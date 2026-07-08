@@ -48,16 +48,16 @@ async function uploadToReplicate(filePath: string, apiKey: string): Promise<stri
   return data.urls.get;
 }
 
-async function transcribeReplicate(filePath: string, config: WhisperConfig): Promise<TranscriptResult> {
+async function transcribeReplicate(filePath: string, config: WhisperConfig, allowFallback = true): Promise<TranscriptResult> {
   const apiKey = config.apiKey ?? process.env.REPLICATE_API_KEY;
   if (!apiKey) throw new Error("REPLICATE_API_KEY missing");
 
   // Upload local file to Replicate storage → get public URL
   const audioUrl = await uploadToReplicate(filePath, apiKey);
 
-  // HuggingFace token für Diarization (optional)
-  const hfToken = process.env.HUGGINGFACE_TOKEN ?? config.endpoint ?? null;
-  const useDiarization = !!hfToken;
+  // HuggingFace token für Diarization (optional, nur wenn allowFallback=true bedeutet erster Versuch)
+  const hfToken = process.env.HUGGINGFACE_TOKEN ?? null;
+  const useDiarization = !!hfToken && allowFallback;
 
   // Start WhisperX prediction
   const startRes = await fetch("https://api.replicate.com/v1/predictions", {
@@ -103,7 +103,13 @@ async function transcribeReplicate(filePath: string, config: WhisperConfig): Pro
   }
 
   if (result.status === "failed") {
-    throw new Error(`Replicate WhisperX failed: ${JSON.stringify(result.error)}`);
+    const errMsg = JSON.stringify(result.error);
+    // Diarization-Fehler → nochmal ohne Diarization versuchen
+    if (useDiarization && allowFallback && errMsg.includes("GatedRepo")) {
+      console.warn("[REPLICATE] Diarization failed (HuggingFace access) — retrying without diarization");
+      return transcribeReplicate(filePath, config, false);
+    }
+    throw new Error(`Replicate WhisperX failed: ${errMsg}`);
   }
   if (result.status !== "succeeded") {
     throw new Error(`Replicate timeout after ${maxAttempts * 5}s`);
