@@ -10,7 +10,7 @@ const CreateGroupSchema = z.object({
 
 export async function groupsRoutes(app: FastifyInstance) {
   // All routes require auth
-  app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
 
   // GET /groups — list groups for current user
   app.get("/groups", async (req, reply) => {

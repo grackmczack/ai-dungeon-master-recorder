@@ -16,7 +16,7 @@ const SettingsSchema = z.object({
 });
 
 export async function settingsRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
 
   // GET /groups/:groupId/settings
   app.get("/groups/:groupId/settings", async (req, reply) => {

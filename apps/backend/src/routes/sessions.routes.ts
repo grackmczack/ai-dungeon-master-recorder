@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "../db.js";
 
 export async function sessionsRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
 
   // GET /sessions/:id — full session detail with transcript + summary
   app.get("/sessions/:id", async (req, reply) => {

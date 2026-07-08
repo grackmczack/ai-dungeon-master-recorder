@@ -48,7 +48,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // GET /auth/me  (protected)
-  app.get("/auth/me", { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get("/auth/me", { preHandler: [async (req, reply) => { await req.jwtVerify(); }] }, async (req, reply) => {
     const payload = req.user as { sub: string };
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
