@@ -87,24 +87,5 @@ export async function groupsRoutes(app: FastifyInstance) {
     return reply.send(group);
   });
 
-  // POST /groups/:id/members — invite user by email
-  app.post("/groups/:id/members", async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { sub } = req.user as { sub: string };
-    const { email, role } = req.body as { email: string; role?: string };
-
-    const myMembership = await prisma.groupMembership.findFirst({ where: { groupId: id, userId: sub, role: "GM", leftAt: null } });
-    if (!myMembership) return reply.status(403).send({ error: "Only GMs can invite" });
-
-    const targetUser = await prisma.user.findUnique({ where: { email } });
-    if (!targetUser) return reply.status(404).send({ error: "User not found" });
-
-    const existing = await prisma.groupMembership.findFirst({ where: { groupId: id, userId: targetUser.id, leftAt: null } });
-    if (existing) return reply.status(409).send({ error: "Already a member" });
-
-    const membership = await prisma.groupMembership.create({
-      data: { groupId: id, userId: targetUser.id, role: (role as any) ?? "PLAYER" }
-    });
-    return reply.status(201).send(membership);
-  });
+  // POST /groups/:id/members — handled by members.routes.ts
 }
