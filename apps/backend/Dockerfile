@@ -1,5 +1,4 @@
 FROM node:22-alpine AS base
-RUN apk add --no-cache openssl1.1-compat
 RUN npm install -g pnpm@10.0.0
 
 FROM base AS deps
@@ -19,7 +18,6 @@ RUN pnpm --filter @ai-dungeon-master-recorder/backend run db:generate
 RUN pnpm --filter @ai-dungeon-master-recorder/backend run build
 
 FROM node:22-alpine AS runner
-RUN apk add --no-cache openssl1.1-compat
 RUN npm install -g pnpm@10.0.0
 WORKDIR /app
 ENV NODE_ENV=production
