@@ -9,6 +9,7 @@ import { sessionsRoutes } from "./routes/sessions.routes.js";
 import { settingsRoutes } from "./routes/settings.routes.js";
 import { campaignsRoutes } from "./routes/campaigns.routes.js";
 import { internalRoutes } from "./routes/internal.routes.js";
+import { membersRoutes } from "./routes/members.routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -39,6 +40,7 @@ await app.register(settingsRoutes);
 await app.register(campaignsRoutes);
 
 await app.register(internalRoutes);
+await app.register(membersRoutes);
 
 // Health
 app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString(), version: "0.1.0" }));

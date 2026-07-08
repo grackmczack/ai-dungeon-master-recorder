@@ -33,12 +33,17 @@ model Group {
 }
 
 model GroupMembership {
-  id        String   @id @default(cuid())
-  userId    String
-  groupId   String
-  role      Role     @default(PLAYER)
-  joinedAt  DateTime @default(now())
-  leftAt    DateTime?
+  id            String    @id @default(cuid())
+  userId        String
+  groupId       String
+  role          Role      @default(PLAYER)
+  characterName String?
+  joinedAt      DateTime  @default(now())
+  leftAt        DateTime?
+  isPaused      Boolean   @default(false)
+  pausedAt      DateTime?
+  pauseNote     String?
+  notes         String?
 
   user  User  @relation(fields: [userId], references: [id])
   group Group @relation(fields: [groupId], references: [id])
@@ -74,8 +79,9 @@ model Session {
   sessionNumber  Int?
   title          String?
   startedAt      DateTime      @default(now())
-  stoppedAt      DateTime?
-  status         SessionStatus @default(RECORDING)
+  stoppedAt       DateTime?
+  status          SessionStatus @default(RECORDING)
+  activeMemberIds String[]      @default([])
   createdAt      DateTime      @default(now())
   updatedAt      DateTime @updatedAt
 
