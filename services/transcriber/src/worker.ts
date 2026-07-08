@@ -47,42 +47,40 @@ async function getMergedTranscriptIfComplete(
   sessionId: string,
   totalChunks: number
 ): Promise<TranscriptSegment[] | null> {
-  // Alle Transcripts für diese Session laden (ein Transcript pro Chunk, gespeichert als rawJson mit chunkIndex)
-  const transcripts = await prisma.transcript.findMany({
-    where: { sessionId }
-  });
+  const transcript = await prisma.transcript.findUnique({ where: { sessionId } });
+  if (!transcript) return null;
 
-  if (transcripts.length < totalChunks) {
-    console.log(`[WORKER] Session ${sessionId}: ${transcripts.length}/${totalChunks} chunks done — waiting`);
+  const raw = transcript.rawJson as any;
+
+  // Format: { chunks: [{ chunkIndex, durationSeconds, segments: [...] }] }
+  const chunks: any[] = raw.chunks ?? [];
+
+  // Prüfen ob alle Chunks da sind
+  const presentIndexes = new Set(chunks.map((c: any) => c.chunkIndex ?? 0));
+  const allPresent = Array.from({ length: totalChunks }, (_, i) => i).every(i => presentIndexes.has(i));
+
+  if (!allPresent) {
+    console.log(`[WORKER] Session ${sessionId}: ${chunks.length}/${totalChunks} chunks in transcript — waiting`);
     return null;
   }
 
-  // Nach chunkIndex sortieren und Segmente zusammenführen mit Zeit-Offset
-  const sorted = [...transcripts].sort((a, b) => {
-    const ai = (a.rawJson as any).chunkIndex ?? 0;
-    const bi = (b.rawJson as any).chunkIndex ?? 0;
-    return ai - bi;
-  });
+  // Nach chunkIndex sortieren + Segmente mit Zeit-Offset zusammenführen
+  const sorted = [...chunks].sort((a: any, b: any) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
 
   let timeOffset = 0;
   const merged: TranscriptSegment[] = [];
 
-  for (const t of sorted) {
-    const raw = t.rawJson as any;
-    const segments: TranscriptSegment[] = raw.segments ?? [];
-    const chunkDuration = raw.durationSeconds ?? 0;
+  for (const chunk of sorted) {
+    const segments: TranscriptSegment[] = chunk.segments ?? [];
+    const duration = chunk.durationSeconds ?? 0;
 
     for (const seg of segments) {
-      merged.push({
-        ...seg,
-        start: seg.start + timeOffset,
-        end: seg.end + timeOffset
-      });
+      merged.push({ ...seg, start: seg.start + timeOffset, end: seg.end + timeOffset });
     }
-    timeOffset += chunkDuration;
+    timeOffset += duration;
   }
 
-  console.log(`[WORKER] All ${totalChunks} chunks merged: ${merged.length} total segments`);
+  console.log(`[WORKER] All ${totalChunks} chunks merged: ${merged.length} total segments (timespan: ${Math.round(timeOffset)}s)`);
   return merged;
 }
 

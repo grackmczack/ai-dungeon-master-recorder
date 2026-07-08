@@ -49,7 +49,13 @@ export interface Recording {
 
 export interface Transcript {
   id: string;
-  rawJson: { segments: TranscriptSegment[]; language: string; provider: string };
+  // rawJson kann direkt { segments } sein oder { chunks: [{ segments, chunkIndex, durationSeconds }] }
+  rawJson: {
+    segments?: TranscriptSegment[];
+    chunks?: Array<{ segments: TranscriptSegment[]; chunkIndex: number; durationSeconds: number }>;
+    language?: string;
+    provider?: string;
+  };
   provider: string;
   language: string;
 }

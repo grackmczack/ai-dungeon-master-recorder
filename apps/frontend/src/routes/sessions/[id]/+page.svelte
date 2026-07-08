@@ -33,9 +33,30 @@
     }
   });
 
+  /** Normalisiert rawJson — gibt immer ein flaches segments[] zurück */
+  function getSegments(): TranscriptSegment[] {
+    if (!session?.transcript) return [];
+    const raw = session.transcript.rawJson;
+    // Chunked format: { chunks: [{ segments: [], chunkIndex, durationSeconds }] }
+    if (raw.chunks && raw.chunks.length > 0) {
+      let offset = 0;
+      const merged: TranscriptSegment[] = [];
+      const sorted = [...raw.chunks].sort((a, b) => a.chunkIndex - b.chunkIndex);
+      for (const chunk of sorted) {
+        for (const seg of (chunk.segments ?? [])) {
+          merged.push({ ...seg, start: seg.start + offset, end: seg.end + offset });
+        }
+        offset += chunk.durationSeconds ?? 0;
+      }
+      return merged;
+    }
+    // Flat format: { segments: [] }
+    return raw.segments ?? [];
+  }
+
   function buildSpeakerColorMap() {
     if (!session?.transcript) return;
-    const speakers = [...new Set(session.transcript.rawJson.segments.map(s => s.speaker))];
+    const speakers = [...new Set(getSegments().map(s => s.speaker))];
     const map: Record<string, string> = {};
     speakers.forEach((spk, i) => {
       map[spk] = SPEAKER_COLORS[i % SPEAKER_COLORS.length]!;
@@ -241,7 +262,7 @@
         </div>
       {:else}
         <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          {#each session.transcript.rawJson.segments as seg}
+          {#each getSegments() as seg}
             <div class="flex gap-3 group">
               <span class="text-xs text-gray-700 font-mono mt-1 w-10 shrink-0 group-hover:text-gray-500 transition">
                 {formatTimestamp(seg.start)}
