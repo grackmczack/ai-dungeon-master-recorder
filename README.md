@@ -58,7 +58,7 @@ storage/
   recordings/
 ```
 
-## Planned Flow
+## Planned Flow (extended from original)
 
 The intended end-to-end flow is:
 
@@ -68,9 +68,11 @@ The intended end-to-end flow is:
 4. The bot records the session audio.
 5. The user runs `/stop`.
 6. The bot saves a WAV file under `storage/recordings`.
-7. A future transcriber service picks up the recording.
-8. The transcript is processed into summaries, scenes, NPC notes, quests, and campaign memory.
-9. n8n workflows automate follow-up steps, exports, notifications, or publishing.
+7. WAV file have to be transformed into mp3 for storage reasons
+8. A transcriber whisperX via API service picks up the recording. time and speakers have to be transcripted
+9. The transcript is processed into summaries, scenes, NPC notes, quests, and campaign memory.
+10. The bot posts the summary from the adventure into a chosen discord channel
+11. to be discussed: n8n workflows automate follow-up steps, exports, notifications, or publishing.
 
 The current implementation covers steps 1 through 6.
 
@@ -197,3 +199,10 @@ pnpm --filter @ai-dungeon-master-recorder/discord-recorder typecheck
 ## Notes
 
 This project is intentionally incremental. The first milestone is a reliable Discord recorder. Transcription, databases, and workflow automation are planned but deliberately kept out of the initial recording surface.
+
+### Adaption, Thoughts to implemented in reworked version
+- i need a backend where i can implement and edit campaign details or create new campaigns. first iteration v0 would be single user with login, v1 multiuser with admin-user rolesystem
+- database to store campaigns and adventures (the round which are to summerise)
+- whisper via Api for transcription planned, need of a settings section for flexibel api key or endpoint to choose maybe another transcription service
+- model selection for the narrative part which translates the dialogue into an nice summary which happend, quests are solved, monsters are slayed and so on.
+- the technical backend have to be styled afterwards in a nice and intuitive modern way and layout 
