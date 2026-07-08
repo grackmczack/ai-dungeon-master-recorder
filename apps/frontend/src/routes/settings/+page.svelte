@@ -26,7 +26,7 @@
   ];
   const LLM_MODELS: Record<string, Array<{value: string, label: string}>> = {
     anthropic: [
-      { value: 'claude-opus-4-8-20251101', label: 'Claude Opus 4.8' },
+      { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
       { value: 'claude-sonnet-4-6-20251101', label: 'Claude Sonnet 4.6' }
     ],
     gemini: [
@@ -63,7 +63,7 @@
       settings = await api.getSettings(selectedGroupId);
       form = settings ? { ...settings } : {
         whisperProvider: 'openai', llmProvider: 'anthropic',
-        summaryLanguage: 'de', llmModel: 'claude-opus-4-8-20251101'
+        summaryLanguage: 'de', llmModel: 'claude-opus-4-8'
       };
     } catch {
       form = { whisperProvider: 'openai', llmProvider: 'anthropic', summaryLanguage: 'de' };

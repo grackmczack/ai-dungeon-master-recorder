@@ -56,7 +56,7 @@ ${transcript}`;
 
 async function summarizeAnthropic(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig): Promise<SummaryResult> {
   const client = new Anthropic({ apiKey: config.apiKey ?? process.env.ANTHROPIC_API_KEY });
-  const model = config.model ?? "claude-opus-4-8-20251101";
+  const model = config.model ?? "claude-opus-4-8";
 
   const message = await client.messages.create({
     model,

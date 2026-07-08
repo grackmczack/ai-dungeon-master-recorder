@@ -92,7 +92,7 @@ const worker = new Worker<TranscriptionJobData>(
     const llmConfig: LLMConfig = {
       provider: (settings?.llmProvider as LLMConfig["provider"] | undefined) ?? "anthropic",
       apiKey: settings?.llmApiKey ?? process.env.ANTHROPIC_API_KEY,
-      model: settings?.llmModel ?? "claude-opus-4-8-20251101",
+      model: settings?.llmModel ?? "claude-opus-4-8",
       endpoint: settings?.llmEndpoint ?? undefined
     };
 
