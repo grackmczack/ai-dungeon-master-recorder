@@ -55,8 +55,8 @@ export async function groupsRoutes(app: FastifyInstance) {
       where: { id },
       include: {
         memberships: {
-          where: { leftAt: null },
-          include: { user: { select: { id: true, displayName: true, email: true } } }
+          include: { user: { select: { id: true, displayName: true, email: true } } },
+          orderBy: { joinedAt: "asc" }
         },
         campaigns: {
           orderBy: { createdAt: "desc" },
@@ -69,7 +69,14 @@ export async function groupsRoutes(app: FastifyInstance) {
                 title: true,
                 status: true,
                 startedAt: true,
-                stoppedAt: true
+                stoppedAt: true,
+                speakerMaps: {
+                  select: {
+                    discordUserId: true,
+                    discordName: true,
+                    characterName: true
+                  }
+                }
               }
             }
           }

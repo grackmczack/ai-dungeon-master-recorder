@@ -5,6 +5,21 @@ export interface User {
   createdAt: string;
 }
 
+export interface GroupMembership {
+  id: string;
+  userId: string;
+  groupId: string;
+  role: 'GM' | 'PLAYER' | 'OBSERVER';
+  characterName?: string;
+  joinedAt: string;
+  leftAt?: string;
+  isPaused: boolean;
+  pausedAt?: string;
+  pauseNote?: string;
+  notes?: string;
+  user: { id: string; email: string; displayName: string };
+}
+
 export interface Group {
   id: string;
   name: string;
@@ -12,6 +27,7 @@ export interface Group {
   discordGuildId?: string;
   role?: 'GM' | 'PLAYER' | 'OBSERVER';
   _count?: { campaigns: number; memberships: number };
+  memberships?: GroupMembership[];
 }
 
 export interface Campaign {
