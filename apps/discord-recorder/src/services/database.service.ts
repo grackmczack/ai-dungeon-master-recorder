@@ -3,8 +3,10 @@
  * Legt automatisch Group → Campaign → Session → Recording an
  * wenn noch keine existiert (Discord Guild ID als Ankerpunkt).
  */
-import pkg from "@prisma/client";
-const { PrismaClient } = pkg;
+
+// Prisma CJS compat import
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { PrismaClient } = require("@prisma/client") as typeof import("@prisma/client");
 
 const prisma = new PrismaClient();
 
@@ -15,9 +17,8 @@ export interface SessionRecord {
 
 /**
  * Stellt sicher dass für diese Guild eine Group + aktive Campaign existiert.
- * Legt beides auto an falls nicht vorhanden.
  */
-async function ensureGroupAndCampaign(guildId: string, guildName?: string): Promise<string> {
+async function ensureGroupAndCampaign(guildId: string, guildName?: string | undefined): Promise<string> {
   let group = await prisma.group.findFirst({ where: { discordGuildId: guildId } });
 
   if (!group) {
@@ -28,7 +29,7 @@ async function ensureGroupAndCampaign(guildId: string, guildName?: string): Prom
         description: "Auto-created from Discord bot"
       }
     });
-    console.log(`[DB] Created group ${group.id} for guild ${guildId}`);
+    console.log(`[DB] Gruppe ${group.id} für Guild ${guildId} angelegt`);
   }
 
   let campaign = await prisma.campaign.findFirst({
@@ -41,18 +42,17 @@ async function ensureGroupAndCampaign(guildId: string, guildName?: string): Prom
       data: {
         groupId: group.id,
         name: "Kampagne 1",
-        description: "Auto-created — benenne mich im Web-Panel um!"
+        description: "Auto-erstellt — bitte im Web-Panel umbenennen!"
       }
     });
-    console.log(`[DB] Created campaign ${campaign.id} for group ${group.id}`);
+    console.log(`[DB] Kampagne ${campaign.id} für Gruppe ${group.id} angelegt`);
   }
 
   return campaign.id;
 }
 
 /**
- * Erstellt eine neue Session + Recording-Eintrag nach dem Stop.
- * Gibt sessionId + recordingId zurück für den BullMQ-Job.
+ * Erstellt Session + Recording nach dem Stop.
  */
 export async function createSessionRecord(params: {
   guildId: string;
@@ -67,14 +67,12 @@ export async function createSessionRecord(params: {
 
   const campaignId = await ensureGroupAndCampaign(guildId, guildName);
 
-  // Berechne nächste Session-Nummer
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     include: { _count: { select: { sessions: true } } }
   });
   const sessionNumber = (campaign?._count.sessions ?? 0) + 1;
 
-  // Session anlegen
   const session = await prisma.session.create({
     data: {
       campaignId,
@@ -85,7 +83,6 @@ export async function createSessionRecord(params: {
     }
   });
 
-  // Recording anlegen
   const recording = await prisma.recording.create({
     data: {
       sessionId: session.id,
@@ -96,7 +93,6 @@ export async function createSessionRecord(params: {
     }
   });
 
-  // SpeakerMaps für alle Teilnehmer anlegen
   if (participantIds.length > 0) {
     await prisma.speakerMap.createMany({
       data: participantIds.map(userId => ({
@@ -108,12 +104,12 @@ export async function createSessionRecord(params: {
     });
   }
 
-  console.log(`[DB] Session ${session.id} (Nr. ${sessionNumber}) + Recording ${recording.id} created`);
+  console.log(`[DB] Session ${session.id} (Nr. ${sessionNumber}) + Recording ${recording.id} angelegt`);
   return { sessionId: session.id, recordingId: recording.id };
 }
 
 /**
- * Gibt die postSummaryChannelId aus den GroupSettings zurück (falls konfiguriert).
+ * Gibt postSummaryChannelId aus GroupSettings zurück.
  */
 export async function getPostChannel(guildId: string): Promise<string | null> {
   const group = await prisma.group.findFirst({
