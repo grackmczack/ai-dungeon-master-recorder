@@ -35,6 +35,24 @@ services:
       redis:
         condition: service_healthy
 
+  transcriber:
+    build:
+      context: .
+      dockerfile: services/transcriber/Dockerfile
+    container_name: dnd-transcriber
+    restart: unless-stopped
+    env_file:
+      - services/transcriber/.env
+    volumes:
+      - recordings:/app/storage/recordings
+    networks:
+      - dnd-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     container_name: dnd-postgres
