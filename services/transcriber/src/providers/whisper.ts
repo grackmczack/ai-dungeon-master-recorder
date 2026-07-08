@@ -58,23 +58,31 @@ async function transcribeReplicate(filePath: string, config: WhisperConfig): Pro
   // Upload local file to Replicate storage → get public URL
   const audioUrl = await uploadToReplicate(filePath, apiKey);
 
+  // HuggingFace token für Diarization (optional)
+  const hfToken = process.env.HUGGINGFACE_TOKEN ?? config.endpoint ?? null;
+  const useDiarization = !!hfToken;
+
   // Start WhisperX prediction
   const startRes = await fetch("https://api.replicate.com/v1/predictions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "Prefer": "wait"
+      "Prefer": "wait=60"
     },
     body: JSON.stringify({
-      version: "victor-upmeet/whisperx:84d2ad2d6194fe98efde5c9d0a398e911dddd314a61f2e8a0b2f13e9d1c3e5d5",
+      version: "655845d6190ef70573c669245f245892cd039df4b880a1e3a65852c09252f5cc",
       input: {
-        audio: audioUrl,
+        audio_file: audioUrl,
         language: "de",
-        diarize: true,
-        min_speakers: 1,
-        max_speakers: 6,
-        align_output: true
+        task: "transcribe",
+        align_output: true,
+        diarization: useDiarization,
+        ...(useDiarization ? {
+          huggingface_access_token: hfToken,
+          min_speakers: 1,
+          max_speakers: 6
+        } : {})
       }
     })
   });
@@ -104,20 +112,26 @@ async function transcribeReplicate(filePath: string, config: WhisperConfig): Pro
     throw new Error(`Replicate timeout after ${maxAttempts * 5}s`);
   }
 
-  // Parse output — WhisperX gibt segments mit speaker zurück
+  // Parse output — victor-upmeet/whisperx output format
   const output = result.output;
   let segments: TranscriptSegment[] = [];
 
-  if (Array.isArray(output?.segments)) {
-    segments = output.segments.map((s: any) => ({
-      speaker: s.speaker ?? "SPEAKER_00",
-      start: s.start ?? 0,
-      end: s.end ?? 0,
+  // Output kann direkt segments[] sein oder { segments: [] }
+  const rawSegments = Array.isArray(output) ? output
+    : Array.isArray(output?.segments) ? output.segments
+    : [];
+
+  if (rawSegments.length > 0) {
+    segments = rawSegments.map((s: any) => ({
+      speaker: s.speaker ?? s.speaker_id ?? "SPEAKER_00",
+      start: s.start ?? s.timestamp?.[0] ?? 0,
+      end: s.end ?? s.timestamp?.[1] ?? 0,
       text: (s.text ?? "").trim()
-    }));
+    })).filter((s: TranscriptSegment) => s.text.length > 0);
   } else if (typeof output === "string") {
-    // Fallback: plain text output
     segments = [{ speaker: "SPEAKER_00", start: 0, end: 0, text: output }];
+  } else {
+    console.warn("[REPLICATE] Unexpected output format:", JSON.stringify(output).slice(0, 200));
   }
 
   console.log(`[REPLICATE] Done: ${segments.length} segments`);
