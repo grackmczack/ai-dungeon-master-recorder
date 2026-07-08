@@ -3,9 +3,8 @@
  * Legt automatisch Group → Campaign → Session → Recording an
  * wenn noch keine existiert (Discord Guild ID als Ankerpunkt).
  */
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — generated at build time via prisma generate
-import { PrismaClient } from "@prisma/client";
+import pkg from "@prisma/client";
+const { PrismaClient } = pkg;
 
 const prisma = new PrismaClient();
 
