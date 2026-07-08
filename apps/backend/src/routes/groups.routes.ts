@@ -58,7 +58,22 @@ export async function groupsRoutes(app: FastifyInstance) {
           where: { leftAt: null },
           include: { user: { select: { id: true, displayName: true, email: true } } }
         },
-        campaigns: { orderBy: { createdAt: "desc" } },
+        campaigns: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            sessions: {
+              orderBy: { startedAt: "desc" },
+              select: {
+                id: true,
+                sessionNumber: true,
+                title: true,
+                status: true,
+                startedAt: true,
+                stoppedAt: true
+              }
+            }
+          }
+        },
         settings: true
       }
     });

@@ -8,6 +8,10 @@ export interface TranscriptionJobData {
   filename: string;
   durationSeconds?: number;
   discordChannelId?: string;
+  // Chunked recording
+  chunkIndex?: number;
+  isLastChunk?: boolean;
+  totalChunks?: number;
 }
 
 const connection = new IORedis({
@@ -16,7 +20,7 @@ const connection = new IORedis({
   maxRetriesPerRequest: null
 });
 
-export const transcriptionQueue = new Queue<TranscriptionJobData, unknown, "transcribe">("transcription", {
+export const transcriptionQueue = new Queue<TranscriptionJobData, unknown, "transcribe" | "transcribe-chunk">("transcription", {
   connection,
   defaultJobOptions: {
     attempts: 3,
