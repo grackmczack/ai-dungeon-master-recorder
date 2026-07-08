@@ -4,9 +4,9 @@
  * wenn noch keine existiert (Discord Guild ID als Ankerpunkt).
  */
 
-// Prisma CJS compat import
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { PrismaClient } = require("@prisma/client") as typeof import("@prisma/client");
+// Prisma CJS compat import — dynamic to avoid ESM/CJS type conflicts
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const { PrismaClient } = require("@prisma/client") as any;
 
 const prisma = new PrismaClient();
 
