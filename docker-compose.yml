@@ -1,0 +1,59 @@
+services:
+  discord-recorder:
+    build:
+      context: .
+      dockerfile: apps/discord-recorder/Dockerfile
+    container_name: ai-dungeon-master-recorder-discord
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - recordings:/app/storage/recordings
+    networks:
+      - ai-dungeon-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-dungeon-master-recorder-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_dungeon_master_recorder
+      POSTGRES_USER: ai_dungeon
+      POSTGRES_PASSWORD: ai_dungeon_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ai-dungeon-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_dungeon -d ai_dungeon_master_recorder"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-dungeon-master-recorder-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-dungeon-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  recordings:
+    driver: local
+
+networks:
+  ai-dungeon-network:
+    driver: bridge
