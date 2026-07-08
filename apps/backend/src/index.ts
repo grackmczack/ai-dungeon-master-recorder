@@ -7,6 +7,7 @@ import { authRoutes } from "./routes/auth.routes.js";
 import { groupsRoutes } from "./routes/groups.routes.js";
 import { sessionsRoutes } from "./routes/sessions.routes.js";
 import { settingsRoutes } from "./routes/settings.routes.js";
+import { internalRoutes } from "./routes/internal.routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -34,6 +35,8 @@ await app.register(authRoutes);
 await app.register(groupsRoutes);
 await app.register(sessionsRoutes);
 await app.register(settingsRoutes);
+
+await app.register(internalRoutes);
 
 // Health
 app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString(), version: "0.1.0" }));

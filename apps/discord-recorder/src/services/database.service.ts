@@ -1,60 +1,28 @@
 /**
- * DatabaseService — Bot-seitige DB-Anbindung via Prisma
- * Legt automatisch Group → Campaign → Session → Recording an
- * wenn noch keine existiert (Discord Guild ID als Ankerpunkt).
+ * DatabaseService — Bot kommuniziert mit dem Backend via interner HTTP-API.
+ * Kein Prisma direkt im Bot — vermeidet Binary/ESM-Probleme.
  */
 
-import { createRequire } from "node:module";
-const _require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const { PrismaClient } = _require("@prisma/client") as any;
+const BACKEND_URL = process.env.BACKEND_INTERNAL_URL ?? "http://dnd-backend:3001";
 
-const prisma = new PrismaClient();
-
-export interface SessionRecord {
+interface SessionRecord {
   sessionId: string;
   recordingId: string;
 }
 
-/**
- * Stellt sicher dass für diese Guild eine Group + aktive Campaign existiert.
- */
-async function ensureGroupAndCampaign(guildId: string, guildName?: string | undefined): Promise<string> {
-  let group = await prisma.group.findFirst({ where: { discordGuildId: guildId } });
-
-  if (!group) {
-    group = await prisma.group.create({
-      data: {
-        name: guildName ?? `Discord Server ${guildId}`,
-        discordGuildId: guildId,
-        description: "Auto-created from Discord bot"
-      }
-    });
-    console.log(`[DB] Gruppe ${group.id} für Guild ${guildId} angelegt`);
-  }
-
-  let campaign = await prisma.campaign.findFirst({
-    where: { groupId: group.id, isActive: true },
-    orderBy: { createdAt: "desc" }
+async function backendPost(path: string, body: unknown): Promise<unknown> {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-internal-token": process.env.INTERNAL_TOKEN ?? "internal" },
+    body: JSON.stringify(body)
   });
-
-  if (!campaign) {
-    campaign = await prisma.campaign.create({
-      data: {
-        groupId: group.id,
-        name: "Kampagne 1",
-        description: "Auto-erstellt — bitte im Web-Panel umbenennen!"
-      }
-    });
-    console.log(`[DB] Kampagne ${campaign.id} für Gruppe ${group.id} angelegt`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Backend ${path} failed: ${res.status} ${text}`);
   }
-
-  return campaign.id;
+  return res.json();
 }
 
-/**
- * Erstellt Session + Recording nach dem Stop.
- */
 export async function createSessionRecord(params: {
   guildId: string;
   guildName?: string | undefined;
@@ -66,58 +34,31 @@ export async function createSessionRecord(params: {
 }): Promise<SessionRecord> {
   const { guildId, guildName, filename, filePath, durationSeconds, participantIds, participantNames } = params;
 
-  const campaignId = await ensureGroupAndCampaign(guildId, guildName);
+  const data = await backendPost("/internal/sessions", {
+    guildId,
+    guildName,
+    filename,
+    filePath,
+    durationSeconds,
+    participants: participantIds.map(id => ({
+      discordUserId: id,
+      discordName: participantNames.get(id) ?? id
+    }))
+  }) as SessionRecord;
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-    include: { _count: { select: { sessions: true } } }
-  });
-  const sessionNumber = (campaign?._count.sessions ?? 0) + 1;
-
-  const session = await prisma.session.create({
-    data: {
-      campaignId,
-      discordGuildId: guildId,
-      sessionNumber,
-      status: "PROCESSING",
-      stoppedAt: new Date()
-    }
-  });
-
-  const recording = await prisma.recording.create({
-    data: {
-      sessionId: session.id,
-      filename,
-      filePath,
-      durationSeconds,
-      format: filename.endsWith(".mp3") ? "mp3" : "wav"
-    }
-  });
-
-  if (participantIds.length > 0) {
-    await prisma.speakerMap.createMany({
-      data: participantIds.map(userId => ({
-        sessionId: session.id,
-        discordUserId: userId,
-        discordName: participantNames.get(userId) ?? userId
-      })),
-      skipDuplicates: true
-    });
-  }
-
-  console.log(`[DB] Session ${session.id} (Nr. ${sessionNumber}) + Recording ${recording.id} angelegt`);
-  return { sessionId: session.id, recordingId: recording.id };
+  console.log(`[DB] Session ${data.sessionId} via Backend-API angelegt`);
+  return data;
 }
 
-/**
- * Gibt postSummaryChannelId aus GroupSettings zurück.
- */
 export async function getPostChannel(guildId: string): Promise<string | null> {
-  const group = await prisma.group.findFirst({
-    where: { discordGuildId: guildId },
-    include: { settings: true }
-  });
-  return group?.settings?.postSummaryChannelId ?? null;
+  try {
+    const res = await fetch(`${BACKEND_URL}/internal/guild/${guildId}/post-channel`, {
+      headers: { "x-internal-token": process.env.INTERNAL_TOKEN ?? "internal" }
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { channelId: string | null };
+    return data.channelId;
+  } catch {
+    return null;
+  }
 }
-
-export { prisma };
