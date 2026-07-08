@@ -91,18 +91,26 @@ services:
       - "8080:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - frontend_dist:/usr/share/nginx/html:ro
     networks:
       - dnd-network
     depends_on:
       - backend
+      - frontend
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: dnd-frontend
+    restart: unless-stopped
+    networks:
+      - dnd-network
 
 volumes:
   postgres_data:
   redis_data:
   recordings:
     driver: local
-  frontend_dist:
 
 networks:
   dnd-network:

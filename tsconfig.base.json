@@ -17,5 +17,5 @@
     "types": ["node"]
   },
   "include": ["apps/**/*.ts", "services/**/*.ts", "shared/**/*.ts", "workflows/**/*.ts"],
-  "exclude": ["node_modules", "dist", "storage"]
+  "exclude": ["node_modules", "dist", "storage", "apps/frontend"]
 }
