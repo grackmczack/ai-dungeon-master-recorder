@@ -63,10 +63,11 @@
       settings = await api.getSettings(selectedGroupId);
       form = settings ? { ...settings } : {
         whisperProvider: 'openai', llmProvider: 'anthropic',
-        summaryLanguage: 'de', llmModel: 'claude-opus-4-8'
+        summaryLanguage: 'de', llmModel: 'claude-opus-4-8',
+        llmSystemPrompt: '', llmCampaignContext: ''
       };
     } catch {
-      form = { whisperProvider: 'openai', llmProvider: 'anthropic', summaryLanguage: 'de' };
+      form = { whisperProvider: 'openai', llmProvider: 'anthropic', summaryLanguage: 'de', llmSystemPrompt: '', llmCampaignContext: '' };
     }
   }
 
@@ -209,6 +210,22 @@
           <input bind:value={form.postSummaryChannelId}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
             placeholder="Discord Channel ID" />
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-sm text-gray-400">System-Prompt <span class="text-gray-600 text-xs">(leer = Standard)</span></label>
+          <textarea bind:value={form.llmSystemPrompt} rows="6"
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono placeholder-gray-600 focus:outline-none focus:border-brand-500 transition resize-y"
+            placeholder="Du bist ein Chronist für eine Pen-&-Paper-Rollenspielgruppe..."></textarea>
+          <p class="text-xs text-gray-600">Überschreibt den Standard-Prompt. Muss valides JSON als Antwort verlangen (narrative, npcs, quests, loot, locations, openThreads).</p>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-sm text-gray-400">Kampagnen-Kontext <span class="text-gray-600 text-xs">(für alle Sessions dieser Gruppe)</span></label>
+          <textarea bind:value={form.llmCampaignContext} rows="4"
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-brand-500 transition resize-y"
+            placeholder="z.B.: Wir spielen D&D 5e. Die Kampagne heißt 'Vergessene Reiche'. Spieler: Arkeles (Magier), Neston (Krieger), Akuma (Schurke). Der DM ist Grack. Das aktuelle Setting ist..."></textarea>
+          <p class="text-xs text-gray-600">Dieser Text wird beim LLM als Kontext mitgesendet. Beschreibe Kampagne, Setting, Charaktere und wichtige Hintergrundinfos.</p>
         </div>
       </div>
 

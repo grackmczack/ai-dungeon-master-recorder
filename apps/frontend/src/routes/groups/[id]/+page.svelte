@@ -2,11 +2,14 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import { auth } from '$lib/auth.js';
   import type { Group } from '$lib/types.js';
 
   let group: any = $state(null);
   let loading = $state(true);
   let error = $state('');
+  let editingContext: string | null = $state(null);
+  let contextEdits: Record<string, string> = $state({});
 
   const STATUS_LABELS: Record<string, string> = {
     RECORDING: '🔴 Aufnahme',
@@ -37,6 +40,21 @@
 
   function formatDate(d: string) {
     return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  async function saveContext(campaignId: string) {
+    try {
+      await fetch(`/api/campaigns/${campaignId}/context`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.getToken()}` },
+        body: JSON.stringify({ campaignContext: contextEdits[campaignId] })
+      });
+      const c = group?.campaigns.find((c: any) => c.id === campaignId);
+      if (c) c.campaignContext = contextEdits[campaignId];
+      editingContext = null;
+    } catch (e) {
+      console.error('Context save failed:', e);
+    }
   }
 </script>
 
@@ -79,6 +97,25 @@
             <h2 class="text-xl font-semibold text-white">{campaign.name}</h2>
             {#if campaign.setting}<span class="text-xs text-gray-500 bg-surface-700 px-2 py-1 rounded">{campaign.setting}</span>{/if}
           </div>
+
+          {#if editingContext === campaign.id}
+            <div class="mb-4 bg-surface-700 rounded-xl p-4 border border-brand-500/30">
+              <textarea bind:value={contextEdits[campaign.id]} rows="3"
+                class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 resize-none"
+                placeholder="Kampagnen-Kontext für die KI-Zusammenfassung..."></textarea>
+              <div class="flex gap-2 mt-2">
+                <button onclick={() => saveContext(campaign.id)}
+                  class="bg-brand-600 hover:bg-brand-500 text-white text-xs px-3 py-1.5 rounded-lg transition">Speichern</button>
+                <button onclick={() => editingContext = null}
+                  class="text-gray-500 hover:text-white text-xs px-3 py-1.5 transition">Abbrechen</button>
+              </div>
+            </div>
+          {:else}
+            <button onclick={() => { editingContext = campaign.id; contextEdits[campaign.id] = campaign.campaignContext ?? ''; }}
+              class="text-xs text-gray-600 hover:text-brand-400 transition mb-3 flex items-center gap-1">
+              ✏️ {campaign.campaignContext ? 'Kontext bearbeiten' : 'Kampagnen-Kontext hinzufügen'}
+            </button>
+          {/if}
 
           {#if !campaign.sessions?.length}
             <p class="text-gray-600 text-sm pl-4 border-l border-surface-700">Noch keine Sessions</p>

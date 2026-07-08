@@ -7,6 +7,7 @@ import { authRoutes } from "./routes/auth.routes.js";
 import { groupsRoutes } from "./routes/groups.routes.js";
 import { sessionsRoutes } from "./routes/sessions.routes.js";
 import { settingsRoutes } from "./routes/settings.routes.js";
+import { campaignsRoutes } from "./routes/campaigns.routes.js";
 import { internalRoutes } from "./routes/internal.routes.js";
 
 declare module "fastify" {
@@ -35,6 +36,7 @@ await app.register(authRoutes);
 await app.register(groupsRoutes);
 await app.register(sessionsRoutes);
 await app.register(settingsRoutes);
+await app.register(campaignsRoutes);
 
 await app.register(internalRoutes);
 

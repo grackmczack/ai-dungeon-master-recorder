@@ -21,6 +21,7 @@ export interface Campaign {
   description?: string;
   setting?: string;
   isActive: boolean;
+  campaignContext?: string;
   createdAt: string;
   sessions?: Session[];
 }
