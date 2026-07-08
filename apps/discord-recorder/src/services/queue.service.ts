@@ -7,6 +7,7 @@ export interface TranscriptionJobData {
   filePath: string;
   filename: string;
   durationSeconds?: number;
+  discordChannelId?: string;
 }
 
 const connection = new IORedis({

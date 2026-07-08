@@ -42,6 +42,7 @@ interface ActiveRecording {
 interface StopResult {
   filename: string;
   filePath: string;
+  participantIds: string[];
 }
 
 class ParticipantAudio {
@@ -245,7 +246,8 @@ export class VoiceRecorderService {
 
     return {
       filename: recording.filename,
-      filePath: recording.filePath
+      filePath: recording.filePath,
+      participantIds: [...recording.participants.keys()]
     };
   }
 

@@ -84,6 +84,9 @@ importers:
       '@discordjs/voice':
         specifier: ^0.19.2
         version: 0.19.2(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(opusscript@0.0.8)
+      '@prisma/client':
+        specifier: ^5.0.0
+        version: 5.22.0(prisma@5.22.0)
       bullmq:
         specifier: ^5.0.0
         version: 5.79.3
