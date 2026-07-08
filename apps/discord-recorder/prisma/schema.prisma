@@ -58,7 +58,8 @@ model Campaign {
   name        String
   description String?
   setting     String?
-  isActive    Boolean  @default(true)
+  isActive         Boolean  @default(true)
+  campaignContext  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   group       Group    @relation(fields: [groupId], references: [id])
@@ -155,5 +156,7 @@ model GroupSettings {
   llmEndpoint          String?
   summaryLanguage      String  @default("de")
   postSummaryChannelId String?
+  llmSystemPrompt      String?
+  llmCampaignContext   String?
   group                Group   @relation(fields: [groupId], references: [id])
 }

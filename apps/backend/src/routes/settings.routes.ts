@@ -11,6 +11,8 @@ const SettingsSchema = z.object({
   llmApiKey: z.string().optional().nullable(),
   llmModel: z.string().optional().nullable(),
   llmEndpoint: z.string().optional().nullable(),
+  llmSystemPrompt: z.string().optional().nullable(),
+  llmCampaignContext: z.string().optional().nullable(),
   summaryLanguage: z.enum(["de", "en"]).optional(),
   postSummaryChannelId: z.string().optional().nullable()
 });

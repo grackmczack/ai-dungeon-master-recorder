@@ -21,16 +21,7 @@ export interface LLMConfig {
   endpoint?: string | undefined;
 }
 
-function buildPrompt(segments: TranscriptSegment[], speakerMap: Record<string, string>): string {
-  const transcript = segments
-    .map(s => {
-      const name = speakerMap[s.speaker] ?? s.speaker;
-      const ts = `[${Math.floor(s.start / 60)}:${String(Math.floor(s.start % 60)).padStart(2, "0")}]`;
-      return `${ts} ${name}: ${s.text}`;
-    })
-    .join("\n");
-
-  return `Du bist ein Chronist für eine Pen-&-Paper-Rollenspielgruppe (TTRPG/D&D).
+const DEFAULT_SYSTEM_PROMPT = `Du bist ein Chronist für eine Pen-&-Paper-Rollenspielgruppe (TTRPG/D&D).
 
 Analysiere das folgende Transkript einer Spielsitzung und erstelle:
 1. Eine narrative Zusammenfassung der Session (3-5 Absätze, epischer Stil, Vergangenheitsform)
@@ -48,20 +39,40 @@ Antworte NUR als valides JSON in diesem Format:
   "loot": [{"item": "...", "foundBy": "..."}],
   "locations": [{"name": "...", "description": "..."}],
   "openThreads": ["..."]
+}`;
+
+export { DEFAULT_SYSTEM_PROMPT };
+
+function buildPrompt(
+  segments: TranscriptSegment[],
+  speakerMap: Record<string, string>,
+  systemPrompt?: string,
+  campaignContext?: string
+): string {
+  const transcript = segments
+    .map(s => {
+      const name = speakerMap[s.speaker] ?? s.speaker;
+      const ts = `[${Math.floor(s.start / 60)}:${String(Math.floor(s.start % 60)).padStart(2, "0")}]`;
+      return `${ts} ${name}: ${s.text}`;
+    })
+    .join("\n");
+
+  const prompt = systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+  const contextBlock = campaignContext
+    ? `\n\nKAMPAGNEN-KONTEXT (vom Spielleiter bereitgestellt):\n${campaignContext}\n`
+    : "";
+
+  return `${prompt}${contextBlock}\n\nTRANSKRIPT:\n${transcript}`;
 }
 
-TRANSKRIPT:
-${transcript}`;
-}
-
-async function summarizeAnthropic(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig): Promise<SummaryResult> {
+async function summarizeAnthropic(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
   const client = new Anthropic({ apiKey: config.apiKey ?? process.env.ANTHROPIC_API_KEY });
   const model = config.model ?? "claude-opus-4-8";
 
   const message = await client.messages.create({
     model,
     max_tokens: 4096,
-    messages: [{ role: "user", content: buildPrompt(segments, speakerMap) }]
+    messages: [{ role: "user", content: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }]
   });
 
   const block = message.content[0];
@@ -70,13 +81,13 @@ async function summarizeAnthropic(segments: TranscriptSegment[], speakerMap: Rec
   return { ...json, model, provider: "anthropic" };
 }
 
-async function summarizeGemini(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig): Promise<SummaryResult> {
+async function summarizeGemini(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
   const client = new GoogleGenAI({ apiKey: config.apiKey ?? process.env.GEMINI_API_KEY ?? "" });
   const model = config.model ?? "gemini-2.5-flash";
 
   const result = await client.models.generateContent({
     model,
-    contents: [{ role: "user", parts: [{ text: buildPrompt(segments, speakerMap) }] }]
+    contents: [{ role: "user", parts: [{ text: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }] }]
   });
 
   const candidate = result.candidates?.[0];
@@ -86,13 +97,13 @@ async function summarizeGemini(segments: TranscriptSegment[], speakerMap: Record
   return { ...json, model, provider: "gemini" };
 }
 
-async function summarizeOpenAI(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig): Promise<SummaryResult> {
+async function summarizeOpenAI(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
   const client = new OpenAI({ apiKey: config.apiKey ?? process.env.OPENAI_API_KEY });
   const model = config.model ?? "gpt-4o";
 
   const completion = await client.chat.completions.create({
     model,
-    messages: [{ role: "user", content: buildPrompt(segments, speakerMap) }],
+    messages: [{ role: "user", content: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }],
     response_format: { type: "json_object" }
   });
 
@@ -101,7 +112,7 @@ async function summarizeOpenAI(segments: TranscriptSegment[], speakerMap: Record
   return { ...json, model, provider: "openai" };
 }
 
-async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig): Promise<SummaryResult> {
+async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
   const apiKey = config.apiKey ?? process.env.SILICONFLOW_API_KEY;
   const model = config.model ?? "deepseek-ai/DeepSeek-V3";
   const endpoint = config.endpoint ?? "https://api.siliconflow.cn/v1/chat/completions";
@@ -111,7 +122,7 @@ async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: R
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: buildPrompt(segments, speakerMap) }],
+      messages: [{ role: "user", content: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }],
       response_format: { type: "json_object" }
     })
   });
@@ -122,14 +133,14 @@ async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: R
   return { ...json, model, provider: "siliconflow" };
 }
 
-async function summarizeOllama(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig): Promise<SummaryResult> {
+async function summarizeOllama(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
   const endpoint = config.endpoint ?? "http://localhost:11434/api/generate";
   const model = config.model ?? "llama3.1";
 
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, prompt: buildPrompt(segments, speakerMap), stream: false, format: "json" })
+    body: JSON.stringify({ model, prompt: buildPrompt(segments, speakerMap, systemPrompt, campaignContext), stream: false, format: "json" })
   });
 
   const data = await res.json() as any;
@@ -140,14 +151,16 @@ async function summarizeOllama(segments: TranscriptSegment[], speakerMap: Record
 export async function generateSummary(
   segments: TranscriptSegment[],
   speakerMap: Record<string, string>,
-  config: LLMConfig
+  config: LLMConfig,
+  systemPrompt?: string,
+  campaignContext?: string
 ): Promise<SummaryResult> {
   switch (config.provider) {
-    case "anthropic": return summarizeAnthropic(segments, speakerMap, config);
-    case "gemini": return summarizeGemini(segments, speakerMap, config);
-    case "openai": return summarizeOpenAI(segments, speakerMap, config);
-    case "siliconflow": return summarizeSiliconFlow(segments, speakerMap, config);
-    case "ollama": return summarizeOllama(segments, speakerMap, config);
+    case "anthropic": return summarizeAnthropic(segments, speakerMap, config, systemPrompt, campaignContext);
+    case "gemini": return summarizeGemini(segments, speakerMap, config, systemPrompt, campaignContext);
+    case "openai": return summarizeOpenAI(segments, speakerMap, config, systemPrompt, campaignContext);
+    case "siliconflow": return summarizeSiliconFlow(segments, speakerMap, config, systemPrompt, campaignContext);
+    case "ollama": return summarizeOllama(segments, speakerMap, config, systemPrompt, campaignContext);
     default: throw new Error(`Unknown LLM provider: ${config.provider}`);
   }
 }

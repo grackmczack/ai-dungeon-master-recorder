@@ -193,7 +193,20 @@ const worker = new Worker<TranscriptionJobData>(
         endpoint: settings?.llmEndpoint ?? undefined
       };
 
-      const summary = await generateSummary(segmentsForSummary, speakerMap, llmConfig);
+      // Kampagnen-Kontext aus Campaign holen falls vorhanden
+      let campaignContext: string | undefined;
+      if (session.campaignId) {
+        const campaign = await prisma.campaign.findUnique({ where: { id: session.campaignId } });
+        campaignContext = campaign?.campaignContext ?? undefined;
+      }
+
+      const summary = await generateSummary(
+        segmentsForSummary,
+        speakerMap,
+        llmConfig,
+        settings?.llmSystemPrompt ?? undefined,
+        campaignContext
+      );
       console.log(`[WORKER] Summary: ${summary.provider}/${summary.model}`);
       await job.updateProgress(90);
 
