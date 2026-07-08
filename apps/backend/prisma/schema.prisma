@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships  GroupMembership[]
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  discordGuildId String? @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships GroupMembership[]
+  campaigns   Campaign[]
+  settings    GroupSettings?
+}
+
+model GroupMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  groupId   String
+  role      Role     @default(PLAYER)
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+}
+
+enum Role {
+  GM
+  PLAYER
+  OBSERVER
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  groupId     String
+  name        String
+  description String?
+  setting     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group    Group     @relation(fields: [groupId], references: [id])
+  sessions Session[]
+}
+
+model Session {
+  id             String        @id @default(cuid())
+  campaignId     String
+  discordGuildId String
+  sessionNumber  Int?
+  title          String?
+  startedAt      DateTime      @default(now())
+  stoppedAt      DateTime?
+  status         SessionStatus @default(RECORDING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime @updatedAt
+
+  campaign    Campaign      @relation(fields: [campaignId], references: [id])
+  recordings  Recording[]
+  transcript  Transcript?
+  summary     Summary?
+  speakerMaps SpeakerMap[]
+}
+
+enum SessionStatus {
+  RECORDING
+  PROCESSING
+  TRANSCRIBING
+  SUMMARIZING
+  DONE
+  FAILED
+}
+
+model Recording {
+  id              String   @id @default(cuid())
+  sessionId       String
+  filename        String
+  filePath        String
+  durationSeconds Float?
+  fileSizeBytes   BigInt?
+  format          String   @default("mp3")
+  createdAt       DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id])
+}
+
+model Transcript {
+  id         String   @id @default(cuid())
+  sessionId  String   @unique
+  rawJson    Json
+  provider   String
+  language   String   @default("de")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id])
+}
+
+model Summary {
+  id           String   @id @default(cuid())
+  sessionId    String   @unique
+  narrative    String
+  npcs         Json     @default("[]")
+  quests       Json     @default("[]")
+  loot         Json     @default("[]")
+  locations    Json     @default("[]")
+  openThreads  Json     @default("[]")
+  model        String
+  provider     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id])
+}
+
+model SpeakerMap {
+  id            String  @id @default(cuid())
+  sessionId     String
+  discordUserId String
+  discordName   String
+  characterName String?
+  playerName    String?
+
+  session Session @relation(fields: [sessionId], references: [id])
+
+  @@unique([sessionId, discordUserId])
+}
+
+model GroupSettings {
+  id                    String  @id @default(cuid())
+  groupId               String  @unique
+  whisperProvider       String  @default("openai")
+  whisperApiKey         String?
+  whisperEndpoint       String?
+  replicateApiKey       String?
+  llmProvider           String  @default("anthropic")
+  llmApiKey             String?
+  llmModel              String?
+  llmEndpoint           String?
+  summaryLanguage       String  @default("de")
+  postSummaryChannelId  String?
+
+  group Group @relation(fields: [groupId], references: [id])
+}

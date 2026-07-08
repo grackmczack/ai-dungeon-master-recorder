@@ -1,35 +1,31 @@
-FROM node:22-alpine AS build
+FROM node:22-alpine AS base
+RUN apk add --no-cache ffmpeg
+RUN npm install -g pnpm@10.0.0
 
+FROM base AS deps
 WORKDIR /app
-RUN corepack enable
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/discord-recorder/package.json ./apps/discord-recorder/
+COPY shared/ ./shared/
+RUN pnpm install --frozen-lockfile
 
-COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
-COPY apps/discord-recorder/package.json apps/discord-recorder/package.json
-RUN pnpm install --filter @ai-dungeon-master-recorder/discord-recorder... --no-frozen-lockfile
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/discord-recorder/node_modules ./apps/discord-recorder/node_modules
+COPY . .
+RUN pnpm --filter @ai-dungeon-master-recorder/discord-recorder run build
 
-COPY apps/discord-recorder apps/discord-recorder
-# Install TypeScript in the specific package for build
-RUN pnpm add -D --filter @ai-dungeon-master-recorder/discord-recorder typescript
-RUN pnpm --filter @ai-dungeon-master-recorder/discord-recorder build
-
-FROM node:22-alpine AS runtime
-
+FROM node:22-alpine AS runner
+RUN apk add --no-cache ffmpeg
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable
 
-COPY package.json pnpm-workspace.yaml ./
-COPY apps/discord-recorder/package.json apps/discord-recorder/package.json
-RUN pnpm install --filter @ai-dungeon-master-recorder/discord-recorder --prod --no-frozen-lockfile
-
-COPY --from=build /app/apps/discord-recorder/dist apps/discord-recorder/dist
-
-# Create recordings directory
-RUN mkdir -p /app/storage/recordings
+COPY --from=builder /app/apps/discord-recorder/dist ./apps/discord-recorder/dist
+COPY --from=builder /app/apps/discord-recorder/package.json ./apps/discord-recorder/
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/discord-recorder/node_modules ./apps/discord-recorder/node_modules
+COPY --from=builder /app/storage ./storage
 
 WORKDIR /app/apps/discord-recorder
-
-# Copy .env file if it exists (will be overridden by docker-compose)
-COPY apps/discord-recorder/.env.example .env
-
 CMD ["node", "dist/index.js"]
