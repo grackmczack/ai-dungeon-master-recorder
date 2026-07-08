@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
-import fetch from "node-fetch";
 import type { TranscriptSegment } from "./whisper.js";
 
 export interface SummaryResult {

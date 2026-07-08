@@ -1,6 +1,4 @@
-import FormData from "form-data";
-import { createReadStream, statSync, readFileSync } from "node:fs";
-import fetch from "node-fetch";
+import { readFileSync } from "node:fs";
 
 export interface TranscriptSegment {
   speaker: string;
@@ -30,15 +28,14 @@ async function uploadToReplicate(filePath: string, apiKey: string): Promise<stri
 
   console.log(`[REPLICATE] Uploading ${filename} (${sizeMB}MB)...`);
 
+  // Native fetch + FormData + Blob (required by Replicate Files API)
+  const form = new FormData();
+  form.append("content", new Blob([fileBuffer], { type: mimeType }), filename);
+
   const res = await fetch("https://api.replicate.com/v1/files", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": mimeType,
-      "Content-Length": String(fileBuffer.length),
-      "Content-Disposition": `attachment; filename="${filename}"`
-    },
-    body: fileBuffer
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form
   });
 
   if (!res.ok) {
@@ -47,7 +44,7 @@ async function uploadToReplicate(filePath: string, apiKey: string): Promise<stri
   }
 
   const data = await res.json() as { urls: { get: string } };
-  console.log(`[REPLICATE] Upload done: ${data.urls.get}`);
+  console.log(`[REPLICATE] Upload OK: ${data.urls.get}`);
   return data.urls.get;
 }
 
@@ -143,8 +140,11 @@ async function transcribeOpenAI(filePath: string, config: WhisperConfig): Promis
   const apiKey = config.apiKey ?? process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY missing");
 
+  const fileBuffer = readFileSync(filePath);
+  const filename = filePath.split("/").pop() ?? "audio.mp3";
+
   const form = new FormData();
-  form.append("file", createReadStream(filePath));
+  form.append("file", new Blob([fileBuffer], { type: "audio/mpeg" }), filename);
   form.append("model", "whisper-1");
   form.append("language", "de");
   form.append("response_format", "verbose_json");
@@ -152,7 +152,7 @@ async function transcribeOpenAI(filePath: string, config: WhisperConfig): Promis
 
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, ...form.getHeaders() },
+    headers: { Authorization: `Bearer ${apiKey}` },
     body: form
   });
 
@@ -173,15 +173,17 @@ async function transcribeOpenAI(filePath: string, config: WhisperConfig): Promis
 async function transcribeSelfhosted(filePath: string, config: WhisperConfig): Promise<TranscriptResult> {
   const endpoint = config.endpoint ?? "http://localhost:9000/v1/audio/transcriptions";
   const apiKey = config.apiKey ?? "local";
+  const fileBuffer = readFileSync(filePath);
+  const filename = filePath.split("/").pop() ?? "audio.mp3";
 
   const form = new FormData();
-  form.append("file", createReadStream(filePath));
+  form.append("file", new Blob([fileBuffer], { type: "audio/mpeg" }), filename);
   form.append("model", "whisper-1");
   form.append("response_format", "verbose_json");
 
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, ...form.getHeaders() },
+    headers: { Authorization: `Bearer ${apiKey}` },
     body: form
   });
 
