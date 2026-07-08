@@ -29,8 +29,8 @@ COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
 
-COPY --from=builder /app/apps/backend/start.sh ./start.sh
-RUN chmod +x ./start.sh
+COPY --from=builder /app/apps/backend/start.sh ./apps/backend/start.sh
+RUN chmod +x ./apps/backend/start.sh
 WORKDIR /app/apps/backend
 EXPOSE 3001
 CMD ["sh", "start.sh"]
