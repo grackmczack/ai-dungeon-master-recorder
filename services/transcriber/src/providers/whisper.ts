@@ -1,5 +1,5 @@
 import FormData from "form-data";
-import { createReadStream, statSync } from "node:fs";
+import { createReadStream, statSync, readFileSync } from "node:fs";
 import fetch from "node-fetch";
 
 export interface TranscriptSegment {
@@ -23,22 +23,22 @@ export interface WhisperConfig {
 
 // --- Replicate: File Upload + WhisperX ---
 async function uploadToReplicate(filePath: string, apiKey: string): Promise<string> {
-  const fileStats = statSync(filePath);
   const filename = filePath.split("/").pop() ?? "audio.mp3";
   const mimeType = filename.endsWith(".mp3") ? "audio/mpeg" : "audio/wav";
+  const fileBuffer = readFileSync(filePath);
+  const sizeMB = Math.round(fileBuffer.length / 1024 / 1024 * 10) / 10;
 
-  console.log(`[REPLICATE] Uploading ${filename} (${Math.round(fileStats.size / 1024 / 1024 * 10) / 10}MB)...`);
+  console.log(`[REPLICATE] Uploading ${filename} (${sizeMB}MB)...`);
 
-  // Replicate File Upload API
   const res = await fetch("https://api.replicate.com/v1/files", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": mimeType,
-      "Content-Length": String(fileStats.size),
+      "Content-Length": String(fileBuffer.length),
       "Content-Disposition": `attachment; filename="${filename}"`
     },
-    body: createReadStream(filePath)
+    body: fileBuffer
   });
 
   if (!res.ok) {
