@@ -4,6 +4,7 @@
   import { api } from '$lib/api.js';
   import { auth } from '$lib/auth.js';
   import { parallax } from '$lib/actions/parallax.js';
+  import WikiView from '$lib/components/WikiView.svelte';
   import type { Group } from '$lib/types.js';
 
   let group: any = $state(null);
@@ -13,9 +14,11 @@
   let contextEdits: Record<string, string> = $state({});
 
   // Tab state
-  let activeView: 'sessions' | 'diary' | 'members' = $state('sessions');
+  let activeView: 'sessions' | 'diary' | 'wiki' | 'members' = $state('sessions');
 
-  // Diary state
+  // Wiki state
+  let wikiCampaignId: string | null = $state(null);
+  let wikiCampaignName: string = $state('');
   let diaryLoading = $state(false);
   let diarySessions: any[] = $state([]);
 
@@ -274,6 +277,17 @@
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'diary' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📖 Tagebuch
       </button>
+      <button onclick={() => {
+          activeView = 'wiki';
+          // Wähle erste Kampagne für Wiki-Ansicht
+          if (!wikiCampaignId && group?.campaigns?.length) {
+            wikiCampaignId = group.campaigns[0].id;
+            wikiCampaignName = group.campaigns[0].name;
+          }
+        }}
+        class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'wiki' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
+        📜 Wiki
+      </button>
       <button onclick={() => activeView = 'members'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'members' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         👥 Mitglieder
@@ -437,6 +451,34 @@
           {/each}
         {/if}
       </div>
+    {:else if activeView === 'wiki'}
+      <!-- Quest-Wiki -->
+      {#if group.campaigns.length === 0}
+        <div class="text-center py-16 bg-surface-800 rounded-2xl border border-surface-600">
+          <div class="text-5xl mb-3">📜</div>
+          <p class="text-gray-500 text-sm">Keine Kampagnen — Wiki wird mit der ersten Session verfügbar</p>
+        </div>
+      {:else if group.campaigns.length === 1}
+        <WikiView campaignId={group.campaigns[0].id} campaignName={group.campaigns[0].name} />
+      {:else}
+        <!-- Mehrere Kampagnen: Auswahl + Wiki -->
+        <div class="space-y-4">
+          <div class="flex gap-2 flex-wrap">
+            {#each group.campaigns as campaign}
+              <button
+                onclick={() => { wikiCampaignId = campaign.id; wikiCampaignName = campaign.name; }}
+                class="px-3 py-1.5 rounded-lg text-sm font-medium transition {wikiCampaignId === campaign.id ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white border border-surface-600'}">
+                {campaign.name}
+              </button>
+            {/each}
+          </div>
+          {#if wikiCampaignId}
+            <WikiView campaignId={wikiCampaignId} campaignName={wikiCampaignName} />
+          {:else}
+            <div class="text-center py-12 text-gray-600 text-sm">Wähle eine Kampagne aus</div>
+          {/if}
+        </div>
+      {/if}
     {:else if activeView === 'members'}
       <!-- Mitglieder-Verwaltung -->
       <div class="space-y-6">

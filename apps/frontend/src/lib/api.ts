@@ -1,5 +1,6 @@
 import { auth } from './auth.js';
 import { browser } from '$app/environment';
+import type { AggregatedWiki, WikiNPC } from './types.js';
 
 const BASE = '/api';
 
@@ -129,5 +130,11 @@ export const api = {
     return data as { backgroundImageUrl: string };
   },
   removeCampaignBackground: (campaignId: string) =>
-    request<any>(`/campaigns/${campaignId}/background`, { method: 'DELETE' })
+    request<any>(`/campaigns/${campaignId}/background`, { method: 'DELETE' }),
+
+  // Quest-Wiki (Stufe 1 — Aggregation aus Session-Summaries)
+  getWiki: (campaignId: string) =>
+    request<AggregatedWiki>(`/wiki/${campaignId}`),
+  getWikiNPCs: (campaignId: string) =>
+    request<WikiNPC[]>(`/wiki/${campaignId}/npcs`),
 };

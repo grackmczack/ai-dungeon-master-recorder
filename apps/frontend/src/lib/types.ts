@@ -134,3 +134,54 @@ export interface ApiError {
   error: string | object;
   statusCode?: number;
 }
+
+// ─── Quest-Wiki Types ───────────────────────────────────────
+
+export interface WikiNPC {
+  name: string;
+  description: string;
+  firstSeenSessionId: string | null;
+  lastSeenSessionId: string | null;
+  firstSeenSessionNumber: number | null;
+  lastSeenSessionNumber: number | null;
+  sessionCount: number;
+}
+
+export interface WikiQuest {
+  title: string;
+  status: string;
+  notes: string;
+  firstSeenSessionId: string | null;
+  lastSeenSessionId: string | null;
+  allNotes: string[];
+}
+
+export interface WikiLocation {
+  name: string;
+  description: string;
+  sessionCount: number;
+}
+
+export interface WikiThread {
+  text: string;
+  sessionId: string | null;
+  sessionNumber: number | null;
+}
+
+export interface WikiLoot {
+  item: string;
+  foundBy: string;
+  sessionId: string | null;
+  sessionNumber: number | null;
+}
+
+export interface AggregatedWiki {
+  campaignId: string;
+  campaignName: string;
+  sessionCount: number;
+  npcs: WikiNPC[];
+  quests: WikiQuest[];
+  locations: WikiLocation[];
+  threads: WikiThread[];
+  loot: WikiLoot[];
+}
