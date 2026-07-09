@@ -20,6 +20,8 @@ RUN pnpm --filter @ai-dungeon-master-recorder/backend run db:generate
 RUN pnpm --filter @ai-dungeon-master-recorder/transcriber run build
 
 FROM node:22-alpine AS runner
+# Prisma's auto-downloaded schema-engine binary needs OpenSSL 1.1 compat
+RUN apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/v3.16/main libssl1.1 libcrypto1.1 ffmpeg
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node
@@ -28,4 +30,4 @@ COPY --from=builder /app/services/transcriber/package.json ./services/transcribe
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/services/transcriber/node_modules ./services/transcriber/node_modules
 WORKDIR /app/services/transcriber
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/worker.js"]
