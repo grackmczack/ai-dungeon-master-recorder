@@ -36,19 +36,22 @@ model Group {
 
 model GroupMembership {
   id            String    @id @default(cuid())
-  userId        String
+  userId        String?
   groupId       String
   role          Role      @default(PLAYER)
+  discordName   String?
   characterName String?
+  partyRole     String?
+  avatarUrl          String?
+  characterSheetUrl  String?
   joinedAt      DateTime  @default(now())
   leftAt        DateTime?
   isPaused      Boolean   @default(false)
   pausedAt      DateTime?
   pauseNote     String?
   notes         String?
-  user     User      @relation(fields: [userId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
   group    Group     @relation(fields: [groupId], references: [id])
-  @@unique([userId, groupId])
 }
 
 enum Role {
@@ -145,8 +148,10 @@ model SpeakerMap {
   discordName   String
   characterName String?
   playerName    String?
+  diarizationLabel String?
   session       Session @relation(fields: [sessionId], references: [id])
   @@unique([sessionId, discordUserId])
+  @@unique([sessionId, diarizationLabel])
 }
 
 model GroupSettings {

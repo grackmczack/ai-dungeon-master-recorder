@@ -18,20 +18,53 @@
 
   // Speaker edit state
   let editingSpeakers = $state(false);
-  let speakerEdits = $state<Array<{ discordUserId: string; discordName: string; characterName: string; playerName: string }>>([]);
+  let speakerEdits = $state<Array<{ discordUserId: string; discordName: string; characterName: string; playerName: string; diarizationLabel: string }>>([]);
   let savingSpeakers = $state(false);
+  let diarizationLabels: Array<{ label: string; count: number; sample: string }> = $state([]);
+
+  // Titel-Edit state
+  let editingTitle = $state(false);
+  let titleEdit = $state('');
+  let savingTitle = $state(false);
 
   onMount(async () => {
     try {
-      session = await api.getSession($page.params.id!);
+      const loaded = await api.getSession($page.params.id!);
+      session = loaded;
       buildSpeakerColorMap();
       initSpeakerEdits();
+      if (loaded.transcript) {
+        diarizationLabels = await api.getDiarizationLabels($page.params.id!).catch(() => []);
+      }
     } catch (e: any) {
       error = e.error ?? 'Session nicht gefunden';
     } finally {
       loading = false;
     }
   });
+
+  function startEditTitle() {
+    titleEdit = session?.title ?? '';
+    editingTitle = true;
+  }
+
+  async function saveTitle() {
+    if (!session) return;
+    savingTitle = true;
+    try {
+      await api.updateSessionTitle(session.id, titleEdit);
+      session.title = titleEdit;
+      editingTitle = false;
+    } catch (e: any) {
+      alert(e.error ?? 'Fehler beim Speichern des Titels');
+    } finally {
+      savingTitle = false;
+    }
+  }
+
+  function recordingUrl(filename: string): string {
+    return `/api/uploads/recordings/${filename}`;
+  }
 
   /** Normalisiert rawJson — gibt immer ein flaches segments[] zurück */
   function getSegments(): TranscriptSegment[] {
@@ -70,7 +103,8 @@
       discordUserId: sm.discordUserId,
       discordName: sm.discordName,
       characterName: sm.characterName ?? '',
-      playerName: sm.playerName ?? ''
+      playerName: sm.playerName ?? '',
+      diarizationLabel: sm.diarizationLabel ?? ''
     }));
   }
 
@@ -89,7 +123,11 @@
   }
 
   function getSpeakerName(speakerId: string): string {
-    const sm = session?.speakerMaps?.find(s => s.discordUserId === speakerId);
+    // speakerId ist das anonyme Diarization-Label aus dem Transkript (z.B. "SPEAKER_00").
+    // Zuerst gegen diarizationLabel matchen (korrekte Zuordnung), als Fallback gegen
+    // discordUserId (Altdaten / Bot-generierte SpeakerMaps ohne Label).
+    const sm = session?.speakerMaps?.find(s => s.diarizationLabel === speakerId)
+      ?? session?.speakerMaps?.find(s => s.discordUserId === speakerId);
     return sm?.characterName ?? sm?.playerName ?? sm?.discordName ?? speakerId;
   }
 
@@ -121,13 +159,30 @@
     <!-- Header -->
     <div class="mb-8">
       <div class="flex items-start justify-between">
-        <div>
-          <h1 class="text-3xl font-bold text-white">
-            {session.title ?? `Session #${session.sessionNumber ?? '?'}`}
-          </h1>
+        <div class="flex-1 min-w-0">
+          {#if editingTitle}
+            <div class="flex items-center gap-2">
+              <input bind:value={titleEdit} placeholder="Session-Titel"
+                class="text-2xl font-bold bg-surface-800 border border-brand-500/40 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-brand-500 w-full max-w-lg" />
+              <button onclick={saveTitle} disabled={savingTitle}
+                class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm px-3 py-2 rounded-lg transition">
+                {savingTitle ? '...' : 'Speichern'}
+              </button>
+              <button onclick={() => editingTitle = false} class="text-gray-500 hover:text-white text-sm px-2 py-2 transition">Abbrechen</button>
+            </div>
+          {:else}
+            <div class="flex items-center gap-2 group">
+              <h1 class="text-3xl font-bold text-white">
+                {session.title ?? `Session #${session.sessionNumber ?? '?'}`}
+              </h1>
+              <button onclick={startEditTitle} class="text-gray-600 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition text-lg" title="Titel bearbeiten">
+                ✏️
+              </button>
+            </div>
+          {/if}
           <p class="text-gray-500 mt-1">{formatDate(session.startedAt)}</p>
         </div>
-        <span class="text-sm px-3 py-1.5 rounded-full {session.status === 'DONE' ? 'bg-green-500/10 text-green-400' : session.status === 'FAILED' ? 'bg-red-500/10 text-red-400' : 'bg-yellow-500/10 text-yellow-400'}">
+        <span class="text-sm px-3 py-1.5 rounded-full shrink-0 {session.status === 'DONE' ? 'bg-green-500/10 text-green-400' : session.status === 'FAILED' ? 'bg-red-500/10 text-red-400' : 'bg-yellow-500/10 text-yellow-400'}">
           {session.status}
         </span>
       </div>
@@ -165,6 +220,21 @@
               <span>Generiert von</span>
               <span class="bg-surface-700 px-2 py-0.5 rounded font-mono">{session.summary.provider}/{session.summary.model}</span>
             </div>
+
+            {#if session.recordings?.length}
+              <div class="mt-4 pt-4 border-t border-surface-600">
+                <p class="text-xs text-gray-500 mb-2">🎧 Aufnahmen dieser Session</p>
+                <div class="flex flex-wrap gap-2">
+                  {#each session.recordings as rec, i}
+                    <a href={recordingUrl(rec.filename)} target="_blank" download
+                      class="text-xs bg-surface-700 hover:bg-surface-600 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                      🔊 Part {i + 1}
+                      {#if rec.durationSeconds}<span class="text-gray-600">· {Math.round(rec.durationSeconds / 60)} min</span>{/if}
+                    </a>
+                  {/each}
+                </div>
+              </div>
+            {/if}
           </div>
 
           <!-- NPCs + Quests + Loot Grid -->
@@ -281,55 +351,89 @@
 
     <!-- Speakers Tab -->
     {:else if activeTab === 'speakers'}
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h3 class="font-semibold text-white">Sprecher zuordnen</h3>
-            <p class="text-xs text-gray-500 mt-1">Ordne Discord-Usernamen den Charakternamen zu</p>
+      <div class="space-y-5">
+        {#if diarizationLabels.length > 0}
+          <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6">
+            <h3 class="font-semibold text-white mb-1">🎙️ Erkannte Sprecher im Transkript</h3>
+            <p class="text-xs text-gray-500 mb-4">Die automatische Transkription erkennt anonyme Sprecher-Labels (z.B. "SPEAKER_00") — hier ein Ausschnitt aus dem, was jedes Label gesagt hat. Hilft bei der Zuordnung unten.</p>
+            <div class="space-y-2">
+              {#each diarizationLabels as dl}
+                <div class="flex items-start gap-3 text-sm bg-surface-700/50 rounded-lg px-3 py-2">
+                  <span class="font-mono text-xs {speakerColorMap[dl.label] ?? 'text-gray-400'} shrink-0 pt-0.5">{dl.label}</span>
+                  <span class="text-gray-400 italic flex-1">„{dl.sample}…“</span>
+                  <span class="text-xs text-gray-600 shrink-0">{dl.count} Segmente</span>
+                </div>
+              {/each}
+            </div>
           </div>
-          {#if !editingSpeakers}
-            <button onclick={() => editingSpeakers = true}
-              class="text-sm border border-surface-500 hover:border-brand-500 text-gray-400 hover:text-white px-4 py-2 rounded-lg transition">
-              Bearbeiten
-            </button>
+        {/if}
+
+        <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h3 class="font-semibold text-white">Sprecher zuordnen</h3>
+              <p class="text-xs text-gray-500 mt-1">Ordne Discord-Usernamen, Charakternamen und das erkannte Transkript-Label einander zu</p>
+            </div>
+            {#if !editingSpeakers}
+              <button onclick={() => editingSpeakers = true}
+                class="text-sm border border-surface-500 hover:border-brand-500 text-gray-400 hover:text-white px-4 py-2 rounded-lg transition">
+                Bearbeiten
+              </button>
+            {/if}
+          </div>
+
+          {#if speakerEdits.length === 0}
+            <p class="text-gray-600 text-sm">Keine Sprecher erfasst</p>
+          {:else}
+            <div class="space-y-4">
+              {#if editingSpeakers}
+                <div class="grid grid-cols-4 gap-3 text-xs text-gray-500 font-medium px-1">
+                  <span>Discord-User</span>
+                  <span>Transkript-Label</span>
+                  <span>Charaktername</span>
+                  <span>Spielername</span>
+                </div>
+              {/if}
+              {#each speakerEdits as edit, i}
+                <div class="grid grid-cols-4 gap-3 items-center">
+                  <div class="text-sm text-gray-400 font-medium truncate">{edit.discordName}</div>
+                  {#if editingSpeakers}
+                    <select bind:value={speakerEdits[i].diarizationLabel}
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                      <option value="">— kein Label —</option>
+                      {#each diarizationLabels as dl}
+                        <option value={dl.label}>{dl.label}</option>
+                      {/each}
+                    </select>
+                    <input bind:value={speakerEdits[i].characterName}
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
+                      placeholder="Charaktername" />
+                    <input bind:value={speakerEdits[i].playerName}
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
+                      placeholder="Spielername" />
+                  {:else}
+                    <span class="text-sm font-mono text-gray-400">{edit.diarizationLabel || '—'}</span>
+                    <span class="text-sm text-white">{edit.characterName || '—'}</span>
+                    <span class="text-sm text-gray-500">{edit.playerName || '—'}</span>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+
+            {#if editingSpeakers}
+              <div class="flex gap-3 mt-6 pt-6 border-t border-surface-600">
+                <button onclick={saveSpeakers} disabled={savingSpeakers}
+                  class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                  {savingSpeakers ? 'Speichern...' : 'Speichern'}
+                </button>
+                <button onclick={() => { editingSpeakers = false; initSpeakerEdits(); }}
+                  class="text-gray-500 hover:text-white px-5 py-2 rounded-lg text-sm transition">
+                  Abbrechen
+                </button>
+              </div>
+            {/if}
           {/if}
         </div>
-
-        {#if speakerEdits.length === 0}
-          <p class="text-gray-600 text-sm">Keine Sprecher erfasst</p>
-        {:else}
-          <div class="space-y-4">
-            {#each speakerEdits as edit, i}
-              <div class="grid grid-cols-3 gap-3 items-center">
-                <div class="text-sm text-gray-400 font-medium truncate">{edit.discordName}</div>
-                {#if editingSpeakers}
-                  <input bind:value={speakerEdits[i].characterName}
-                    class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
-                    placeholder="Charaktername" />
-                  <input bind:value={speakerEdits[i].playerName}
-                    class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
-                    placeholder="Spielername" />
-                {:else}
-                  <span class="text-sm text-white">{edit.characterName || '—'}</span>
-                  <span class="text-sm text-gray-500">{edit.playerName || '—'}</span>
-                {/if}
-              </div>
-            {/each}
-          </div>
-
-          {#if editingSpeakers}
-            <div class="flex gap-3 mt-6 pt-6 border-t border-surface-600">
-              <button onclick={saveSpeakers} disabled={savingSpeakers}
-                class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-                {savingSpeakers ? 'Speichern...' : 'Speichern'}
-              </button>
-              <button onclick={() => { editingSpeakers = false; initSpeakerEdits(); }}
-                class="text-gray-500 hover:text-white px-5 py-2 rounded-lg text-sm transition">
-                Abbrechen
-              </button>
-            </div>
-          {/if}
-        {/if}
       </div>
     {/if}
   {/if}

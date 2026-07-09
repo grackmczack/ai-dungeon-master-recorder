@@ -41,16 +41,62 @@ export const api = {
   createGroup: (data: { name: string; description?: string; discordGuildId?: string }) =>
     request<any>('/groups', { method: 'POST', body: JSON.stringify(data) }),
   getGroup: (id: string) => request<any>(`/groups/${id}`),
-  inviteMember: (groupId: string, email: string, role = 'PLAYER') =>
+
+  // Members (v1 — direkte Verwaltung, kein Login/Email nötig)
+  createMember: (groupId: string, data: { discordName?: string; characterName?: string; partyRole?: string; role?: string; notes?: string }) =>
     request<any>(`/groups/${groupId}/members`, {
-      method: 'POST', body: JSON.stringify({ email, role })
+      method: 'POST', body: JSON.stringify(data)
     }),
+  updateMember: (groupId: string, memberId: string, data: { discordName?: string | null; characterName?: string | null; partyRole?: string | null; role?: string; notes?: string | null }) =>
+    request<any>(`/groups/${groupId}/members/${memberId}`, {
+      method: 'PATCH', body: JSON.stringify(data)
+    }),
+  pauseMember: (groupId: string, memberId: string, note?: string) =>
+    request<any>(`/groups/${groupId}/members/${memberId}/pause`, {
+      method: 'POST', body: JSON.stringify({ note })
+    }),
+  resumeMember: (groupId: string, memberId: string) =>
+    request<any>(`/groups/${groupId}/members/${memberId}/resume`, { method: 'POST' }),
+  removeMember: (groupId: string, memberId: string) =>
+    request<any>(`/groups/${groupId}/members/${memberId}`, { method: 'DELETE' }),
+  uploadMemberAvatar: async (groupId: string, memberId: string, file: File) => {
+    const token = auth.getToken();
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/groups/${groupId}/members/${memberId}/avatar`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form
+    });
+    const data = await res.json();
+    if (!res.ok) throw { ...data, statusCode: res.status };
+    return data as { avatarUrl: string };
+  },
+  uploadMemberCharacterSheet: async (groupId: string, memberId: string, file: File) => {
+    const token = auth.getToken();
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/groups/${groupId}/members/${memberId}/character-sheet`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form
+    });
+    const data = await res.json();
+    if (!res.ok) throw { ...data, statusCode: res.status };
+    return data as { characterSheetUrl: string };
+  },
 
   // Sessions
   getSession: (id: string) => request<any>(`/sessions/${id}`),
   updateSpeakers: (sessionId: string, speakers: any[]) =>
     request<any>(`/sessions/${sessionId}/speakers`, {
       method: 'PUT', body: JSON.stringify({ speakers })
+    }),
+  getDiarizationLabels: (sessionId: string) =>
+    request<any[]>(`/sessions/${sessionId}/diarization-labels`),
+  updateSessionTitle: (sessionId: string, title: string) =>
+    request<any>(`/sessions/${sessionId}`, {
+      method: 'PATCH', body: JSON.stringify({ title })
     }),
 
   // Settings

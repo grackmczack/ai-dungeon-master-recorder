@@ -7,17 +7,22 @@ export interface User {
 
 export interface GroupMembership {
   id: string;
-  userId: string;
+  userId?: string | null;
   groupId: string;
   role: 'GM' | 'PLAYER' | 'OBSERVER';
+  discordName?: string;
   characterName?: string;
+  partyRole?: string;
+  avatarUrl?: string;
+  characterSheetUrl?: string;
   joinedAt: string;
   leftAt?: string;
   isPaused: boolean;
   pausedAt?: string;
   pauseNote?: string;
   notes?: string;
-  user: { id: string; email: string; displayName: string };
+  // user ist nur gesetzt, wenn dieses Mitglied ein eigenes Login hat (i.d.R. nur der GM)
+  user?: { id: string; email: string; displayName: string } | null;
 }
 
 export interface Group {
@@ -102,6 +107,13 @@ export interface SpeakerMap {
   discordName: string;
   characterName?: string;
   playerName?: string;
+  diarizationLabel?: string;
+}
+
+export interface DiarizationLabelInfo {
+  label: string;
+  count: number;
+  sample: string;
 }
 
 export interface GroupSettings {

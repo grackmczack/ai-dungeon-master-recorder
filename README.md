@@ -222,11 +222,20 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | GET | `/groups` | Eigene Gruppen |
 | POST | `/groups` | Gruppe erstellen |
 | GET | `/groups/:id` | Gruppe mit Kampagnen + Sessions |
-| POST | `/groups/:id/members` | Mitglied einladen |
+| GET | `/groups/:groupId/members` | Alle Mitglieder (inkl. Historie) |
+| POST | `/groups/:groupId/members` | Mitglied direkt anlegen (kein Login nötig) |
+| PATCH | `/groups/:groupId/members/:memberId` | Mitglied bearbeiten |
+| POST | `/groups/:groupId/members/:memberId/pause` | Mitglied pausieren |
+| POST | `/groups/:groupId/members/:memberId/resume` | Pause aufheben |
+| DELETE | `/groups/:groupId/members/:memberId` | Mitglied entfernen (soft-delete) |
+| POST | `/groups/:groupId/members/:memberId/avatar` | Avatar/Gesichtsbild hochladen |
+| POST | `/groups/:groupId/members/:memberId/character-sheet` | Charakterbogen (PDF) hochladen |
 | GET | `/groups/:groupId/settings` | Einstellungen lesen |
 | PUT | `/groups/:groupId/settings` | Einstellungen speichern |
 | GET | `/sessions/:id` | Session-Detail mit Transcript + Summary |
-| PUT | `/sessions/:id/speakers` | Speaker-Namen zuordnen |
+| PATCH | `/sessions/:id` | Session-Titel ändern |
+| PUT | `/sessions/:id/speakers` | Speaker-Namen zuordnen (inkl. Diarization-Label) |
+| GET | `/sessions/:id/diarization-labels` | Erkannte Sprecher-Labels aus dem Transkript mit Textausschnitt |
 | PUT | `/campaigns/:id/context` | Kampagnen-Kontext setzen |
 | POST | `/internal/sessions` | (intern) Session anlegen via Bot |
 
@@ -236,16 +245,22 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 
 ```
 Group (Discord-Server / Spielgruppe)
-  ├── GroupMembership (User, Rolle: GM/PLAYER/OBSERVER, joinedAt/leftAt)
+  ├── GroupMembership (Mitglied — braucht KEINEN eigenen Login/Account in v1;
+  │     userId optional (nur GM/DM), discordName, characterName, partyRole,
+  │     avatarUrl, characterSheetUrl, Rolle GM/PLAYER/OBSERVER, joinedAt/leftAt)
   ├── GroupSettings (API-Keys, Provider, Prompt, Kampagnen-Kontext)
   └── Campaign (Kampagne, z.B. "Vergessene Reiche")
         ├── campaignContext (Hintergrundinfo für LLM)
         └── Session (eine Spielrunde)
               ├── Recording (MP3-Chunk, filePath, durationSeconds)
-              ├── Transcript (rawJson mit Segmenten, Speaker, Timestamps)
+              ├── Transcript (rawJson mit Segmenten, Speaker-Label, Timestamps)
               ├── Summary (narrative, npcs, quests, loot, locations, openThreads)
-              └── SpeakerMap (discordUserId ↔ characterName ↔ playerName)
+              └── SpeakerMap (discordUserId ↔ characterName ↔ playerName ↔ diarizationLabel)
 ```
+
+**Hinweis Mitglieder-Modell:** Ein `discordName` (realer User) kann in verschiedenen
+Kampagnen unterschiedliche Charaktere haben — die Zuordnung liegt daher pro
+`GroupMembership`, nicht global am User.
 
 ---
 

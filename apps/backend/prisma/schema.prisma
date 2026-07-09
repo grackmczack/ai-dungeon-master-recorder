@@ -16,16 +16,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships  GroupMembership[]
+  memberships GroupMembership[]
 }
 
 model Group {
-  id          String   @id @default(cuid())
-  name        String
-  discordGuildId String? @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  discordGuildId String?  @unique
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   memberships GroupMembership[]
   campaigns   Campaign[]
@@ -33,22 +33,30 @@ model Group {
 }
 
 model GroupMembership {
-  id            String    @id @default(cuid())
-  userId        String
-  groupId       String
-  role          Role      @default(PLAYER)
-  characterName String?
-  joinedAt      DateTime  @default(now())
-  leftAt        DateTime?
-  isPaused      Boolean   @default(false)
-  pausedAt      DateTime?
-  pauseNote     String?
-  notes         String?
+  id                String    @id @default(cuid())
+  // userId ist optional: Mitglieder sind in v1 reine Entitäten ohne eigenen Login.
+  // Ein User-Account (userId gesetzt) ist nur für den DM/GM nötig, der sich einloggt.
+  userId            String?
+  groupId           String
+  role              Role      @default(PLAYER)
+  // Discord-Handle des realen Spielers (z.B. "grackmczack"). Ein discordName kann
+  // in verschiedenen Kampagnen unterschiedliche Charaktere haben — daher liegt
+  // die Zuordnung pro Membership, nicht global am User.
+  discordName       String?
+  characterName     String?
+  // Freitext-Rolle innerhalb der Gruppe (z.B. "Tank", "Healer", "Scout") — nicht zu verwechseln mit Role (GM/PLAYER/OBSERVER)
+  partyRole         String?
+  avatarUrl         String?
+  characterSheetUrl String?
+  joinedAt          DateTime  @default(now())
+  leftAt            DateTime?
+  isPaused          Boolean   @default(false)
+  pausedAt          DateTime?
+  pauseNote         String?
+  notes             String?
 
-  user  User  @relation(fields: [userId], references: [id])
+  user  User? @relation(fields: [userId], references: [id])
   group Group @relation(fields: [groupId], references: [id])
-
-  @@unique([userId, groupId])
 }
 
 enum Role {
@@ -58,34 +66,34 @@ enum Role {
 }
 
 model Campaign {
-  id          String   @id @default(cuid())
-  groupId     String
-  name        String
-  description String?
-  setting     String?
-  isActive         Boolean  @default(true)
-  campaignContext  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  groupId         String
+  name            String
+  description     String?
+  setting         String?
+  isActive        Boolean  @default(true)
+  campaignContext String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   group    Group     @relation(fields: [groupId], references: [id])
   sessions Session[]
 }
 
 model Session {
-  id             String        @id @default(cuid())
-  campaignId     String
-  discordGuildId String
-  sessionNumber  Int?
-  title          String?
-  startedAt      DateTime      @default(now())
+  id              String        @id @default(cuid())
+  campaignId      String
+  discordGuildId  String
+  sessionNumber   Int?
+  title           String?
+  startedAt       DateTime      @default(now())
   stoppedAt       DateTime?
   status          SessionStatus @default(RECORDING)
   activeMemberIds String[]      @default([])
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  campaign    Campaign      @relation(fields: [campaignId], references: [id])
+  campaign    Campaign     @relation(fields: [campaignId], references: [id])
   recordings  Recording[]
   transcript  Transcript?
   summary     Summary?
@@ -115,30 +123,30 @@ model Recording {
 }
 
 model Transcript {
-  id         String   @id @default(cuid())
-  sessionId  String   @unique
-  rawJson    Json
-  provider   String
-  language   String   @default("de")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  rawJson   Json
+  provider  String
+  language  String   @default("de")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   session Session @relation(fields: [sessionId], references: [id])
 }
 
 model Summary {
-  id           String   @id @default(cuid())
-  sessionId    String   @unique
-  narrative    String
-  npcs         Json     @default("[]")
-  quests       Json     @default("[]")
-  loot         Json     @default("[]")
-  locations    Json     @default("[]")
-  openThreads  Json     @default("[]")
-  model        String
-  provider     String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  sessionId   String   @unique
+  narrative   String
+  npcs        Json     @default("[]")
+  quests      Json     @default("[]")
+  loot        Json     @default("[]")
+  locations   Json     @default("[]")
+  openThreads Json     @default("[]")
+  model       String
+  provider    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   session Session @relation(fields: [sessionId], references: [id])
 }
@@ -150,25 +158,30 @@ model SpeakerMap {
   discordName   String
   characterName String?
   playerName    String?
+  // Verknüpfung zum anonymen Diarization-Label aus dem Transkript (z.B. "SPEAKER_00").
+  // WhisperX liefert nur anonyme Sprecher-Labels, keine echten Discord-Namen —
+  // der DM ordnet hier manuell zu, welches Label zu welchem echten Teilnehmer gehört.
+  diarizationLabel String?
 
   session Session @relation(fields: [sessionId], references: [id])
 
   @@unique([sessionId, discordUserId])
+  @@unique([sessionId, diarizationLabel])
 }
 
 model GroupSettings {
-  id                    String  @id @default(cuid())
-  groupId               String  @unique
-  whisperProvider       String  @default("openai")
-  whisperApiKey         String?
-  whisperEndpoint       String?
-  replicateApiKey       String?
-  llmProvider           String  @default("anthropic")
-  llmApiKey             String?
-  llmModel              String?
-  llmEndpoint           String?
-  summaryLanguage       String  @default("de")
-  postSummaryChannelId  String?
+  id                   String  @id @default(cuid())
+  groupId              String  @unique
+  whisperProvider      String  @default("openai")
+  whisperApiKey        String?
+  whisperEndpoint      String?
+  replicateApiKey      String?
+  llmProvider          String  @default("anthropic")
+  llmApiKey            String?
+  llmModel             String?
+  llmEndpoint          String?
+  summaryLanguage      String  @default("de")
+  postSummaryChannelId String?
   llmSystemPrompt      String?
   llmCampaignContext   String?
 

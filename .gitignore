@@ -28,6 +28,12 @@ storage/*
 !storage/recordings/
 storage/recordings/*
 !storage/recordings/.gitkeep
+!storage/avatars/
+storage/avatars/*
+!storage/avatars/.gitkeep
+!storage/character-sheets/
+storage/character-sheets/*
+!storage/character-sheets/.gitkeep
 
 # Editors and OS
 .DS_Store

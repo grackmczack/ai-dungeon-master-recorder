@@ -19,14 +19,26 @@
   let diarySessions: any[] = $state([]);
 
   // Members state
-  let showInvite = $state(false);
-  let inviteEmail = $state('');
-  let inviteRole = $state('PLAYER');
-  let inviteCharName = $state('');
-  let inviting = $state(false);
-  let inviteError = $state('');
+  let showAddMember = $state(false);
+  let newDiscordName = $state('');
+  let newCharacterName = $state('');
+  let newPartyRole = $state('');
+  let newRole = $state('PLAYER');
+  let creatingMember = $state(false);
+  let createMemberError = $state('');
   let pausingMemberId: string | null = $state(null);
   let pauseNote = $state('');
+
+  // Edit-Modal state
+  let editingMember: any = $state(null);
+  let editDiscordName = $state('');
+  let editCharacterName = $state('');
+  let editPartyRole = $state('');
+  let editRole = $state('PLAYER');
+  let savingMember = $state(false);
+  let editError = $state('');
+  let uploadingAvatar = $state(false);
+  let uploadingSheet = $state(false);
 
   const STATUS_LABELS: Record<string, string> = {
     RECORDING: '🔴 Aufnahme',
@@ -95,55 +107,102 @@
     }
   }
 
-  async function inviteMember() {
-    inviting = true;
-    inviteError = '';
+  async function createMember() {
+    creatingMember = true;
+    createMemberError = '';
     try {
-      const res = await fetch(`/api/groups/${$page.params.id}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.getToken()}` },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole, characterName: inviteCharName || undefined })
+      await api.createMember($page.params.id!, {
+        discordName: newDiscordName || undefined,
+        characterName: newCharacterName || undefined,
+        partyRole: newPartyRole || undefined,
+        role: newRole
       });
-      if (!res.ok) {
-        const d = await res.json() as any;
-        inviteError = d.error ?? 'Fehler beim Einladen';
-        return;
-      }
       group = await api.getGroup($page.params.id!);
-      showInvite = false;
-      inviteEmail = '';
-      inviteCharName = '';
+      showAddMember = false;
+      newDiscordName = '';
+      newCharacterName = '';
+      newPartyRole = '';
+      newRole = 'PLAYER';
     } catch (e: any) {
-      inviteError = e.message ?? 'Fehler';
+      createMemberError = e.error ?? 'Fehler beim Anlegen';
     } finally {
-      inviting = false;
+      creatingMember = false;
+    }
+  }
+
+  function openEditMember(member: any) {
+    editingMember = member;
+    editDiscordName = member.discordName ?? '';
+    editCharacterName = member.characterName ?? '';
+    editPartyRole = member.partyRole ?? '';
+    editRole = member.role;
+    editError = '';
+  }
+
+  async function saveEditMember() {
+    if (!editingMember) return;
+    savingMember = true;
+    editError = '';
+    try {
+      await api.updateMember($page.params.id!, editingMember.id, {
+        discordName: editDiscordName || null,
+        characterName: editCharacterName || null,
+        partyRole: editPartyRole || null,
+        role: editRole
+      });
+      group = await api.getGroup($page.params.id!);
+      editingMember = null;
+    } catch (e: any) {
+      editError = e.error ?? 'Fehler beim Speichern';
+    } finally {
+      savingMember = false;
+    }
+  }
+
+  async function onAvatarSelected(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file || !editingMember) return;
+    uploadingAvatar = true;
+    try {
+      const { avatarUrl } = await api.uploadMemberAvatar($page.params.id!, editingMember.id, file);
+      editingMember.avatarUrl = avatarUrl;
+      group = await api.getGroup($page.params.id!);
+    } catch (e: any) {
+      editError = e.error ?? 'Fehler beim Avatar-Upload';
+    } finally {
+      uploadingAvatar = false;
+    }
+  }
+
+  async function onSheetSelected(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file || !editingMember) return;
+    uploadingSheet = true;
+    try {
+      const { characterSheetUrl } = await api.uploadMemberCharacterSheet($page.params.id!, editingMember.id, file);
+      editingMember.characterSheetUrl = characterSheetUrl;
+      group = await api.getGroup($page.params.id!);
+    } catch (e: any) {
+      editError = e.error ?? 'Fehler beim PDF-Upload';
+    } finally {
+      uploadingSheet = false;
     }
   }
 
   async function pauseMember(memberId: string) {
-    await fetch(`/api/groups/${$page.params.id}/members/${memberId}/pause`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.getToken()}` },
-      body: JSON.stringify({ note: pauseNote })
-    });
+    await api.pauseMember($page.params.id!, memberId, pauseNote);
     group = await api.getGroup($page.params.id!);
     pausingMemberId = null;
   }
 
   async function resumeMember(memberId: string) {
-    await fetch(`/api/groups/${$page.params.id}/members/${memberId}/resume`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${auth.getToken()}` }
-    });
+    await api.resumeMember($page.params.id!, memberId);
     group = await api.getGroup($page.params.id!);
   }
 
   async function removeMember(memberId: string, name: string) {
     if (!confirm(`${name} wirklich aus der Gruppe entfernen? Die Session-Historie bleibt erhalten.`)) return;
-    await fetch(`/api/groups/${$page.params.id}/members/${memberId}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${auth.getToken()}` }
-    });
+    await api.removeMember($page.params.id!, memberId);
     group = await api.getGroup($page.params.id!);
   }
 </script>
@@ -323,25 +382,28 @@
         <!-- Aktive Mitglieder -->
         <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6">
           <div class="flex items-center justify-between mb-5">
-            <h3 class="font-semibold text-white">Aktive Mitglieder</h3>
-            <button onclick={() => showInvite = !showInvite}
+            <div>
+              <h3 class="font-semibold text-white">Aktive Mitglieder</h3>
+              <p class="text-xs text-gray-600 mt-0.5">Mitglieder sind reine Einträge für die Verwaltung — kein eigener Login nötig</p>
+            </div>
+            <button onclick={() => showAddMember = !showAddMember}
               class="text-sm bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg transition">
-              + Einladen
+              + Mitglied hinzufügen
             </button>
           </div>
 
-          <!-- Invite Form -->
-          {#if showInvite}
-            <form onsubmit={inviteMember} class="mb-5 bg-surface-700 rounded-xl p-4 border border-brand-500/30 space-y-3">
+          <!-- Add-Member Form -->
+          {#if showAddMember}
+            <form onsubmit={(e) => { e.preventDefault(); createMember(); }} class="mb-5 bg-surface-700 rounded-xl p-4 border border-brand-500/30 space-y-3">
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">E-Mail</label>
-                  <input bind:value={inviteEmail} type="email" required placeholder="spieler@example.com"
+                  <label class="block text-xs text-gray-500 mb-1">Discordname</label>
+                  <input bind:value={newDiscordName} placeholder="z.B. grackmczack"
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle</label>
-                  <select bind:value={inviteRole}
+                  <label class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
+                  <select bind:value={newRole}
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
                     <option value="PLAYER">🎲 Spieler</option>
                     <option value="GM">🎭 Spielleiter (GM)</option>
@@ -349,19 +411,26 @@
                   </select>
                 </div>
               </div>
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">Charaktername (optional)</label>
-                <input bind:value={inviteCharName} placeholder="z.B. Arkeles der Magier"
-                  class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Charaktername</label>
+                  <input bind:value={newCharacterName} placeholder="z.B. Arkeles der Magier"
+                    class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
+                  <input bind:value={newPartyRole} placeholder="z.B. Tank, Healer, Scout"
+                    class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+                </div>
               </div>
               <div class="flex gap-2">
-                <button type="submit" disabled={inviting}
+                <button type="submit" disabled={creatingMember}
                   class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
-                  {inviting ? 'Einladen...' : 'Einladen'}
+                  {creatingMember ? 'Anlegen...' : 'Hinzufügen'}
                 </button>
-                <button type="button" onclick={() => showInvite = false} class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Abbrechen</button>
+                <button type="button" onclick={() => showAddMember = false} class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Abbrechen</button>
               </div>
-              {#if inviteError}<p class="text-red-400 text-xs">{inviteError}</p>{/if}
+              {#if createMemberError}<p class="text-red-400 text-xs">{createMemberError}</p>{/if}
             </form>
           {/if}
 
@@ -369,30 +438,42 @@
           <div class="space-y-3">
             {#each (group?.memberships ?? []).filter((m: any) => !m.leftAt) as member}
               <div class="flex items-center justify-between py-3 border-b border-surface-700 last:border-0">
-                <div class="flex items-center gap-3">
-                  <div class="w-9 h-9 rounded-full bg-surface-600 flex items-center justify-center text-sm font-medium text-white">
-                    {member.user.displayName[0]?.toUpperCase()}
-                  </div>
-                  <div>
+                <button onclick={() => openEditMember(member)} class="flex items-center gap-3 text-left flex-1 min-w-0">
+                  {#if member.avatarUrl}
+                    <img src={member.avatarUrl} alt="" class="w-9 h-9 rounded-full object-cover bg-surface-600 shrink-0" />
+                  {:else}
+                    <div class="w-9 h-9 rounded-full bg-surface-600 flex items-center justify-center text-sm font-medium text-white shrink-0">
+                      {(member.characterName ?? member.discordName ?? member.user?.displayName ?? '?')[0]?.toUpperCase()}
+                    </div>
+                  {/if}
+                  <div class="min-w-0">
                     <div class="flex items-center gap-2">
-                      <p class="text-sm font-medium text-white">{member.user.displayName}</p>
+                      <p class="text-sm font-medium text-white truncate">
+                        {member.characterName ?? member.discordName ?? member.user?.displayName ?? 'Unbenanntes Mitglied'}
+                      </p>
                       {#if member.isPaused}
-                        <span class="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">⏸ Pausiert</span>
+                        <span class="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full shrink-0">⏸ Pausiert</span>
                       {/if}
                     </div>
-                    <p class="text-xs text-gray-500">
-                      {member.characterName ? `${member.characterName} · ` : ''}{member.user.email}
+                    <p class="text-xs text-gray-500 truncate">
+                      {#if member.discordName}@{member.discordName}{/if}
+                      {#if member.partyRole} · {member.partyRole}{/if}
+                      {#if member.user?.email} · {member.user.email}{/if}
                     </p>
                     {#if member.isPaused && member.pauseNote}
                       <p class="text-xs text-yellow-600 italic mt-0.5">"{member.pauseNote}"</p>
                     {/if}
                   </div>
-                </div>
-                <div class="flex items-center gap-2">
+                </button>
+                <div class="flex items-center gap-2 shrink-0">
                   <span class="text-xs px-2 py-1 rounded-full {member.role === 'GM' ? 'bg-brand-500/20 text-brand-400' : 'bg-gray-700/50 text-gray-400'}">
                     {member.role === 'GM' ? '🎭 GM' : member.role === 'PLAYER' ? '🎲 Spieler' : '👁️ Zuschauer'}
                   </span>
                   <div class="flex gap-1">
+                    <button onclick={() => openEditMember(member)}
+                      class="text-xs text-gray-500 hover:text-brand-400 border border-surface-600 hover:border-brand-500/40 px-2 py-1 rounded transition">
+                      ✏️
+                    </button>
                     {#if member.isPaused}
                       <button onclick={() => resumeMember(member.id)}
                         class="text-xs text-gray-500 hover:text-green-400 border border-surface-600 hover:border-green-500/40 px-2 py-1 rounded transition">
@@ -404,7 +485,7 @@
                         ⏸
                       </button>
                     {/if}
-                    <button onclick={() => removeMember(member.id, member.user.displayName)}
+                    <button onclick={() => removeMember(member.id, member.characterName ?? member.discordName ?? member.user?.displayName ?? 'Mitglied')}
                       class="text-xs text-gray-500 hover:text-red-400 border border-surface-600 hover:border-red-500/40 px-2 py-1 rounded transition">
                       ✕
                     </button>
@@ -414,6 +495,85 @@
             {/each}
           </div>
         </div>
+
+        <!-- Edit-Mitglied-Modal -->
+        {#if editingMember}
+          <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto">
+              <h3 class="font-semibold text-white mb-4">Mitglied bearbeiten</h3>
+
+              <!-- Avatar -->
+              <div class="flex items-center gap-4 mb-5">
+                {#if editingMember.avatarUrl}
+                  <img src={editingMember.avatarUrl} alt="" class="w-16 h-16 rounded-full object-cover bg-surface-700" />
+                {:else}
+                  <div class="w-16 h-16 rounded-full bg-surface-700 flex items-center justify-center text-2xl text-gray-500">👤</div>
+                {/if}
+                <div>
+                  <label class="text-xs text-brand-400 hover:text-brand-300 cursor-pointer border border-surface-600 hover:border-brand-500/40 px-3 py-1.5 rounded-lg transition inline-block">
+                    {uploadingAvatar ? 'Lade hoch...' : 'Avatar hochladen'}
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" onchange={onAvatarSelected} disabled={uploadingAvatar} />
+                  </label>
+                  <p class="text-xs text-gray-600 mt-1">PNG/JPEG/WebP/GIF, max. 15 MB</p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Discordname</label>
+                  <input bind:value={editDiscordName}
+                    class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
+                  <select bind:value={editRole}
+                    class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                    <option value="PLAYER">🎲 Spieler</option>
+                    <option value="GM">🎭 Spielleiter (GM)</option>
+                    <option value="OBSERVER">👁️ Zuschauer</option>
+                  </select>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Charaktername</label>
+                  <input bind:value={editCharacterName}
+                    class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
+                  <input bind:value={editPartyRole} placeholder="z.B. Tank, Healer"
+                    class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+                </div>
+              </div>
+
+              <!-- Charakterbogen -->
+              <div class="mb-5 pb-5 border-b border-surface-700">
+                <label class="block text-xs text-gray-500 mb-2">Charakterbogen (PDF)</label>
+                {#if editingMember.characterSheetUrl}
+                  <a href={editingMember.characterSheetUrl} target="_blank" class="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1.5 mb-2">
+                    📄 Aktueller Charakterbogen öffnen
+                  </a>
+                {/if}
+                <label class="text-xs text-brand-400 hover:text-brand-300 cursor-pointer border border-surface-600 hover:border-brand-500/40 px-3 py-1.5 rounded-lg transition inline-block">
+                  {uploadingSheet ? 'Lade hoch...' : editingMember.characterSheetUrl ? 'PDF ersetzen' : 'PDF hochladen'}
+                  <input type="file" accept="application/pdf" class="hidden" onchange={onSheetSelected} disabled={uploadingSheet} />
+                </label>
+              </div>
+
+              {#if editError}<p class="text-red-400 text-xs mb-3">{editError}</p>{/if}
+
+              <div class="flex gap-3">
+                <button onclick={saveEditMember} disabled={savingMember}
+                  class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                  {savingMember ? 'Speichern...' : 'Speichern'}
+                </button>
+                <button onclick={() => editingMember = null}
+                  class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Schließen</button>
+              </div>
+            </div>
+          </div>
+        {/if}
 
         <!-- Pause-Modal -->
         {#if pausingMemberId}
@@ -441,7 +601,7 @@
               {#each (group?.memberships ?? []).filter((m: any) => m.leftAt) as member}
                 <div class="flex items-center justify-between py-2 opacity-50">
                   <div>
-                    <p class="text-sm text-gray-400">{member.user.displayName}</p>
+                    <p class="text-sm text-gray-400">{member.characterName ?? member.discordName ?? member.user?.displayName ?? 'Unbenanntes Mitglied'}</p>
                     <p class="text-xs text-gray-600">Dabei: {formatDate(member.joinedAt)} – {formatDate(member.leftAt!)}</p>
                   </div>
                   <span class="text-xs text-gray-600">ausgeschieden</span>

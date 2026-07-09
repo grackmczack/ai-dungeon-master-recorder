@@ -1,7 +1,10 @@
 import "dotenv/config";
+import path from "node:path";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
+import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import { authPlugin } from "./plugins/auth.js";
 import { authRoutes } from "./routes/auth.routes.js";
 import { groupsRoutes } from "./routes/groups.routes.js";
@@ -28,6 +31,26 @@ await app.register(cors, {
 
 await app.register(jwt, {
   secret: process.env.JWT_SECRET ?? "dev_secret_change_me_in_production"
+});
+
+await app.register(multipart);
+
+// Statisches Serving für hochgeladene Avatare + Charakterbögen (PDF)
+await app.register(fastifyStatic, {
+  root: path.resolve(process.cwd(), "..", "..", "storage", "avatars"),
+  prefix: "/uploads/avatars/",
+  decorateReply: false
+});
+await app.register(fastifyStatic, {
+  root: path.resolve(process.cwd(), "..", "..", "storage", "character-sheets"),
+  prefix: "/uploads/character-sheets/",
+  decorateReply: false
+});
+// Aufnahmen (MP3-Chunks) — für die Verlinkung im Session-Summary
+await app.register(fastifyStatic, {
+  root: path.resolve(process.cwd(), "..", "..", "storage", "recordings"),
+  prefix: "/uploads/recordings/",
+  decorateReply: false
 });
 
 await app.register(authPlugin);
