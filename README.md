@@ -36,11 +36,13 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 ### Web-Panel
 - **Login** mit JWT-Auth
 - **Dashboard** — Gruppen-Übersicht
-- **Kampagnen** mit Session-Timeline
+- **Kampagnen** mit Session-Timeline, Tagebuch-Tab und Mitgliederverwaltung
+- **Kampagnen-Hintergrundbild** mit Parallax-Scroll-Effekt (Banner über jeder Kampagnen-Karte)
+- **Mitgliederverwaltung** — Discordname, Charaktername, freie Rolle (Tank/Healer/…), Avatar-Upload, Charakterbogen-PDF-Upload; volle CRUD-Operationen, kein Login/Account für Mitglieder nötig (nur der DM loggt sich ein)
 - **Session-Detail** — 3 Tabs:
-  - 📖 Summary (Chronik, NSCs, Quests, Beute, Orte, Offene Fäden)
+  - 📖 Summary (Chronik, NSCs, Quests, Beute, Orte, Offene Fäden, verlinkte MP3-Aufnahmen) — Titel manuell änderbar oder wird vom LLM automatisch mitgeneriert
   - 📝 Transkript (farbig nach Sprecher, mit Timestamps)
-  - 👤 Sprecher (Discord-User → Charakternamen zuordnen)
+  - 👤 Sprecher — Diarization-Label (`SPEAKER_00` etc.) mit Text-Ausschnitt aus dem Transkript zur Orientierung, Zuordnung zu Discord-User/Charaktername/Spielername
 - **Live-Status-Widget** (zeigt ob gerade aufgenommen/transkribiert wird)
 - **Einstellungen** — API-Keys, Provider-Wahl, System-Prompt, Kampagnen-Kontext
 
@@ -86,7 +88,10 @@ services/
 
 shared/               ← Gemeinsame TypeScript-Types (reserved)
 storage/
-  recordings/         ← MP3-Chunks (Docker Volume)
+  recordings/            ← MP3-Chunks (Docker Volume)
+  avatars/               ← Mitglieder-Avatare (Docker Volume)
+  character-sheets/      ← Charakterbögen als PDF (Docker Volume)
+  campaign-backgrounds/  ← Kampagnen-Hintergrundbilder (Docker Volume)
 ```
 
 ---
@@ -160,6 +165,21 @@ docker compose up -d --build
 # Update
 git pull && docker compose up -d --build
 ```
+
+**Bekannter Gotcha — Prisma `db push` schlägt beim Backend-Start fehl:**
+Wenn `docker logs dnd-backend` beim Start `Could not parse schema engine response` zeigt: Prismas
+auto-heruntergeladene Schema-Engine-Binary (genutzt von `prisma db push` in `start.sh`) linkt gegen
+OpenSSL 1.1 (`libssl.so.1.1`), aktuelle Alpine-Images liefern aber nur OpenSSL 3.x. Der Fix ist
+bereits dauerhaft in `apps/backend/Dockerfile` eingebaut (installiert die archivierten Alpine-v3.16-
+Compat-Pakete `libssl1.1`/`libcrypto1.1` in der Runner-Stage) — falls das Backend-Base-Image mal
+aktualisiert wird, hier zuerst nachsehen, ob der Fix noch greift.
+
+Bei Schema-Änderungen, die alte `@@unique`-Constraints entfernen oder Spalten von required auf
+optional umstellen, kann `prisma db push` mit einem Constraint-Konflikt fehlschlagen (z.B.
+`cannot drop index ... because constraint ... requires it`). In dem Fall den alten Constraint
+einmalig manuell per `docker exec dnd-postgres psql ...` entfernen, dann erneut `db push` laufen
+lassen (passiert automatisch beim nächsten Container-Neustart, oder manuell via
+`docker exec dnd-backend sh -c "npx prisma db push --schema ./prisma/schema.prisma --skip-generate"`).
 
 ---
 
@@ -237,6 +257,9 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | PUT | `/sessions/:id/speakers` | Speaker-Namen zuordnen (inkl. Diarization-Label) |
 | GET | `/sessions/:id/diarization-labels` | Erkannte Sprecher-Labels aus dem Transkript mit Textausschnitt |
 | PUT | `/campaigns/:id/context` | Kampagnen-Kontext setzen |
+| PATCH | `/campaigns/:id` | Kampagne bearbeiten (Name, Beschreibung, Setting, aktiv) |
+| POST | `/campaigns/:id/background` | Kampagnen-Hintergrundbild hochladen (GM-only) |
+| DELETE | `/campaigns/:id/background` | Kampagnen-Hintergrundbild entfernen (GM-only) |
 | POST | `/internal/sessions` | (intern) Session anlegen via Bot |
 
 ---
@@ -266,7 +289,10 @@ Kampagnen unterschiedliche Charaktere haben — die Zuordnung liegt daher pro
 
 ## Roadmap
 
-### v0 — aktuell
+Die vollständige, laufend gepflegte Roadmap mit Details, Implementierungs-Staffelung und
+Deployment-Notizen steht in [`ROADMAP.md`](./ROADMAP.md). Kurzüberblick:
+
+### v0 — abgeschlossen
 - [x] Discord-Bot mit /record, /stop, /status
 - [x] WAV → MP3 Konvertierung (FFmpeg)
 - [x] Chunked Recording (30-Min-Parts)
@@ -279,15 +305,18 @@ Kampagnen unterschiedliche Charaktere haben — die Zuordnung liegt daher pro
 - [x] Konfigurierbarer System-Prompt
 - [x] Kampagnen-Kontext für LLM
 - [x] Docker Compose Deployment
-- [ ] Tagebuch-Tab (alle Session-Summaries chronologisch)
-- [ ] Kampagnen umbenennen im Panel
+- [x] Tagebuch-Tab (alle Session-Summaries chronologisch)
 
-### v1 — geplant
-- [ ] Avatar + Gesichtsbild pro Mitglied
-- [ ] Epische Session-Bilder via Replicate Seedream
-- [ ] Charactersheet als PDF hinterlegen (→ LLM-Kontext)
-- [ ] Multi-User mit Admin/User-Rollensystem
-- [ ] Kampagnen-Übersicht als Share-Link
+### v1 — in Arbeit
+- [x] Mitgliederverwaltung ohne Login-Zwang (Discordname, Charaktername, freie Rolle, Avatar, Charakterbogen-PDF)
+- [x] Kampagnen-Hintergrundbild mit Parallax-Effekt
+- [x] Session-Titel manuell änderbar + automatisch vom LLM mitgeneriert
+- [x] MP3-Aufnahmen im Summary verlinkt
+- [x] Sprecher-Zuordnung mit Diarization-Label + Transkript-Ausschnitt (Zwischenschritt, siehe ROADMAP.md für den geplanten vollautomatischen Fix)
+- [ ] Epische Session-Bilder via Replicate (Qwen Image Edit)
+- [ ] Quest-Wiki (Living Lore: Quests, NSCs, Orte, Beute, offene Fäden)
+- [ ] Multi-User mit Super-Admin/DM-Rollensystem, DM-Registrierung
+- [ ] Dokumentationsbereich im Panel
 
 ---
 
