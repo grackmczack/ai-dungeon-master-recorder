@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
+import { promises as fs } from "node:fs";
 import { Redis as IORedis } from "ioredis";
 import pkg from "@prisma/client";
 const { PrismaClient } = pkg;
@@ -108,6 +109,62 @@ const worker = new Worker<TranscriptionJobData>(
 
     const transcript = await transcribeAudio(filePath, whisperConfig);
     console.log(`[WORKER] Chunk transkribiert: ${transcript.segments.length} Segmente`);
+    
+    // --- AUTOMATISCHES SPEAKER MAPPING (aus speakers.json) ---
+    const speakersJsonPath = filePath.replace(".mp3", ".speakers.json").replace(".wav", ".speakers.json");
+    let speakerLogs: Array<{ userId: string; start: number; end: number }> = [];
+    try {
+      const fileContent = await fs.readFile(speakersJsonPath, "utf8");
+      speakerLogs = JSON.parse(fileContent);
+    } catch (e) {
+      console.log(`[WORKER] Kein speakers.json gefunden unter ${speakersJsonPath}`);
+    }
+
+    if (speakerLogs.length > 0 && session) {
+      console.log(`[WORKER] Gleiche Transkript-Segmente mit ${speakerLogs.length} Voice-Logs ab...`);
+      const scores: Record<string, Record<string, number>> = {};
+      
+      for (const seg of transcript.segments) {
+        const label = seg.speaker;
+        if (!label) continue;
+        if (!scores[label]) scores[label] = {};
+
+        const segStartMs = seg.start * 1000;
+        const segEndMs = seg.end * 1000;
+
+        for (const log of speakerLogs) {
+          const overlapStart = Math.max(segStartMs, log.start);
+          const overlapEnd = Math.min(segEndMs, log.end);
+          if (overlapEnd > overlapStart) {
+            scores[label][log.userId] = (scores[label][log.userId] || 0) + (overlapEnd - overlapStart);
+          }
+        }
+      }
+
+      // Beste Übereinstimmung pro Diarization-Label (SPEAKER_00) finden
+      for (const [label, userScores] of Object.entries(scores)) {
+        let bestUser = null;
+        let maxScore = 0;
+        for (const [userId, score] of Object.entries(userScores)) {
+          if (score > maxScore) {
+            maxScore = score;
+            bestUser = userId;
+          }
+        }
+        
+        if (bestUser) {
+          console.log(`[WORKER] -> ${label} ist Discord-User ${bestUser} (Score: ${Math.round(maxScore)}ms)`);
+          
+          // Trage das gefundene Label in die SpeakerMap ein
+          await prisma.speakerMap.updateMany({
+            where: { sessionId: session.id, discordUserId: bestUser },
+            data: { diarizationLabel: label }
+          });
+        }
+      }
+    }
+    // ---------------------------------------------------------
+
     await job.updateProgress(50);
 
     // Chunk-Transcript in DB speichern (mit chunkIndex + durationSeconds für Merge)
