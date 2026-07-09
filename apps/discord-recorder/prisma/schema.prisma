@@ -68,6 +68,7 @@ model Campaign {
   setting     String?
   isActive         Boolean  @default(true)
   campaignContext  String?
+  backgroundImageUrl String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   group       Group    @relation(fields: [groupId], references: [id])

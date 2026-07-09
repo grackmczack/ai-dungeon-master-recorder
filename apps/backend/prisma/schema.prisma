@@ -66,15 +66,17 @@ enum Role {
 }
 
 model Campaign {
-  id              String   @id @default(cuid())
-  groupId         String
-  name            String
-  description     String?
-  setting         String?
-  isActive        Boolean  @default(true)
-  campaignContext String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  groupId            String
+  name               String
+  description        String?
+  setting            String?
+  isActive           Boolean  @default(true)
+  campaignContext    String?
+  // Hintergrundbild fuer das Kampagnen-Dashboard + Detailansicht (Parallax-Effekt beim Scrollen)
+  backgroundImageUrl String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   group    Group     @relation(fields: [groupId], references: [id])
   sessions Session[]
@@ -152,12 +154,12 @@ model Summary {
 }
 
 model SpeakerMap {
-  id            String  @id @default(cuid())
-  sessionId     String
-  discordUserId String
-  discordName   String
-  characterName String?
-  playerName    String?
+  id               String  @id @default(cuid())
+  sessionId        String
+  discordUserId    String
+  discordName      String
+  characterName    String?
+  playerName       String?
   // Verknüpfung zum anonymen Diarization-Label aus dem Transkript (z.B. "SPEAKER_00").
   // WhisperX liefert nur anonyme Sprecher-Labels, keine echten Discord-Namen —
   // der DM ordnet hier manuell zu, welches Label zu welchem echten Teilnehmer gehört.

@@ -43,6 +43,7 @@ export interface Campaign {
   setting?: string;
   isActive: boolean;
   campaignContext?: string;
+  backgroundImageUrl?: string;
   createdAt: string;
   sessions?: Session[];
 }

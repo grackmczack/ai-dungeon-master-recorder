@@ -34,6 +34,9 @@ storage/avatars/*
 !storage/character-sheets/
 storage/character-sheets/*
 !storage/character-sheets/.gitkeep
+!storage/campaign-backgrounds/
+storage/campaign-backgrounds/*
+!storage/campaign-backgrounds/.gitkeep
 
 # Editors and OS
 .DS_Store

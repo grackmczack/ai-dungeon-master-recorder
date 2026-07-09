@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import { auth } from '$lib/auth.js';
+  import { parallax } from '$lib/actions/parallax.js';
   import type { Group } from '$lib/types.js';
 
   let group: any = $state(null);
@@ -39,6 +40,10 @@
   let editError = $state('');
   let uploadingAvatar = $state(false);
   let uploadingSheet = $state(false);
+
+  // Kampagnen-Hintergrundbild state
+  let uploadingBackgroundFor: string | null = $state(null);
+  let backgroundError: Record<string, string> = $state({});
 
   const STATUS_LABELS: Record<string, string> = {
     RECORDING: '🔴 Aufnahme',
@@ -83,6 +88,33 @@
       editingContext = null;
     } catch (e) {
       console.error('Context save failed:', e);
+    }
+  }
+
+  async function onBackgroundSelected(e: Event, campaignId: string) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    uploadingBackgroundFor = campaignId;
+    backgroundError[campaignId] = '';
+    try {
+      const { backgroundImageUrl } = await api.uploadCampaignBackground(campaignId, file);
+      const c = group?.campaigns.find((c: any) => c.id === campaignId);
+      if (c) c.backgroundImageUrl = backgroundImageUrl;
+    } catch (err: any) {
+      backgroundError[campaignId] = err.error ?? 'Fehler beim Hochladen';
+    } finally {
+      uploadingBackgroundFor = null;
+    }
+  }
+
+  async function removeBackground(campaignId: string) {
+    if (!confirm('Hintergrundbild wirklich entfernen?')) return;
+    try {
+      await api.removeCampaignBackground(campaignId);
+      const c = group?.campaigns.find((c: any) => c.id === campaignId);
+      if (c) c.backgroundImageUrl = undefined;
+    } catch (err: any) {
+      backgroundError[campaignId] = err.error ?? 'Fehler beim Entfernen';
     }
   }
 
@@ -259,10 +291,39 @@
       {:else}
         {#each group.campaigns as campaign}
           <div class="mb-8">
-            <div class="flex items-center gap-3 mb-4">
-              <h2 class="text-xl font-semibold text-white">{campaign.name}</h2>
-              {#if campaign.setting}<span class="text-xs text-gray-500 bg-surface-700 px-2 py-1 rounded">{campaign.setting}</span>{/if}
+            <!-- Kampagnen-Hintergrundbild mit Parallax -->
+            <div class="relative h-40 md:h-56 rounded-2xl overflow-hidden mb-4 border border-surface-600 bg-surface-800">
+              {#if campaign.backgroundImageUrl}
+                <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
+                  <img src={campaign.backgroundImageUrl} alt="" class="w-full h-full object-cover opacity-60" />
+                </div>
+                <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/40 to-transparent"></div>
+              {:else}
+                <div class="absolute inset-0 flex items-center justify-center text-gray-700 text-4xl">🗺️</div>
+              {/if}
+
+              <div class="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+                <div class="flex items-center gap-3">
+                  <h2 class="text-xl font-semibold text-white drop-shadow">{campaign.name}</h2>
+                  {#if campaign.setting}<span class="text-xs text-gray-200 bg-black/40 backdrop-blur px-2 py-1 rounded">{campaign.setting}</span>{/if}
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="text-xs text-gray-200 bg-black/40 hover:bg-black/60 backdrop-blur px-3 py-1.5 rounded-lg transition cursor-pointer">
+                    {uploadingBackgroundFor === campaign.id ? 'Lade hoch...' : campaign.backgroundImageUrl ? 'Bild ersetzen' : '🖼️ Hintergrundbild hinzufügen'}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
+                      onchange={(e) => onBackgroundSelected(e, campaign.id)}
+                      disabled={uploadingBackgroundFor === campaign.id} />
+                  </label>
+                  {#if campaign.backgroundImageUrl}
+                    <button onclick={() => removeBackground(campaign.id)}
+                      class="text-xs text-gray-200 bg-black/40 hover:bg-red-900/60 backdrop-blur px-2 py-1.5 rounded-lg transition">✕</button>
+                  {/if}
+                </div>
+              </div>
             </div>
+            {#if backgroundError[campaign.id]}
+              <p class="text-red-400 text-xs mb-3">{backgroundError[campaign.id]}</p>
+            {/if}
 
             {#if editingContext === campaign.id}
               <div class="mb-4 bg-surface-700 rounded-xl p-4 border border-brand-500/30">

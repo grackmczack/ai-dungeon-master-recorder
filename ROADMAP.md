@@ -33,10 +33,10 @@
 
 ### Kampagnen-Hintergrundbild
 
-- [ ] DM kann ein Bild fuer die Kampagne hinterlegen.
-- [ ] Wird als Hintergrundbild im Kampagnen-Dashboard angezeigt.
-- [ ] Parallax-Effekt beim Scrollen in der Kampagnen-Detailansicht.
-- [ ] Dient auch als gestalterische Grundlage fuer die Session-Uebersicht innerhalb der Kampagne.
+- [x] DM kann ein Bild fuer die Kampagne hinterlegen (`Campaign.backgroundImageUrl`, Upload-Endpoint `POST /campaigns/:id/background`, Entfernen via `DELETE`).
+- [x] Wird als Hintergrundbild im Kampagnen-Dashboard angezeigt (Header-Banner ueber jeder Kampagnen-Karte in der Sessions-Ansicht).
+- [x] Parallax-Effekt beim Scrollen -- eigene Svelte-Action `$lib/actions/parallax.ts` (leichtgewichtig, `transform: translate3d`, kein `background-attachment: fixed` wegen iOS-Safari-Unzuverlaessigkeit).
+- [ ] Nutzung als Grundlage fuer die komplette Session-Uebersicht/Detailansicht (aktuell nur als Banner ueber der Kampagnen-Karte, noch nicht als durchgaengiger Seiten-Hintergrund).
 
 ### Session-Bild generieren (Replicate)
 

@@ -104,5 +104,30 @@ export const api = {
   updateSettings: (groupId: string, data: any) =>
     request<any>(`/groups/${groupId}/settings`, {
       method: 'PUT', body: JSON.stringify(data)
-    })
+    }),
+
+  // Campaigns
+  updateCampaignContext: (campaignId: string, campaignContext: string) =>
+    request<any>(`/campaigns/${campaignId}/context`, {
+      method: 'PUT', body: JSON.stringify({ campaignContext })
+    }),
+  updateCampaign: (campaignId: string, data: { name?: string; description?: string; setting?: string; isActive?: boolean }) =>
+    request<any>(`/campaigns/${campaignId}`, {
+      method: 'PATCH', body: JSON.stringify(data)
+    }),
+  uploadCampaignBackground: async (campaignId: string, file: File) => {
+    const token = auth.getToken();
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/campaigns/${campaignId}/background`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form
+    });
+    const data = await res.json();
+    if (!res.ok) throw { ...data, statusCode: res.status };
+    return data as { backgroundImageUrl: string };
+  },
+  removeCampaignBackground: (campaignId: string) =>
+    request<any>(`/campaigns/${campaignId}/background`, { method: 'DELETE' })
 };

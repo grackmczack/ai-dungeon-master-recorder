@@ -52,6 +52,12 @@ await app.register(fastifyStatic, {
   prefix: "/uploads/recordings/",
   decorateReply: false
 });
+// Kampagnen-Hintergrundbilder (Dashboard + Detailansicht mit Parallax)
+await app.register(fastifyStatic, {
+  root: path.resolve(process.cwd(), "..", "..", "storage", "campaign-backgrounds"),
+  prefix: "/uploads/campaign-backgrounds/",
+  decorateReply: false
+});
 
 await app.register(authPlugin);
 
