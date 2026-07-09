@@ -27,6 +27,9 @@ services:
       - "3001:3001"
     volumes:
       - recordings:/app/storage/recordings
+      - avatars:/app/storage/avatars
+      - character_sheets:/app/storage/character-sheets
+      - campaign_backgrounds:/app/storage/campaign-backgrounds
     networks:
       - dnd-network
     depends_on:
@@ -110,6 +113,12 @@ volumes:
   postgres_data:
   redis_data:
   recordings:
+    driver: local
+  avatars:
+    driver: local
+  character_sheets:
+    driver: local
+  campaign_backgrounds:
     driver: local
 
 networks:
