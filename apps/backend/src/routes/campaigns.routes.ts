@@ -188,7 +188,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
       body: JSON.stringify({
         input: {
           prompt,
-          width: 1920,
+          width: 1792,
           height: 576,
           output_format: "webp"
         }

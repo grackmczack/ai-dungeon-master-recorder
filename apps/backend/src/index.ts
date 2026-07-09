@@ -37,26 +37,10 @@ await app.register(jwt, {
 await app.register(multipart);
 
 // Statisches Serving für hochgeladene Avatare + Charakterbögen (PDF)
+// Static file serving for all storage directories under /uploads/
 await app.register(fastifyStatic, {
-  root: path.resolve(process.cwd(), "..", "..", "storage", "avatars"),
-  prefix: "/uploads/avatars/",
-  decorateReply: false
-});
-await app.register(fastifyStatic, {
-  root: path.resolve(process.cwd(), "..", "..", "storage", "character-sheets"),
-  prefix: "/uploads/character-sheets/",
-  decorateReply: false
-});
-// Aufnahmen (MP3-Chunks) — für die Verlinkung im Session-Summary
-await app.register(fastifyStatic, {
-  root: path.resolve(process.cwd(), "..", "..", "storage", "recordings"),
-  prefix: "/uploads/recordings/",
-  decorateReply: false
-});
-// Kampagnen-Hintergrundbilder (Dashboard + Detailansicht mit Parallax)
-await app.register(fastifyStatic, {
-  root: path.resolve(process.cwd(), "..", "..", "storage", "campaign-backgrounds"),
-  prefix: "/uploads/campaign-backgrounds/",
+  root: path.resolve(process.cwd(), "..", "..", "storage"),
+  prefix: "/uploads/",
   decorateReply: false
 });
 
