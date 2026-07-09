@@ -44,6 +44,7 @@ interface Chunk {
   pcmBytesWritten: number;
   startedAt: Date;
   index: number;
+  speakerLogs: Array<{ userId: string; start: number; end: number }>;
 }
 
 interface ActiveRecording {
@@ -51,6 +52,7 @@ interface ActiveRecording {
   sessionId: string;
   connection: VoiceConnection;
   participants: Map<string, ParticipantAudio>;
+  currentlySpeaking: Map<string, { startMs: number; lastSpokeMs: number }>;
   mixer: NodeJS.Timeout;
   chunks: Chunk[];
   currentChunk: Chunk;
@@ -139,6 +141,7 @@ export class VoiceRecorderService {
       sessionId,
       connection,
       participants: new Map(),
+      currentlySpeaking: new Map(),
       chunks: [firstChunk],
       currentChunk: firstChunk,
       onChunkReady,
@@ -199,7 +202,7 @@ export class VoiceRecorderService {
     const filePath = path.join(this.recordingsDir, filename);
     const output = createWriteStream(filePath);
     output.write(createWavHeader(0));
-    return { filename, filePath, output, pcmBytesWritten: 0, startedAt: new Date(), index };
+    return { filename, filePath, output, pcmBytesWritten: 0, startedAt: new Date(), index, speakerLogs: [] };
   }
 
   private async rotateChunk(recording: ActiveRecording, isLast = false): Promise<void> {
@@ -224,7 +227,20 @@ export class VoiceRecorderService {
     });
     await this.finalizeWavHeader(oldChunk.filePath, oldChunk.pcmBytesWritten);
 
-    console.log(`[RECORDER] Chunk ${oldChunk.index} ready: ${oldChunk.filename} (${oldChunk.pcmBytesWritten} PCM bytes)`);
+    // Alle aktuell Sprechenden im alten Chunk loggen und in den neuen Chunk uebernehmen
+    const finalMs = (oldChunk.pcmBytesWritten / (SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE)) * 1000;
+    for (const [userId, state] of recording.currentlySpeaking.entries()) {
+      oldChunk.speakerLogs.push({ userId, start: state.startMs, end: finalMs });
+      // Reset state for new chunk to start at 0
+      state.startMs = 0;
+      state.lastSpokeMs = 0;
+    }
+
+    // Schreibe die speaker logs als JSON neben das WAV File
+    const logFilePath = oldChunk.filePath.replace(".wav", ".speakers.json");
+    await fs.writeFile(logFilePath, JSON.stringify(oldChunk.speakerLogs, null, 2), "utf8");
+
+    console.log(`[RECORDER] Chunk ${oldChunk.index} ready: ${oldChunk.filename} (${oldChunk.pcmBytesWritten} PCM bytes, ${oldChunk.speakerLogs.length} speech segments)`);
     await recording.onChunkReady(oldChunk, isLast);
   }
 
@@ -294,9 +310,41 @@ export class VoiceRecorderService {
   }
 
   private writeMixedFrame(recording: ActiveRecording): void {
-    const frames = [...recording.participants.values()]
-      .map(p => p.readFrame())
+    const currentMs = (recording.currentChunk.pcmBytesWritten / (SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE)) * 1000;
+    const activeUsers = new Set<string>();
+
+    const frames = [...recording.participants.entries()]
+      .map(([userId, p]) => {
+        const f = p.readFrame();
+        if (f) activeUsers.add(userId);
+        return f;
+      })
       .filter((f): f is Buffer => f !== null);
+
+    // Update speaking states
+    for (const userId of activeUsers) {
+      const state = recording.currentlySpeaking.get(userId);
+      if (state) {
+        state.lastSpokeMs = currentMs;
+      } else {
+        recording.currentlySpeaking.set(userId, { startMs: currentMs, lastSpokeMs: currentMs });
+      }
+    }
+
+    // Close segments for users who stopped speaking (200ms silence threshold)
+    for (const [userId, state] of recording.currentlySpeaking.entries()) {
+      if (!activeUsers.has(userId)) {
+        if (currentMs - state.lastSpokeMs > 200) {
+          recording.currentChunk.speakerLogs.push({
+            userId,
+            start: state.startMs,
+            end: state.lastSpokeMs
+          });
+          recording.currentlySpeaking.delete(userId);
+        }
+      }
+    }
+
     const mixed = mixFrames(frames);
     recording.currentChunk.output.write(mixed);
     recording.currentChunk.pcmBytesWritten += mixed.length;

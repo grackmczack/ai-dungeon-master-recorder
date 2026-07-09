@@ -148,6 +148,7 @@ Noch nicht ausformuliert -- nur Struktur anlegen.
 ```
 Dokumentation/
 +-- Erste Schritte (Installationsanleitung)
++-- Der Bote -- Bot einladen & einrichten  <-- NEU: Bereich fuer DMs zum Einladen des Bots!
 +-- Das Abenteuer beginnt -- Benutzerhandbuch
 |   +-- Dashboard-Uebersicht
 |   +-- Kampagne anlegen & verwalten
