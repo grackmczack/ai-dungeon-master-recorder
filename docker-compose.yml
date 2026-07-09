@@ -8,7 +8,7 @@ services:
     env_file:
       - apps/discord-recorder/.env
     volumes:
-      - recordings:/app/storage/recordings
+      - ./storage/recordings:/app/storage/recordings
     networks:
       - dnd-network
     depends_on:
@@ -26,10 +26,10 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - recordings:/app/storage/recordings
-      - avatars:/app/storage/avatars
-      - character_sheets:/app/storage/character-sheets
-      - campaign_backgrounds:/app/storage/campaign-backgrounds
+      - ./storage/recordings:/app/storage/recordings
+      - ./storage/avatars:/app/storage/avatars
+      - ./storage/character-sheets:/app/storage/character-sheets
+      - ./storage/campaign-backgrounds:/app/storage/campaign-backgrounds
     networks:
       - dnd-network
     depends_on:
@@ -47,7 +47,7 @@ services:
     env_file:
       - services/transcriber/.env
     volumes:
-      - recordings:/app/storage/recordings
+      - ./storage/recordings:/app/storage/recordings
     networks:
       - dnd-network
     depends_on:
@@ -112,14 +112,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  recordings:
-    driver: local
-  avatars:
-    driver: local
-  character_sheets:
-    driver: local
-  campaign_backgrounds:
-    driver: local
 
 networks:
   dnd-network:
