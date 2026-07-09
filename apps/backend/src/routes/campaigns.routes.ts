@@ -179,7 +179,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
     const prompt = body.data.prompt?.trim() || `Epic fantasy campaign background for "${campaign.name}"${campaign.setting ? ` in ${campaign.setting}` : ""}. Cinematic, dramatic lighting, wide horizontal composition, richly detailed tabletop RPG artwork, no text.`;
     const predictionUrl = `https://api.replicate.com/v1/models/${imageGenModel}/predictions`;
 
-    const createRes = await fetch(predictionUrl, {
+        const createRes = await fetch(predictionUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
@@ -188,8 +188,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
       body: JSON.stringify({
         input: {
           prompt,
-          width: 1792,
-          height: 576,
+          aspect_ratio: "21:9",
           output_format: "webp"
         }
       })
