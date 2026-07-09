@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import type { TranscriptSegment } from "./whisper.js";
 
 export interface SummaryResult {
+  title: string;
   narrative: string;
   npcs: Array<{ name: string; description: string; firstMention: string }>;
   quests: Array<{ title: string; status: "new" | "ongoing" | "completed"; notes: string }>;
@@ -24,15 +25,17 @@ export interface LLMConfig {
 const DEFAULT_SYSTEM_PROMPT = `Du bist ein Chronist für eine Pen-&-Paper-Rollenspielgruppe (TTRPG/D&D).
 
 Analysiere das folgende Transkript einer Spielsitzung und erstelle:
-1. Eine narrative Zusammenfassung der Session (3-5 Absätze, epischer Stil, Vergangenheitsform)
-2. Alle neuen oder erwähnten NSCs (NPCs) mit Name und kurzer Beschreibung
-3. Quests/Aufgaben mit Status (neu/laufend/abgeschlossen)
-4. Beute und gefundene Gegenstände
-5. Besuchte/erwähnte Orte
-6. Offene Fäden (ungeklärte Dinge, Mysterien, nächste Schritte)
+1. Einen kurzen, aussagekräftigen Titel für diese Session (max. 8 Wörter, im Stil eines Kapitelnamens, spiegelt das zentrale Ereignis/Highlight der Session wider — kein generisches "Session X")
+2. Eine narrative Zusammenfassung der Session (3-5 Absätze, epischer Stil, Vergangenheitsform)
+3. Alle neuen oder erwähnten NSCs (NPCs) mit Name und kurzer Beschreibung
+4. Quests/Aufgaben mit Status (neu/laufend/abgeschlossen)
+5. Beute und gefundene Gegenstände
+6. Besuchte/erwähnte Orte
+7. Offene Fäden (ungeklärte Dinge, Mysterien, nächste Schritte)
 
 Antworte NUR als valides JSON in diesem Format:
 {
+  "title": "...",
   "narrative": "...",
   "npcs": [{"name": "...", "description": "...", "firstMention": "..."}],
   "quests": [{"title": "...", "status": "new|ongoing|completed", "notes": "..."}],

@@ -210,6 +210,12 @@ const worker = new Worker<TranscriptionJobData>(
       console.log(`[WORKER] Summary: ${summary.provider}/${summary.model}`);
       await job.updateProgress(90);
 
+      // Titel nur setzen, wenn der DM noch keinen eigenen Titel vergeben hat —
+      // ein manuell gesetzter Titel (PATCH /sessions/:id) darf nicht überschrieben werden.
+      if (!session.title && summary.title) {
+        await prisma.session.update({ where: { id: session.id }, data: { title: summary.title } });
+      }
+
       await prisma.summary.upsert({
         where: { sessionId: session.id },
         update: {

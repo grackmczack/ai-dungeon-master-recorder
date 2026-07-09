@@ -82,13 +82,13 @@
 
 ### Discord Bot -- Erweiterungen
 
-- [ ] Nach der Uebersetzungs-Post: auch Beute, NSCs, Orte, etc. posten (strukturierter Output pro Kategorie).
-- [ ] Inhalte kommen aus dem Quest-Wiki / Reconciliation-Pass der jeweiligen Session.
+- [x] Nach der Uebersetzungs-Post: auch Beute, NSCs, Orte, etc. posten (strukturierter Output pro Kategorie) -- bereits vorhanden in `discord-notify.ts` (`buildSummaryEmbed`, Felder fuer NSCs/Quests/Beute/Orte/Offene Faeden). Session-Titel wird jetzt zusaetzlich im Embed-Titel angezeigt.
+- [ ] Inhalte kuenftig aus dem Quest-Wiki / Reconciliation-Pass ziehen statt nur aus der Einzel-Session-Summary (sobald Quest-Wiki existiert).
 
 ### Session-Ansicht -- Verbesserungen
 
 - [x] **Titel aenderbar** -- DM kann Titel manuell bearbeiten (`PATCH /sessions/:id`, Edit-UI im Header).
-- [ ] **Titel wird mitgeneriert** -- beim LLM-Call wird direkt ein aussagekraeftiger Titel mit generiert, der die Session widerspiegelt (kein generischer Default-Name). *(noch offen: Prompt-Erweiterung im transcriber-Service)*
+- [x] **Titel wird mitgeneriert** -- beim LLM-Call wird direkt ein aussagekraeftiger Titel mit generiert (`SummaryResult.title`, max. 8 Woerter, Kapitelname-Stil). Wird nur gesetzt, wenn der DM noch keinen eigenen Titel per `PATCH /sessions/:id` vergeben hat (manuelle Aenderung hat immer Vorrang). Titel erscheint jetzt auch im Discord-Embed statt "Session #N -- Chronik".
 - [x] **MP3-Dateien verlinken** im Summary-Bereich -- direkte Links zu den Audio-Aufnahmen der Session (`/uploads/recordings/:filename` statisch ausgeliefert).
 - [x] **Sprecher-Tab:**
   - Manuelle Zuordnung: Diarization-Label (z.B. SPEAKER_00) aus dem Transkript werden mit Namen versehen.

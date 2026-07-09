@@ -7,7 +7,10 @@ import type { SummaryResult } from "./providers/llm.js";
 const DISCORD_API = "https://discord.com/api/v10";
 
 function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): object {
-  const title = sessionNumber ? `📖 Session #${sessionNumber} — Chronik` : "📖 Session abgeschlossen";
+  const chapterTitle = summary.title?.trim();
+  const title = chapterTitle
+    ? (sessionNumber ? `📖 Session #${sessionNumber}: ${chapterTitle}` : `📖 ${chapterTitle}`)
+    : (sessionNumber ? `📖 Session #${sessionNumber} — Chronik` : "📖 Session abgeschlossen");
 
   const fields: object[] = [];
 
