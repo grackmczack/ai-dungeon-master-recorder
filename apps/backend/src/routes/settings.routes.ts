@@ -7,6 +7,7 @@ const SettingsSchema = z.object({
   whisperApiKey: z.string().optional().nullable(),
   whisperEndpoint: z.string().optional().nullable(),
   replicateApiKey: z.string().optional().nullable(),
+  imageGenModel: z.string().optional(),
   llmProvider: z.enum(["anthropic", "gemini", "openai", "siliconflow", "ollama"]).optional(),
   llmApiKey: z.string().optional().nullable(),
   llmModel: z.string().optional().nullable(),

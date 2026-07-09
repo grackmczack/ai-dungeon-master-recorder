@@ -122,6 +122,7 @@ export interface GroupSettings {
   whisperApiKey?: string;
   whisperEndpoint?: string;
   replicateApiKey?: string;
+  imageGenModel?: string;
   llmProvider: string;
   llmApiKey?: string;
   llmModel?: string;

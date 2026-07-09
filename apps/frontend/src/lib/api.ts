@@ -129,6 +129,14 @@ export const api = {
     if (!res.ok) throw { ...data, statusCode: res.status };
     return data as { backgroundImageUrl: string };
   },
+  generateCampaignBackground: async (campaignId: string, prompt?: string) => {
+    const body: Record<string, string> = {};
+    if (prompt?.trim()) body.prompt = prompt.trim();
+    return request<{ backgroundImageUrl: string }>(`/campaigns/${campaignId}/generate-background`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+  },
   removeCampaignBackground: (campaignId: string) =>
     request<any>(`/campaigns/${campaignId}/background`, { method: 'DELETE' }),
 

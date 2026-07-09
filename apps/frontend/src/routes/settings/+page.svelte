@@ -64,10 +64,20 @@
       form = settings ? { ...settings } : {
         whisperProvider: 'openai', llmProvider: 'anthropic',
         summaryLanguage: 'de', llmModel: 'claude-opus-4-8',
+        replicateApiKey: '',
+        imageGenModel: 'black-forest-labs/flux-schnell',
         llmSystemPrompt: '', llmCampaignContext: ''
       };
     } catch {
-      form = { whisperProvider: 'openai', llmProvider: 'anthropic', summaryLanguage: 'de', llmSystemPrompt: '', llmCampaignContext: '' };
+      form = {
+        whisperProvider: 'openai',
+        llmProvider: 'anthropic',
+        summaryLanguage: 'de',
+        replicateApiKey: '',
+        imageGenModel: 'black-forest-labs/flux-schnell',
+        llmSystemPrompt: '',
+        llmCampaignContext: ''
+      };
     }
   }
 
@@ -81,6 +91,8 @@
       const payload = { ...form };
       if (payload.whisperApiKey === '***') delete payload.whisperApiKey;
       if (payload.replicateApiKey === '***') delete payload.replicateApiKey;
+      if (!payload.replicateApiKey?.trim()) delete payload.replicateApiKey;
+      if (!payload.imageGenModel?.trim()) delete payload.imageGenModel;
       if (payload.llmApiKey === '***') delete payload.llmApiKey;
       await api.updateSettings(selectedGroupId, payload);
       saved = true;
@@ -151,6 +163,26 @@
               placeholder="http://your-server:9000/v1/audio/transcriptions" />
           </div>
         {/if}
+      </div>
+
+      <!-- Bildgenerierung -->
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+        <h2 class="font-semibold text-white flex items-center gap-2">🎨 Bildgenerierung</h2>
+
+        <div class="space-y-2">
+          <label class="text-sm text-gray-400">Replicate API Key</label>
+          <input bind:value={form.replicateApiKey} type="text" autocomplete="off"
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
+            placeholder="r8_..." />
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm text-gray-400">Bildmodell</label>
+          <input bind:value={form.imageGenModel}
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
+            placeholder="black-forest-labs/flux-schnell" />
+          <p class="text-xs text-gray-600">Standard: `black-forest-labs/flux-schnell`. Andere öffentliche Replicate-Modelle funktionieren ebenfalls.</p>
+        </div>
       </div>
 
       <!-- LLM -->

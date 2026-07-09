@@ -224,13 +224,24 @@
             {#if session.recordings?.length}
               <div class="mt-4 pt-4 border-t border-surface-600">
                 <p class="text-xs text-gray-500 mb-2">🎧 Aufnahmen dieser Session</p>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-col gap-3">
                   {#each session.recordings as rec, i}
-                    <a href={recordingUrl(rec.filename)} target="_blank" download
-                      class="text-xs bg-surface-700 hover:bg-surface-600 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
-                      🔊 Part {i + 1}
-                      {#if rec.durationSeconds}<span class="text-gray-600">· {Math.round(rec.durationSeconds / 60)} min</span>{/if}
-                    </a>
+                    <div class="bg-surface-700/50 rounded-lg p-3 flex flex-col gap-2 border border-surface-600">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                          🔊 Part {i + 1}
+                          {#if rec.durationSeconds}<span class="text-gray-500 font-normal">· {Math.round(rec.durationSeconds / 60)} min</span>{/if}
+                        </span>
+                        <a href={recordingUrl(rec.filename)} download
+                          class="text-xs text-brand-400 hover:text-white bg-surface-600 hover:bg-brand-600 px-3 py-1 rounded transition">
+                          MP3 Download
+                        </a>
+                      </div>
+                      <!-- Kleine Custom-Styles für den Audio-Player im Darkmode (Webkit) -->
+                      <audio controls src={recordingUrl(rec.filename)} preload="none"
+                        class="w-full h-8 [&::-webkit-media-controls-panel]:bg-surface-800 [&::-webkit-media-controls-current-time-display]:text-gray-200 [&::-webkit-media-controls-time-remaining-display]:text-gray-200">
+                      </audio>
+                    </div>
                   {/each}
                 </div>
               </div>

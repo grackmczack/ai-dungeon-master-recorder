@@ -178,6 +178,7 @@ model GroupSettings {
   whisperApiKey        String?
   whisperEndpoint      String?
   replicateApiKey      String?
+  imageGenModel        String  @default("black-forest-labs/flux-schnell")
   llmProvider          String  @default("anthropic")
   llmApiKey            String?
   llmModel             String?

@@ -47,6 +47,10 @@
   // Kampagnen-Hintergrundbild state
   let uploadingBackgroundFor: string | null = $state(null);
   let backgroundError: Record<string, string> = $state({});
+  let generatingBackgroundFor: string | null = $state(null);
+  let generatePrompt: Record<string, string> = $state({});
+  let generateError: Record<string, string> = $state({});
+  let backgroundVersion: Record<string, number> = $state({});
 
   const STATUS_LABELS: Record<string, string> = {
     RECORDING: '🔴 Aufnahme',
@@ -79,6 +83,12 @@
     return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
+  function backgroundImageUrl(campaign: any | null | undefined) {
+    if (!campaign?.backgroundImageUrl) return null;
+    const version = backgroundVersion[campaign.id] ?? (campaign.updatedAt ? new Date(campaign.updatedAt).getTime() : 0);
+    return `${campaign.backgroundImageUrl}?v=${version}`;
+  }
+
   async function saveContext(campaignId: string) {
     try {
       await fetch(`/api/campaigns/${campaignId}/context`, {
@@ -102,11 +112,29 @@
     try {
       const { backgroundImageUrl } = await api.uploadCampaignBackground(campaignId, file);
       const c = group?.campaigns.find((c: any) => c.id === campaignId);
-      if (c) c.backgroundImageUrl = backgroundImageUrl;
+      if (c) {
+        c.backgroundImageUrl = backgroundImageUrl;
+        backgroundVersion[campaignId] = Date.now();
+      }
     } catch (err: any) {
       backgroundError[campaignId] = err.error ?? 'Fehler beim Hochladen';
     } finally {
       uploadingBackgroundFor = null;
+    }
+  }
+
+  async function generateBackground(campaign: any) {
+    generatingBackgroundFor = campaign.id;
+    generateError[campaign.id] = '';
+    try {
+      const prompt = generatePrompt[campaign.id]?.trim();
+      const { backgroundImageUrl } = await api.generateCampaignBackground(campaign.id, prompt || undefined);
+      campaign.backgroundImageUrl = backgroundImageUrl;
+      backgroundVersion[campaign.id] = Date.now();
+    } catch (err: any) {
+      generateError[campaign.id] = err.error ?? 'Fehler bei der Bildgenerierung';
+    } finally {
+      generatingBackgroundFor = null;
     }
   }
 
@@ -116,6 +144,7 @@
       await api.removeCampaignBackground(campaignId);
       const c = group?.campaigns.find((c: any) => c.id === campaignId);
       if (c) c.backgroundImageUrl = undefined;
+      delete backgroundVersion[campaignId];
     } catch (err: any) {
       backgroundError[campaignId] = err.error ?? 'Fehler beim Entfernen';
     }
@@ -242,7 +271,17 @@
   }
 </script>
 
-<div class="max-w-5xl mx-auto px-6 py-10">
+<div class="max-w-5xl mx-auto px-6 py-10 relative">
+  <!-- Seitenweiter Hintergrund (Parallax) -->
+  {#if group && backgroundImageUrl(group.campaigns?.[0])}
+    <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
+      <div class="absolute -inset-y-[15%] inset-x-0" use:parallax={0.15}>
+        <img src={backgroundImageUrl(group.campaigns[0])!} alt="" class="w-full h-full object-cover opacity-15" />
+      </div>
+      <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/80 to-surface-900/50"></div>
+    </div>
+  {/if}
+
   <a href="/dashboard" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-6 transition">← Dashboard</a>
 
   {#if loading}
@@ -309,7 +348,7 @@
             <div class="relative h-40 md:h-56 rounded-2xl overflow-hidden mb-4 border border-surface-600 bg-surface-800">
               {#if campaign.backgroundImageUrl}
                 <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
-                  <img src={campaign.backgroundImageUrl} alt="" class="w-full h-full object-cover opacity-60" />
+                  <img src={backgroundImageUrl(campaign)!} alt="" class="w-full h-full object-cover opacity-60" />
                 </div>
                 <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/40 to-transparent"></div>
               {:else}
@@ -321,22 +360,46 @@
                   <h2 class="text-xl font-semibold text-white drop-shadow">{campaign.name}</h2>
                   {#if campaign.setting}<span class="text-xs text-gray-200 bg-black/40 backdrop-blur px-2 py-1 rounded">{campaign.setting}</span>{/if}
                 </div>
-                <div class="flex items-center gap-2">
-                  <label class="text-xs text-gray-200 bg-black/40 hover:bg-black/60 backdrop-blur px-3 py-1.5 rounded-lg transition cursor-pointer">
-                    {uploadingBackgroundFor === campaign.id ? 'Lade hoch...' : campaign.backgroundImageUrl ? 'Bild ersetzen' : '🖼️ Hintergrundbild hinzufügen'}
-                    <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
-                      onchange={(e) => onBackgroundSelected(e, campaign.id)}
-                      disabled={uploadingBackgroundFor === campaign.id} />
-                  </label>
-                  {#if campaign.backgroundImageUrl}
-                    <button onclick={() => removeBackground(campaign.id)}
-                      class="text-xs text-gray-200 bg-black/40 hover:bg-red-900/60 backdrop-blur px-2 py-1.5 rounded-lg transition">✕</button>
-                  {/if}
+                <div class="flex flex-col items-end gap-2">
+                  <div class="flex items-center gap-2">
+                    <label class="text-xs text-gray-200 bg-black/40 hover:bg-black/60 backdrop-blur px-3 py-1.5 rounded-lg transition cursor-pointer">
+                      {uploadingBackgroundFor === campaign.id ? 'Lade hoch...' : campaign.backgroundImageUrl ? 'Bild ersetzen' : '🖼️ Hintergrundbild hinzufügen'}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
+                        onchange={(e) => onBackgroundSelected(e, campaign.id)}
+                        disabled={uploadingBackgroundFor === campaign.id} />
+                    </label>
+                    {#if campaign.backgroundImageUrl}
+                      <button onclick={() => removeBackground(campaign.id)}
+                        class="text-xs text-gray-200 bg-black/40 hover:bg-red-900/60 backdrop-blur px-2 py-1.5 rounded-lg transition">✕</button>
+                    {/if}
+                  </div>
+                  <div class="flex items-end gap-2">
+                    <input
+                      bind:value={generatePrompt[campaign.id]}
+                      class="w-60 max-w-[55vw] text-xs bg-black/40 backdrop-blur border border-white/10 hover:border-white/20 focus:border-brand-500/60 text-white placeholder:text-gray-400 rounded-lg px-3 py-2 outline-none transition"
+                      placeholder="Beschreibe die Stimmung der Kampagne..." />
+                    <button
+                      onclick={() => generateBackground(campaign)}
+                      disabled={generatingBackgroundFor === campaign.id}
+                      class="text-xs text-white bg-brand-600 hover:bg-brand-500 disabled:opacity-60 backdrop-blur px-3 py-2 rounded-lg transition min-w-[9rem] flex items-center justify-center gap-2">
+                      {#if generatingBackgroundFor === campaign.id}
+                        <span class="h-3.5 w-3.5 rounded-full border-2 border-white/70 border-t-transparent animate-spin"></span>
+                        Generiere...
+                      {:else if campaign.backgroundImageUrl}
+                        🔄 Neu generieren
+                      {:else}
+                        🎨 Bild generieren
+                      {/if}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
             {#if backgroundError[campaign.id]}
               <p class="text-red-400 text-xs mb-3">{backgroundError[campaign.id]}</p>
+            {/if}
+            {#if generateError[campaign.id]}
+              <p class="text-red-400 text-xs mb-3">{generateError[campaign.id]}</p>
             {/if}
 
             {#if editingContext === campaign.id}

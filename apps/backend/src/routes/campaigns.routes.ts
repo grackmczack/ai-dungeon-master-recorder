@@ -2,11 +2,70 @@ import type { FastifyInstance } from "fastify";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { z } from "zod";
 import { prisma } from "../db.js";
 
 const BACKGROUND_DIR = path.resolve(process.cwd(), "..", "..", "storage", "campaign-backgrounds");
 const ALLOWED_BACKGROUND_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_BACKGROUND_BYTES = 20 * 1024 * 1024; // 20 MB — Hintergrundbilder sind meist größer/hochauflösender
+const DEFAULT_IMAGE_MODEL = "black-forest-labs/flux-schnell";
+
+const GenerateBackgroundSchema = z.object({
+  prompt: z.string().optional()
+});
+
+type ReplicatePrediction = {
+  id: string;
+  status: string;
+  output?: unknown;
+  error?: string | null;
+  urls?: {
+    get?: string;
+  };
+};
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractOutputUrl(output: unknown): string | null {
+  if (typeof output === "string") {
+    return output.startsWith("http://") || output.startsWith("https://") || output.startsWith("data:")
+      ? output
+      : null;
+  }
+
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      const found = extractOutputUrl(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (output && typeof output === "object") {
+    const record = output as Record<string, unknown>;
+    if (typeof record.url === "string") return record.url;
+    if (typeof record.href === "string") return record.href;
+    if (typeof record.output === "string") return record.output;
+    if (record.output) {
+      const nested = extractOutputUrl(record.output);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
+async function readErrorBody(res: Response) {
+  const text = await res.text();
+  if (!text) return "";
+  try {
+    return JSON.stringify(JSON.parse(text));
+  } catch {
+    return text;
+  }
+}
 
 export async function campaignsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
@@ -78,6 +137,121 @@ export async function campaignsRoutes(app: FastifyInstance) {
     if (campaign.backgroundImageUrl) {
       const oldFile = path.basename(campaign.backgroundImageUrl);
       await unlink(path.join(BACKGROUND_DIR, oldFile)).catch(() => undefined);
+    }
+
+    const backgroundImageUrl = `/uploads/campaign-backgrounds/${fileName}`;
+    const updated = await prisma.campaign.update({
+      where: { id },
+      data: { backgroundImageUrl }
+    });
+
+    return reply.send({ backgroundImageUrl: updated.backgroundImageUrl });
+  });
+
+  // POST /campaigns/:id/generate-background — Replicate-Generierung fuer GM-Kampagnen
+  app.post("/campaigns/:id/generate-background", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { sub } = req.user as { sub: string };
+
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      include: {
+        group: {
+          include: {
+            memberships: { where: { userId: sub, role: "GM", leftAt: null } },
+            settings: true
+          }
+        }
+      }
+    });
+    if (!campaign) return reply.status(404).send({ error: "Not found" });
+    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Only GMs can generate a background image" });
+
+    const body = GenerateBackgroundSchema.safeParse(req.body ?? {});
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
+
+    const replicateApiKey = campaign.group.settings?.replicateApiKey?.trim();
+    if (!replicateApiKey) {
+      return reply.status(400).send({ error: "No Replicate API key configured for this group" });
+    }
+
+    const imageGenModel = campaign.group.settings?.imageGenModel?.trim() || DEFAULT_IMAGE_MODEL;
+    const prompt = body.data.prompt?.trim() || `Epic fantasy campaign background for "${campaign.name}"${campaign.setting ? ` in ${campaign.setting}` : ""}. Cinematic, dramatic lighting, wide horizontal composition, richly detailed tabletop RPG artwork, no text.`;
+    const predictionUrl = `https://api.replicate.com/v1/models/${imageGenModel}/predictions`;
+
+    const createRes = await fetch(predictionUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${replicateApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        input: {
+          prompt,
+          width: 1920,
+          height: 576,
+          output_format: "webp"
+        }
+      })
+    });
+
+    if (!createRes.ok) {
+      const details = await readErrorBody(createRes);
+      return reply.status(502).send({ error: `Replicate request failed: ${details || createRes.statusText}` });
+    }
+
+    let prediction = (await createRes.json()) as ReplicatePrediction;
+    let attempts = 0;
+    const maxAttempts = 150;
+
+    while (prediction.status === "starting" || prediction.status === "processing" || prediction.status === "queued") {
+      if (attempts++ >= maxAttempts) {
+        return reply.status(504).send({ error: "Replicate prediction timed out" });
+      }
+
+      await sleep(2000);
+
+      const pollRes = await fetch(prediction.urls?.get ?? `https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { Authorization: `Bearer ${replicateApiKey}` }
+      });
+
+      if (!pollRes.ok) {
+        const details = await readErrorBody(pollRes);
+        return reply.status(502).send({ error: `Replicate polling failed: ${details || pollRes.statusText}` });
+      }
+
+      prediction = (await pollRes.json()) as ReplicatePrediction;
+    }
+
+    if (prediction.status !== "succeeded") {
+      return reply.status(502).send({
+        error: prediction.error ? `Replicate generation failed: ${prediction.error}` : `Replicate generation ended with status ${prediction.status}`
+      });
+    }
+
+    const outputUrl = extractOutputUrl(prediction.output);
+    if (!outputUrl) {
+      return reply.status(502).send({ error: "Replicate returned no image URL" });
+    }
+
+    const imageRes = await fetch(outputUrl);
+    if (!imageRes.ok) {
+      const details = await readErrorBody(imageRes);
+      return reply.status(502).send({ error: `Could not download generated image: ${details || imageRes.statusText}` });
+    }
+
+    const buffer = Buffer.from(await imageRes.arrayBuffer());
+    const fileName = `${id}.webp`;
+    const filePath = path.join(BACKGROUND_DIR, fileName);
+
+    await mkdir(BACKGROUND_DIR, { recursive: true });
+    await writeFile(filePath, buffer);
+
+    if (campaign.backgroundImageUrl) {
+      const oldFile = path.basename(campaign.backgroundImageUrl.split("?").at(0) ?? campaign.backgroundImageUrl);
+      if (oldFile !== fileName) {
+        await unlink(path.join(BACKGROUND_DIR, oldFile)).catch(() => undefined);
+      }
     }
 
     const backgroundImageUrl = `/uploads/campaign-backgrounds/${fileName}`;
