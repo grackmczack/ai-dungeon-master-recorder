@@ -138,7 +138,7 @@
 
         <div class="space-y-2">
           <label class="text-sm text-gray-400">API Key {form.whisperProvider === 'openai' ? '(OpenAI)' : form.whisperProvider === 'replicate' ? '(Replicate)' : ''}</label>
-          <input bind:value={form.whisperApiKey} type="password" autocomplete="off"
+          <input bind:value={form.whisperApiKey} type="text" autocomplete="off"
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
             placeholder="sk-..." />
         </div>
@@ -182,7 +182,7 @@
 
         <div class="space-y-2">
           <label class="text-sm text-gray-400">API Key</label>
-          <input bind:value={form.llmApiKey} type="password" autocomplete="off"
+          <input bind:value={form.llmApiKey} type="text" autocomplete="off"
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
             placeholder="sk-ant-..." />
         </div>

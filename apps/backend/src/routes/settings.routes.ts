@@ -29,12 +29,13 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (!membership) return reply.status(403).send({ error: "Not a member" });
 
     const settings = await prisma.groupSettings.findUnique({ where: { groupId } });
-    // Mask API keys in response
+    // Mask API keys in response (show first 7 characters, then stars)
     if (settings) {
+      const maskKey = (key: string | null) => key ? (key.length > 7 ? `${key.substring(0, 7)}***` : "***") : null;
       const masked = { ...settings };
-      if (masked.whisperApiKey) masked.whisperApiKey = "***";
-      if (masked.replicateApiKey) masked.replicateApiKey = "***";
-      if (masked.llmApiKey) masked.llmApiKey = "***";
+      if (masked.whisperApiKey) masked.whisperApiKey = maskKey(masked.whisperApiKey);
+      if (masked.replicateApiKey) masked.replicateApiKey = maskKey(masked.replicateApiKey);
+      if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
       return reply.send(masked);
     }
     return reply.send(null);
@@ -51,10 +52,17 @@ export async function settingsRoutes(app: FastifyInstance) {
     const body = SettingsSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
 
+    // Wenn der Key aus dem Frontend immer noch maskiert ankommt (z.B. "sk-ant-***"), speichern wir ihn nicht ab!
+    // Dadurch wird der alte Key in der DB behalten, falls das Frontend nur andere Felder updated.
+    const dataToUpdate = { ...body.data };
+    if (dataToUpdate.whisperApiKey?.includes("***")) delete dataToUpdate.whisperApiKey;
+    if (dataToUpdate.replicateApiKey?.includes("***")) delete dataToUpdate.replicateApiKey;
+    if (dataToUpdate.llmApiKey?.includes("***")) delete dataToUpdate.llmApiKey;
+
     const settings = await prisma.groupSettings.upsert({
       where: { groupId },
-      update: body.data,
-      create: { groupId, ...body.data }
+      update: dataToUpdate,
+      create: { groupId, ...body.data } // beim Create muesste der echte Key mitgeschickt werden
     });
 
     return reply.send({ updated: true, id: settings.id });
