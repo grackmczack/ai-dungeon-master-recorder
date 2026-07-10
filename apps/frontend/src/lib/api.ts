@@ -148,6 +148,11 @@ export const api = {
       `/campaigns/${campaignId}/sessions${qs ? `?${qs}` : ''}`
     );
   },
+  // Quest-Wiki
+  getCampaignWiki: (campaignId: string) =>
+    request<{ npcs: any[]; quests: any[]; locations: any[]; loot: any[]; openThreads: string[]; sessionCount: number }>(
+      `/campaigns/${campaignId}/wiki`
+    ),
   uploadCampaignBackground: async (campaignId: string, file: File) => {
     const token = auth.getToken();
     const form = new FormData();

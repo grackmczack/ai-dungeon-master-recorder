@@ -305,6 +305,119 @@ export async function campaignsRoutes(app: FastifyInstance) {
     return reply.send({ sessions, total, skip, take });
   });
 
+  // GET /campaigns/:id/wiki — Quest-Wiki Stufe 1: Aggregation aller Session-Summaries
+  app.get("/campaigns/:id/wiki", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { sub } = req.user as { sub: string };
+
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+    });
+    if (!campaign) return reply.status(404).send({ error: "Not found" });
+    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+
+    // Alle Summaries dieser Kampagne laden (nur DONE Sessions)
+    const summaries = await prisma.summary.findMany({
+      where: { session: { campaignId: id, status: "DONE" } },
+      include: { session: { select: { id: true, sessionNumber: true, title: true, startedAt: true } } },
+      orderBy: { session: { startedAt: "asc" } }
+    });
+
+    // ─── Aggregation ───
+    interface NPCEntry { name: string; description: string; firstMention: string; }
+    interface QuestEntry { title: string; status: string; notes: string; }
+    interface LocationEntry { name: string; description: string; }
+    interface LootEntry { item: string; foundBy: string; }
+
+    // NSCs: deduplizieren via name (case-insensitive), Beschreibungen mergen
+    const npcMap = new Map<string, { name: string; descriptions: string[]; firstMention: string }>();
+    for (const s of summaries) {
+      const npcs = (s.npcs as NPCEntry[]) ?? [];
+      for (const npc of npcs) {
+        const key = npc.name.toLowerCase().trim();
+        const existing = npcMap.get(key);
+        if (existing) {
+          if (npc.description?.trim()) existing.descriptions.push(npc.description.trim());
+        } else {
+          npcMap.set(key, {
+            name: npc.name.trim(),
+            descriptions: npc.description?.trim() ? [npc.description.trim()] : [],
+            firstMention: npc.firstMention ?? `Session #${s.session.sessionNumber ?? "?"}`
+          });
+        }
+      }
+    }
+    const npcs = Array.from(npcMap.values()).map(n => ({
+      ...n,
+      description: n.descriptions.join(" ")
+    }));
+
+    // Quests: deduplizieren via title, letzter Status gewinnt
+    const questMap = new Map<string, { title: string; status: string; notes: string[] }>();
+    for (const s of summaries) {
+      const quests = (s.quests as QuestEntry[]) ?? [];
+      for (const q of quests) {
+        const key = q.title.toLowerCase().trim();
+        const existing = questMap.get(key);
+        if (existing) {
+          existing.status = q.status || existing.status;
+          if (q.notes?.trim()) existing.notes.push(q.notes.trim());
+        } else {
+          questMap.set(key, {
+            title: q.title.trim(),
+            status: q.status || "new",
+            notes: q.notes?.trim() ? [q.notes.trim()] : []
+          });
+        }
+      }
+    }
+    const quests = Array.from(questMap.values()).map(q => ({
+      ...q,
+      notes: q.notes.join(" | ")
+    }));
+
+    // Orte: deduplizieren via name
+    const locationMap = new Map<string, { name: string; description: string }>();
+    for (const s of summaries) {
+      const locs = (s.locations as LocationEntry[]) ?? [];
+      for (const l of locs) {
+        const key = l.name.toLowerCase().trim();
+        if (!locationMap.has(key)) {
+          locationMap.set(key, { name: l.name.trim(), description: l.description?.trim() ?? "" });
+        }
+      }
+    }
+    const locations = Array.from(locationMap.values());
+
+    // Beute: alle Items flach sammeln (keine Deduplizierung)
+    const loot: LootEntry[] = [];
+    for (const s of summaries) {
+      const items = (s.loot as LootEntry[]) ?? [];
+      loot.push(...items);
+    }
+
+    // Offene Fäden: deduplizieren via exaktem String
+    const threadSet = new Set<string>();
+    for (const s of summaries) {
+      const threads = (s.openThreads as string[]) ?? [];
+      for (const t of threads) {
+        if (t?.trim()) threadSet.add(t.trim());
+      }
+    }
+    const openThreads = Array.from(threadSet);
+
+    return reply.send({
+      campaignId: id,
+      sessionCount: summaries.length,
+      npcs,
+      quests,
+      locations,
+      loot,
+      openThreads
+    });
+  });
+
   // DELETE /campaigns/:id/background — Hintergrundbild entfernen
   app.delete("/campaigns/:id/background", async (req, reply) => {
     const { id } = req.params as { id: string };
