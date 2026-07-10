@@ -92,6 +92,7 @@ storage/
   avatars/               ← Mitglieder-Avatare (Docker Volume)
   character-sheets/      ← Charakterbögen als PDF (Docker Volume)
   campaign-backgrounds/  ← Kampagnen-Hintergrundbilder (Docker Volume)
+  session-images/        ← Session-Bilder (Docker Volume)
 ```
 
 ---
@@ -259,7 +260,12 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | PUT | `/campaigns/:id/context` | Kampagnen-Kontext setzen |
 | PATCH | `/campaigns/:id` | Kampagne bearbeiten (Name, Beschreibung, Setting, aktiv) |
 | POST | `/campaigns/:id/background` | Kampagnen-Hintergrundbild hochladen (GM-only) |
+| POST | `/campaigns/:id/generate-background` | Kampagnen-Hintergrundbild via Replicate generieren (GM-only) |
 | DELETE | `/campaigns/:id/background` | Kampagnen-Hintergrundbild entfernen (GM-only) |
+| POST | `/sessions/:id/image` | Session-Bild hochladen (GM-only) |
+| POST | `/sessions/:id/generate-image` | Session-Bild via Replicate generieren (GM-only) |
+| DELETE | `/sessions/:id/image` | Session-Bild entfernen (GM-only) |
+| GET | `/campaigns/:id/sessions` | Paginierte Sessions einer Kampagne (?skip=N&take=N) |
 | POST | `/internal/sessions` | (intern) Session anlegen via Bot |
 
 ---
@@ -274,7 +280,9 @@ Group (Discord-Server / Spielgruppe)
   ├── GroupSettings (API-Keys, Provider, Prompt, Kampagnen-Kontext)
   └── Campaign (Kampagne, z.B. "Vergessene Reiche")
         ├── campaignContext (Hintergrundinfo für LLM)
+        ├── backgroundImageUrl (generierbares Hintergrundbild)
         └── Session (eine Spielrunde)
+              ├── sessionImageUrl (generierbares Header-Bild)
               ├── Recording (MP3-Chunk, filePath, durationSeconds)
               ├── Transcript (rawJson mit Segmenten, Speaker-Label, Timestamps)
               ├── Summary (narrative, npcs, quests, loot, locations, openThreads)
@@ -309,11 +317,13 @@ Deployment-Notizen steht in [`ROADMAP.md`](./ROADMAP.md). Kurzüberblick:
 
 ### v1 — in Arbeit
 - [x] Mitgliederverwaltung ohne Login-Zwang (Discordname, Charaktername, freie Rolle, Avatar, Charakterbogen-PDF)
-- [x] Kampagnen-Hintergrundbild mit Parallax-Effekt
+- [x] Kampagnen-Hintergrundbild mit Parallax-Effekt (Upload + Replicate-Generierung, GM-only)
 - [x] Session-Titel manuell änderbar + automatisch vom LLM mitgeneriert
 - [x] MP3-Aufnahmen im Summary verlinkt
 - [x] Sprecher-Zuordnung mit Diarization-Label + Transkript-Ausschnitt (Zwischenschritt, siehe ROADMAP.md für den geplanten vollautomatischen Fix)
-- [ ] Epische Session-Bilder via Replicate (Qwen Image Edit)
+- [x] Session-Bilder via Replicate (Header-Kachel mit Upload/Generate/Remove; automatischer Prompt aus Summary-Daten)
+- [x] Session-Seite zeigt Kampagnen-Hintergrundbild (Parallax-Fixed) für konsistenten Look
+- [x] Session-Paginierung (10 pro Kampagne, "Mehr laden"-Button)
 - [ ] Quest-Wiki (Living Lore: Quests, NSCs, Orte, Beute, offene Fäden)
 - [ ] Multi-User mit Super-Admin/DM-Rollensystem, DM-Registrierung
 - [ ] Dokumentationsbereich im Panel

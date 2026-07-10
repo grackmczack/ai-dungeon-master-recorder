@@ -33,19 +33,21 @@
 
 ### Kampagnen-Hintergrundbild
 
-- [x] DM kann ein Bild fuer die Kampagne hinterlegen (`Campaign.backgroundImageUrl`, Upload-Endpoint `POST /campaigns/:id/background`, Entfernen via `DELETE`).
+- [x] DM kann ein Bild fuer die Kampagne hinterlegen (`Campaign.backgroundImageUrl`, Upload-Endpoint `POST /campaigns/:id/background`, Generate-Endpoint `POST /campaigns/:id/generate-background`, Entfernen via `DELETE`).
 - [x] Wird als Hintergrundbild im Kampagnen-Dashboard angezeigt (Header-Banner ueber jeder Kampagnen-Karte in der Sessions-Ansicht).
-- [x] Parallax-Effekt beim Scrollen -- eigene Svelte-Action `$lib/actions/parallax.ts` (leichtgewichtig, `transform: translate3d`, kein `background-attachment: fixed` wegen iOS-Safari-Unzuverlaessigkeit).
-- [ ] Nutzung als Grundlage fuer die komplette Session-Uebersicht/Detailansicht (aktuell nur als Banner ueber der Kampagnen-Karte, noch nicht als durchgaengiger Seiten-Hintergrund).
+- [x] Parallax-Effekt beim Scrollen -- eigene Svelte-Actions `$lib/actions/parallax.ts` (`parallax` fuer Kachel-Hintergruende, `parallaxFixed` fuer seitenweite fixed Hintergruende).
+- [x] Durchgaengiger Seiten-Hintergrund: Kampagnen-Hintergrundbild erscheint auch auf der Session-Detailseite als seitenweiter Parallax-Hintergrund (konsistentes Raumerlebnis).
 
-### Session-Bild generieren (Replicate)
+### Session-Bild (Replicate)
 
-- [ ] Manueller Button in der Session-Ansicht: "Session-Bild generieren".
-- [ ] Nutzt Replicate -> Qwen Image Edit Modell.
-- [ ] Statusanzeige waehrend der Generierung (Spinner / Fortschrittsanzeige).
-- [ ] Charakter-Zuordnung muss sauber stimmen, damit die Aktionen im Bild die Helden korrekt widerspiegeln.
-  - Charakternamen + Rollen + Avatare fliessen in den Bild-Prompt ein.
-  - Session-Hoehepunkt aus Summary wird als Bildkontext genutzt.
+- [x] Manueller Button in der Session-Ansicht: "Session-Bild generieren" + Upload-Option.
+- [x] Nutzt Replicate API (kompatibel mit jedem Modell, default `black-forest-labs/flux-schnell`).
+- [x] Statusanzeige waehrend der Generierung (Spinner + Fehlerbehandlung).
+- [x] Automatischer Prompt aus Session-Daten: Charaktere + Orte + erster Paragraf der Summary werden zu einem Image-Prompt zusammengebaut (`sessionImagePrompt` in `Summary`).
+- [x] Prompt vom DM ueberschreibbar (Textfeld vorausgefuellt, editierbar).
+- [x] Session-Bild wird als Header-Kachel zwischen Titel und Tabs angezeigt (mit eigenem Parallax-Effekt).
+- [x] Entfernen via Button + Bestaetigungsdialog.
+- [x] Session-Paginierung: max. 10 Sessions pro Kampagne initial geladen, "Mehr laden"-Button.
 
 ### Quest-Wiki (neues Feature)
 
