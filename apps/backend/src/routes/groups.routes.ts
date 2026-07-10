@@ -53,14 +53,27 @@ export async function groupsRoutes(app: FastifyInstance) {
 
     const group = await prisma.group.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        discordGuildId: true,
         memberships: {
           include: { user: { select: { id: true, displayName: true, email: true } } },
           orderBy: { joinedAt: "asc" }
         },
         campaigns: {
           orderBy: { createdAt: "desc" },
-          include: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            setting: true,
+            isActive: true,
+            campaignContext: true,
+            backgroundImageUrl: true,
+            createdAt: true,
+            updatedAt: true,
             sessions: {
               orderBy: { startedAt: "desc" },
               select: {
