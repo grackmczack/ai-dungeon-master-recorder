@@ -333,7 +333,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
     // NSCs: deduplizieren via name (case-insensitive), Beschreibungen mergen
     const npcMap = new Map<string, { name: string; descriptions: string[]; firstMention: string }>();
     for (const s of summaries) {
-      const npcs = (s.npcs as unknown as NPCEntry[]) ?? [];
+      const npcs = (s.npcs as unknown as unknown as NPCEntry[]) ?? [];
       for (const npc of npcs) {
         const key = npc.name.toLowerCase().trim();
         const existing = npcMap.get(key);
@@ -356,7 +356,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
     // Quests: deduplizieren via title, letzter Status gewinnt
     const questMap = new Map<string, { title: string; status: string; notes: string[] }>();
     for (const s of summaries) {
-      const quests = (s.quests as unknown as QuestEntry[]) ?? [];
+      const quests = (s.quests as unknown as unknown as QuestEntry[]) ?? [];
       for (const q of quests) {
         const key = q.title.toLowerCase().trim();
         const existing = questMap.get(key);
@@ -380,7 +380,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
     // Orte: deduplizieren via name
     const locationMap = new Map<string, { name: string; description: string }>();
     for (const s of summaries) {
-      const locs = (s.locations as LocationEntry[]) ?? [];
+      const locs = (s.locations as unknown as LocationEntry[]) ?? [];
       for (const l of locs) {
         const key = l.name.toLowerCase().trim();
         if (!locationMap.has(key)) {
@@ -393,14 +393,14 @@ export async function campaignsRoutes(app: FastifyInstance) {
     // Beute: alle Items flach sammeln (keine Deduplizierung)
     const loot: LootEntry[] = [];
     for (const s of summaries) {
-      const items = (s.loot as unknown as LootEntry[]) ?? [];
+      const items = (s.loot as unknown as unknown as LootEntry[]) ?? [];
       loot.push(...items);
     }
 
     // Offene Fäden: deduplizieren via exaktem String
     const threadSet = new Set<string>();
     for (const s of summaries) {
-      const threads = (s.openThreads as unknown as string[]) ?? [];
+      const threads = (s.openThreads as unknown as unknown as string[]) ?? [];
       for (const t of threads) {
         if (t?.trim()) threadSet.add(t.trim());
       }
