@@ -74,8 +74,10 @@ export async function groupsRoutes(app: FastifyInstance) {
             backgroundImageUrl: true,
             createdAt: true,
             updatedAt: true,
+            _count: { select: { sessions: true } },
             sessions: {
               orderBy: { startedAt: "desc" },
+              take: 10,
               select: {
                 id: true,
                 sessionNumber: true,

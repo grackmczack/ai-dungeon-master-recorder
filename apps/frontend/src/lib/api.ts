@@ -116,6 +116,15 @@ export const api = {
     request<any>(`/campaigns/${campaignId}`, {
       method: 'PATCH', body: JSON.stringify(data)
     }),
+  getCampaignSessions: (campaignId: string, skip?: number, take?: number) => {
+    const params = new URLSearchParams();
+    if (skip !== undefined) params.set('skip', String(skip));
+    if (take !== undefined) params.set('take', String(take));
+    const qs = params.toString();
+    return request<{ sessions: any[]; total: number; skip: number; take: number }>(
+      `/campaigns/${campaignId}/sessions${qs ? `?${qs}` : ''}`
+    );
+  },
   uploadCampaignBackground: async (campaignId: string, file: File) => {
     const token = auth.getToken();
     const form = new FormData();

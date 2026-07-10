@@ -262,6 +262,49 @@ export async function campaignsRoutes(app: FastifyInstance) {
     return reply.send({ backgroundImageUrl: updated.backgroundImageUrl });
   });
 
+  // GET /campaigns/:id/sessions — paginierte Sessions einer Kampagne
+  app.get("/campaigns/:id/sessions", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { sub } = req.user as { sub: string };
+    const query = req.query as { skip?: string; take?: string };
+    const skip = Math.max(0, parseInt(query.skip ?? "0", 10) || 0);
+    const take = Math.min(50, Math.max(1, parseInt(query.take ?? "10", 10) || 10));
+
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+    });
+    if (!campaign) return reply.status(404).send({ error: "Not found" });
+    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+
+    const [sessions, total] = await Promise.all([
+      prisma.session.findMany({
+        where: { campaignId: id },
+        orderBy: { startedAt: "desc" },
+        skip,
+        take,
+        select: {
+          id: true,
+          sessionNumber: true,
+          title: true,
+          status: true,
+          startedAt: true,
+          stoppedAt: true,
+          speakerMaps: {
+            select: {
+              discordUserId: true,
+              discordName: true,
+              characterName: true
+            }
+          }
+        }
+      }),
+      prisma.session.count({ where: { campaignId: id } })
+    ]);
+
+    return reply.send({ sessions, total, skip, take });
+  });
+
   // DELETE /campaigns/:id/background — Hintergrundbild entfernen
   app.delete("/campaigns/:id/background", async (req, reply) => {
     const { id } = req.params as { id: string };

@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import { auth } from '$lib/auth.js';
-  import { parallax } from '$lib/actions/parallax.js';
+  import { parallax, parallaxFixed } from '$lib/actions/parallax.js';
   import WikiView from '$lib/components/WikiView.svelte';
   import type { Group } from '$lib/types.js';
 
@@ -51,6 +51,9 @@
   let generatePrompt: Record<string, string> = $state({});
   let generateError: Record<string, string> = $state({});
   let backgroundVersion: Record<string, number> = $state({});
+
+  // Paginierte Sessions
+  let loadingMoreSessions: Record<string, boolean> = $state({});
 
   const STATUS_LABELS: Record<string, string> = {
     RECORDING: '🔴 Aufnahme',
@@ -171,6 +174,21 @@
     }
   }
 
+  async function loadMoreSessions(campaignId: string) {
+    loadingMoreSessions[campaignId] = true;
+    try {
+      const c = group?.campaigns.find((c: any) => c.id === campaignId);
+      if (!c) return;
+      const currentCount = c.sessions?.length ?? 0;
+      const result = await api.getCampaignSessions(campaignId, currentCount, 10);
+      c.sessions = [...(c.sessions ?? []), ...result.sessions];
+    } catch (e) {
+      console.error('Failed to load more sessions:', e);
+    } finally {
+      loadingMoreSessions[campaignId] = false;
+    }
+  }
+
   async function createMember() {
     creatingMember = true;
     createMemberError = '';
@@ -275,7 +293,7 @@
   <!-- Seitenweiter Hintergrund (Parallax) -->
   {#if group && backgroundImageUrl(group.campaigns?.[0])}
     <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
-      <div class="absolute -inset-y-[15%] inset-x-0" use:parallax={0.15}>
+      <div class="absolute -inset-y-[40%] inset-x-0" use:parallaxFixed={0.5}>
         <img src={backgroundImageUrl(group.campaigns[0])!} alt="" class="w-full h-full object-cover opacity-30" />
       </div>
       <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/60 to-surface-900/40"></div>
@@ -438,7 +456,6 @@
                           <p class="text-xs text-gray-600 mt-0.5">{formatDate(session.startedAt)}</p>
                         </div>
                       </div>
-                      <!-- Mitglieder dieser Session (aus speakerMaps) -->
                       {#if session.speakerMaps?.length > 0}
                         <div class="flex flex-wrap gap-1 mt-2">
                           {#each session.speakerMaps.slice(0,4) as sm}
@@ -457,6 +474,16 @@
                     </span>
                   </a>
                 {/each}
+                {#if campaign._count?.sessions > (campaign.sessions?.length ?? 0)}
+                  <div class="text-center pt-2">
+                    <button
+                      onclick={() => loadMoreSessions(campaign.id)}
+                      disabled={loadingMoreSessions[campaign.id]}
+                      class="text-sm text-brand-400 hover:text-brand-300 disabled:opacity-50 transition">
+                      {loadingMoreSessions[campaign.id] ? 'Lade...' : `+ ${campaign._count.sessions - (campaign.sessions?.length ?? 0)} weitere Sessions laden`}
+                    </button>
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>
