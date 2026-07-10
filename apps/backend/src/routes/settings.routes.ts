@@ -6,6 +6,7 @@ const SettingsSchema = z.object({
   whisperProvider: z.enum(["openai", "replicate", "selfhosted"]).optional(),
   whisperApiKey: z.string().optional().nullable(),
   whisperEndpoint: z.string().optional().nullable(),
+  huggingfaceToken: z.string().optional().nullable(),
   replicateApiKey: z.string().optional().nullable(),
   imageGenModel: z.string().optional(),
   llmProvider: z.enum(["anthropic", "gemini", "openai", "siliconflow", "ollama"]).optional(),
@@ -36,6 +37,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       const masked = { ...settings };
       if (masked.whisperApiKey) masked.whisperApiKey = maskKey(masked.whisperApiKey);
       if (masked.replicateApiKey) masked.replicateApiKey = maskKey(masked.replicateApiKey);
+      if (masked.huggingfaceToken) masked.huggingfaceToken = maskKey(masked.huggingfaceToken);
       if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
       return reply.send(masked);
     }
@@ -58,6 +60,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const dataToUpdate = { ...body.data };
     if (dataToUpdate.whisperApiKey?.includes("***")) delete dataToUpdate.whisperApiKey;
     if (dataToUpdate.replicateApiKey?.includes("***")) delete dataToUpdate.replicateApiKey;
+    if (dataToUpdate.huggingfaceToken?.includes("***")) delete dataToUpdate.huggingfaceToken;
     if (dataToUpdate.llmApiKey?.includes("***")) delete dataToUpdate.llmApiKey;
 
     const settings = await prisma.groupSettings.upsert({

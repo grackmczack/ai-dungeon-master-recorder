@@ -66,6 +66,7 @@
         summaryLanguage: 'de', llmModel: 'claude-opus-4-8',
         replicateApiKey: '',
         imageGenModel: 'black-forest-labs/flux-schnell',
+        huggingfaceToken: '',
         llmSystemPrompt: '', llmCampaignContext: ''
       };
     } catch {
@@ -75,6 +76,7 @@
         summaryLanguage: 'de',
         replicateApiKey: '',
         imageGenModel: 'black-forest-labs/flux-schnell',
+        huggingfaceToken: '',
         llmSystemPrompt: '',
         llmCampaignContext: ''
       };
@@ -93,6 +95,8 @@
       if (payload.replicateApiKey === '***') delete payload.replicateApiKey;
       if (!payload.replicateApiKey?.trim()) delete payload.replicateApiKey;
       if (!payload.imageGenModel?.trim()) delete payload.imageGenModel;
+      if (payload.huggingfaceToken === '***') delete payload.huggingfaceToken;
+      if (!payload.huggingfaceToken?.trim()) delete payload.huggingfaceToken;
       if (payload.llmApiKey === '***') delete payload.llmApiKey;
       await api.updateSettings(selectedGroupId, payload);
       saved = true;
@@ -182,6 +186,49 @@
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
             placeholder="black-forest-labs/flux-schnell" />
           <p class="text-xs text-gray-600">Standard: `black-forest-labs/flux-schnell`. Andere öffentliche Replicate-Modelle funktionieren ebenfalls.</p>
+        </div>
+      </div>
+
+      <!-- HuggingFace / Speaker Diarization -->
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+        <h2 class="font-semibold text-white flex items-center gap-2">🔊 Sprecher-Erkennung (HuggingFace)</h2>
+
+        <div class="space-y-2">
+          <label class="text-sm text-gray-400">HuggingFace Token</label>
+          <input bind:value={form.huggingfaceToken} type="text" autocomplete="off"
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
+            placeholder="hf_..." />
+          <p class="text-xs text-gray-600">Wird für Speaker-Diarization via pyannote benötigt. Auf huggingface.co/settings/tokens erstellen.</p>
+        </div>
+
+        <div class="pt-2 border-t border-surface-600">
+          <p class="text-xs text-gray-500 mb-3">Folgende Modelle müssen mit deinem Account freigeschaltet sein:</p>
+          <div class="space-y-2">
+            <a href="https://huggingface.co/pyannote/speaker-diarization-3.1" target="_blank" rel="noopener noreferrer"
+              class="flex items-center justify-between bg-surface-700 hover:bg-surface-600 border border-surface-600 hover:border-brand-500/40 rounded-lg px-4 py-3 transition group">
+              <div>
+                <p class="text-sm text-white font-medium">pyannote/speaker-diarization-3.1</p>
+                <p class="text-xs text-gray-500">Speaker-Diarization Modell</p>
+              </div>
+              <span class="text-xs text-brand-400 group-hover:text-brand-300 transition">Modell freischalten →</span>
+            </a>
+            <a href="https://huggingface.co/pyannote/segmentation-3.0" target="_blank" rel="noopener noreferrer"
+              class="flex items-center justify-between bg-surface-700 hover:bg-surface-600 border border-surface-600 hover:border-brand-500/40 rounded-lg px-4 py-3 transition group">
+              <div>
+                <p class="text-sm text-white font-medium">pyannote/segmentation-3.0</p>
+                <p class="text-xs text-gray-500">Segmentation Modell (Voraussetzung für Diarization)</p>
+              </div>
+              <span class="text-xs text-brand-400 group-hover:text-brand-300 transition">Modell freischalten →</span>
+            </a>
+            <a href="https://huggingface.co/pyannote/speaker-diarization-community-1" target="_blank" rel="noopener noreferrer"
+              class="flex items-center justify-between bg-surface-700 hover:bg-surface-600 border border-surface-600 hover:border-brand-500/40 rounded-lg px-4 py-3 transition group">
+              <div>
+                <p class="text-sm text-white font-medium">pyannote/speaker-diarization-community-1</p>
+                <p class="text-xs text-gray-500">Community Speaker-Diarization (Alternative)</p>
+              </div>
+              <span class="text-xs text-brand-400 group-hover:text-brand-300 transition">Modell freischalten →</span>
+            </a>
+          </div>
         </div>
       </div>
 

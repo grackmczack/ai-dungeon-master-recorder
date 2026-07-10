@@ -179,6 +179,7 @@ model GroupSettings {
   whisperProvider      String  @default("openai")
   whisperApiKey        String?
   whisperEndpoint      String?
+  huggingfaceToken     String?
   replicateApiKey      String?
   imageGenModel        String  @default("black-forest-labs/flux-schnell")
   llmProvider          String  @default("anthropic")

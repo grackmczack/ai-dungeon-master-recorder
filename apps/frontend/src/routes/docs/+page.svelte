@@ -8,13 +8,14 @@
 
 <div class="max-w-7xl mx-auto px-6 py-10">
   <h1 class="text-3xl font-bold text-white mb-2">📖 Dokumentation</h1>
-  <p class="text-gray-500 mb-8">Alles was du über den D&D Bot wissen musst — vom Start bis zur epischen Zusammenfassung</p>
+  <p class="text-gray-400 mb-2">Alles was du über den D&D Bot wissen musst — vom Start bis zur epischen Zusammenfassung</p>
+  <p class="text-sm text-gray-600 mb-10">Wähle ein Thema aus der Sidebar oder dem Dropdown-Menü (mobil). Bei Fragen hilft dir der FAQ-Bereich weiter.</p>
 
-  <div class="flex gap-8">
+  <div class="flex gap-10">
     <!-- Sidebar -->
     <nav class="w-64 shrink-0 hidden lg:block">
-      <div class="bg-surface-800 rounded-xl border border-surface-600 p-4 sticky top-6 space-y-1">
-        <h3 class="text-xs text-gray-500 uppercase tracking-wider mb-3 font-semibold">Inhalt</h3>
+      <div class="bg-surface-800 rounded-xl border border-surface-600 p-4 sticky top-24 space-y-0.5">
+        <h3 class="text-xs text-gray-500 uppercase tracking-wider mb-3 font-semibold px-2">Inhalt</h3>
         {#each sections as section}
           <button
             onclick={() => activeSection = section.id}
@@ -39,8 +40,8 @@
     <div class="flex-1 min-w-0">
       {#each sections.filter(s => s.id === activeSection) as section}
         <div class="prose prose-invert max-w-none">
-          <h2 class="!text-2xl !font-bold !text-white !mb-6">{section.emoji} {section.title}</h2>
-          <div class="bg-surface-800 rounded-2xl border border-surface-600 p-8">
+          <h2 class="!text-2xl !font-bold !text-white !mb-2 !mt-0">{section.emoji} {section.title}</h2>
+          <div class="bg-surface-800 rounded-2xl border border-surface-600 p-8 space-y-6 text-gray-200 leading-relaxed">
             {@html section.content}
           </div>
         </div>
@@ -263,3 +264,67 @@
     }
   ];
 </script>
+
+<style>
+  :global(.prose-invert h3) {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-top: 1.75rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #334155;
+  }
+  :global(.prose-invert p) {
+    line-height: 1.8;
+    margin-bottom: 1rem;
+    color: #cbd5e1;
+  }
+  :global(.prose-invert ul), :global(.prose-invert ol) {
+    padding-left: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  :global(.prose-invert li) {
+    margin-bottom: 0.4rem;
+    line-height: 1.7;
+  }
+  :global(.prose-invert code) {
+    background: #1e293b;
+    color: #93c5fd;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    border: 1px solid #334155;
+  }
+  :global(.prose-invert pre) {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  :global(.prose-invert table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+  }
+  :global(.prose-invert th) {
+    text-align: left;
+    font-weight: 600;
+    color: #94a3b8;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 2px solid #334155;
+    font-size: 0.85rem;
+  }
+  :global(.prose-invert td) {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #1e293b;
+    font-size: 0.9rem;
+  }
+  :global(.prose-invert strong) {
+    color: #f1f5f9;
+    font-weight: 600;
+  }
+</style>
