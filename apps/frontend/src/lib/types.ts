@@ -53,13 +53,16 @@ export interface Session {
   campaignId: string;
   title?: string;
   sessionNumber?: number;
+  sessionImageUrl?: string;
   status: 'RECORDING' | 'PROCESSING' | 'TRANSCRIBING' | 'SUMMARIZING' | 'DONE' | 'FAILED';
   startedAt: string;
   stoppedAt?: string;
+  updatedAt?: string;
   transcript?: Transcript;
   summary?: Summary;
   speakerMaps?: SpeakerMap[];
   recordings?: Recording[];
+  campaign?: { backgroundImageUrl?: string; updatedAt?: string };
 }
 
 export interface Recording {

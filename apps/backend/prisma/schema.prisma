@@ -88,6 +88,7 @@ model Session {
   discordGuildId  String
   sessionNumber   Int?
   title           String?
+  sessionImageUrl String?
   startedAt       DateTime      @default(now())
   stoppedAt       DateTime?
   status          SessionStatus @default(RECORDING)
@@ -137,18 +138,19 @@ model Transcript {
 }
 
 model Summary {
-  id          String   @id @default(cuid())
-  sessionId   String   @unique
-  narrative   String
-  npcs        Json     @default("[]")
-  quests      Json     @default("[]")
-  loot        Json     @default("[]")
-  locations   Json     @default("[]")
-  openThreads Json     @default("[]")
-  model       String
-  provider    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  sessionId          String   @unique
+  narrative          String
+  npcs               Json     @default("[]")
+  quests             Json     @default("[]")
+  loot               Json     @default("[]")
+  locations          Json     @default("[]")
+  openThreads        Json     @default("[]")
+  sessionImagePrompt String?
+  model              String
+  provider           String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   session Session @relation(fields: [sessionId], references: [id])
 }

@@ -2,12 +2,16 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import { parallax, parallaxFixed } from '$lib/actions/parallax.js';
   import type { Session, TranscriptSegment, SpeakerMap } from '$lib/types.js';
 
   let session: Session | null = $state(null);
   let loading = $state(true);
   let error = $state('');
   let activeTab: 'summary' | 'transcript' | 'speakers' = $state('summary');
+
+  // Campaign background
+  let campaignBackgroundImageUrl: string | null = $state(null);
 
   // Speaker colors für Transcript
   const SPEAKER_COLORS = [
@@ -27,10 +31,23 @@
   let titleEdit = $state('');
   let savingTitle = $state(false);
 
+  // Session-Bild state
+  let generatingSessionImage = $state(false);
+  let generateSessionImagePrompt = $state('');
+  let generateSessionImageError = $state('');
+  let sessionImageVersion = $state(0);
+  let uploadingSessionImage = $state(false);
+  let uploadSessionImageError = $state('');
+
   onMount(async () => {
     try {
       const loaded = await api.getSession($page.params.id!);
       session = loaded;
+      campaignBackgroundImageUrl = (loaded as any).campaignBackgroundImageUrl ?? null;
+      // Pre-fill generate prompt from summary
+      if ((loaded as any).summary?.sessionImagePrompt) {
+        generateSessionImagePrompt = (loaded as any).summary.sessionImagePrompt;
+      }
       buildSpeakerColorMap();
       initSpeakerEdits();
       if (loaded.transcript) {
@@ -66,11 +83,59 @@
     return `/api/uploads/recordings/${filename}`;
   }
 
+  function sessionImageUrl(): string | null {
+    if (!session?.sessionImageUrl) return null;
+    const v = sessionImageVersion || (session.updatedAt ? new Date(session.updatedAt).getTime() : 0);
+    return `${session.sessionImageUrl}?v=${v}`;
+  }
+
+  async function generateSessionImage() {
+    if (!session) return;
+    generatingSessionImage = true;
+    generateSessionImageError = '';
+    try {
+      const prompt = generateSessionImagePrompt.trim() || undefined;
+      const { sessionImageUrl: url } = await api.generateSessionImage(session.id, prompt);
+      session.sessionImageUrl = url;
+      sessionImageVersion = Date.now();
+    } catch (e: any) {
+      generateSessionImageError = e.error ?? 'Fehler bei der Bildgenerierung';
+    } finally {
+      generatingSessionImage = false;
+    }
+  }
+
+  async function onSessionImageSelected(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file || !session) return;
+    uploadingSessionImage = true;
+    uploadSessionImageError = '';
+    try {
+      const { sessionImageUrl: url } = await api.uploadSessionImage(session.id, file);
+      session.sessionImageUrl = url;
+      sessionImageVersion = Date.now();
+    } catch (err: any) {
+      uploadSessionImageError = err.error ?? 'Fehler beim Hochladen';
+    } finally {
+      uploadingSessionImage = false;
+    }
+  }
+
+  async function removeSessionImage() {
+    if (!session || !confirm('Session-Bild wirklich entfernen?')) return;
+    try {
+      await api.removeSessionImage(session.id);
+      session.sessionImageUrl = undefined;
+      sessionImageVersion = 0;
+    } catch (e: any) {
+      alert(e.error ?? 'Fehler beim Entfernen');
+    }
+  }
+
   /** Normalisiert rawJson — gibt immer ein flaches segments[] zurück */
   function getSegments(): TranscriptSegment[] {
     if (!session?.transcript) return [];
     const raw = session.transcript.rawJson;
-    // Chunked format: { chunks: [{ segments: [], chunkIndex, durationSeconds }] }
     if (raw.chunks && raw.chunks.length > 0) {
       let offset = 0;
       const merged: TranscriptSegment[] = [];
@@ -83,7 +148,6 @@
       }
       return merged;
     }
-    // Flat format: { segments: [] }
     return raw.segments ?? [];
   }
 
@@ -115,6 +179,10 @@
       await api.updateSpeakers(session.id, speakerEdits);
       editingSpeakers = false;
       session = await api.getSession($page.params.id!);
+      if ((session as any).summary?.sessionImagePrompt) {
+        generateSessionImagePrompt = (session as any).summary.sessionImagePrompt;
+      }
+      campaignBackgroundImageUrl = (session as any).campaignBackgroundImageUrl ?? null;
     } catch (e: any) {
       alert(e.error ?? 'Fehler beim Speichern');
     } finally {
@@ -123,9 +191,6 @@
   }
 
   function getSpeakerName(speakerId: string): string {
-    // speakerId ist das anonyme Diarization-Label aus dem Transkript (z.B. "SPEAKER_00").
-    // Zuerst gegen diarizationLabel matchen (korrekte Zuordnung), als Fallback gegen
-    // discordUserId (Altdaten / Bot-generierte SpeakerMaps ohne Label).
     const sm = session?.speakerMaps?.find(s => s.diarizationLabel === speakerId)
       ?? session?.speakerMaps?.find(s => s.discordUserId === speakerId);
     return sm?.characterName ?? sm?.playerName ?? sm?.discordName ?? speakerId;
@@ -144,6 +209,15 @@
     });
   }
 </script>
+
+{#if campaignBackgroundImageUrl}
+  <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
+    <div class="absolute -inset-y-[40%] inset-x-0" use:parallaxFixed={0.5}>
+      <img src={`${campaignBackgroundImageUrl}?v=${session?.campaign?.updatedAt ? new Date(session.campaign.updatedAt).getTime() : 0}`} alt="" class="w-full h-full object-cover opacity-30" />
+    </div>
+    <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/60 to-surface-900/40"></div>
+  </div>
+{/if}
 
 <div class="max-w-5xl mx-auto px-6 py-10">
   <a href="javascript:history.back()" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-6 transition">← Zurück</a>
@@ -187,6 +261,48 @@
         </span>
       </div>
     </div>
+
+    <!-- Session-Bild Header-Kachel (zwischen Tabs und Chronik) -->
+    {#if sessionImageUrl()}
+      <div class="mb-6 relative overflow-hidden rounded-2xl h-64 group">
+        <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
+          <img src={sessionImageUrl()!} alt="" class="w-full h-full object-cover opacity-60" />
+        </div>
+        <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-transparent to-surface-900/30 pointer-events-none"></div>
+        <!-- Remove button (GM only, hover) -->
+        <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition flex gap-2">
+          <button onclick={removeSessionImage}
+            class="bg-red-900/80 hover:bg-red-800 text-red-300 text-xs px-3 py-1.5 rounded-lg backdrop-blur transition">
+            ✕ Entfernen
+          </button>
+        </div>
+      </div>
+    {:else if session.status === 'DONE'}
+      <!-- Noch kein Bild — Generate/Upload (GM only) -->
+      <div class="mb-6 bg-surface-800 rounded-2xl border border-surface-600 border-dashed p-6">
+        <p class="text-sm text-gray-400 mb-4">🎨 Session-Bild generieren — zeigt eine illustrierte Szene dieser Session als Header</p>
+        <div class="space-y-3">
+          <textarea
+            bind:value={generateSessionImagePrompt}
+            rows="2"
+            placeholder="Prompt für die Bildgenerierung..."
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500 resize-none">
+          </textarea>
+          <div class="flex items-center gap-3">
+            <button onclick={generateSessionImage} disabled={generatingSessionImage}
+              class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+              {generatingSessionImage ? 'Generiere...' : '🎨 Generieren'}
+            </button>
+            <label class="text-xs text-gray-500 hover:text-brand-400 cursor-pointer border border-surface-600 hover:border-brand-500/40 px-3 py-1.5 rounded-lg transition inline-block">
+              {uploadingSessionImage ? 'Lade hoch...' : '📁 Oder Bild hochladen'}
+              <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange={onSessionImageSelected} disabled={uploadingSessionImage} />
+            </label>
+          </div>
+          {#if generateSessionImageError}<p class="text-red-400 text-xs">{generateSessionImageError}</p>{/if}
+          {#if uploadSessionImageError}<p class="text-red-400 text-xs">{uploadSessionImageError}</p>{/if}
+        </div>
+      </div>
+    {/if}
 
     <!-- Tabs -->
     <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 w-fit border border-surface-600">
@@ -237,7 +353,6 @@
                           MP3 Download
                         </a>
                       </div>
-                      <!-- Kleine Custom-Styles für den Audio-Player im Darkmode (Webkit) -->
                       <audio controls src={recordingUrl(rec.filename)} preload="none"
                         class="w-full h-8 [&::-webkit-media-controls-panel]:bg-surface-800 [&::-webkit-media-controls-current-time-display]:text-gray-200 [&::-webkit-media-controls-time-remaining-display]:text-gray-200">
                       </audio>
@@ -371,7 +486,7 @@
               {#each diarizationLabels as dl}
                 <div class="flex items-start gap-3 text-sm bg-surface-700/50 rounded-lg px-3 py-2">
                   <span class="font-mono text-xs {speakerColorMap[dl.label] ?? 'text-gray-400'} shrink-0 pt-0.5">{dl.label}</span>
-                  <span class="text-gray-400 italic flex-1">„{dl.sample}…“</span>
+                  <span class="text-gray-400 italic flex-1">„{dl.sample}…"</span>
                   <span class="text-xs text-gray-600 shrink-0">{dl.count} Segmente</span>
                 </div>
               {/each}

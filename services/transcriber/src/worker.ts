@@ -299,12 +299,15 @@ const worker = new Worker<TranscriptionJobData>(
         update: {
           narrative: summary.narrative, npcs: summary.npcs, quests: summary.quests,
           loot: summary.loot, locations: summary.locations, openThreads: summary.openThreads,
+          sessionImagePrompt: summary.sessionImagePrompt ?? null,
           model: summary.model, provider: summary.provider
         },
         create: {
           sessionId: session.id, narrative: summary.narrative, npcs: summary.npcs,
           quests: summary.quests, loot: summary.loot, locations: summary.locations,
-          openThreads: summary.openThreads, model: summary.model, provider: summary.provider
+          openThreads: summary.openThreads,
+          sessionImagePrompt: summary.sessionImagePrompt ?? null,
+          model: summary.model, provider: summary.provider
         }
       });
 

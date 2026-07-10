@@ -99,6 +99,29 @@ export const api = {
     request<any>(`/sessions/${sessionId}`, {
       method: 'PATCH', body: JSON.stringify({ title })
     }),
+  uploadSessionImage: async (sessionId: string, file: File) => {
+    const token = auth.getToken();
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/sessions/${sessionId}/image`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form
+    });
+    const data = await res.json();
+    if (!res.ok) throw { ...data, statusCode: res.status };
+    return data as { sessionImageUrl: string };
+  },
+  generateSessionImage: async (sessionId: string, prompt?: string) => {
+    const body: Record<string, string> = {};
+    if (prompt?.trim()) body.prompt = prompt.trim();
+    return request<{ sessionImageUrl: string }>(`/sessions/${sessionId}/generate-image`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+  },
+  removeSessionImage: (sessionId: string) =>
+    request<any>(`/sessions/${sessionId}/image`, { method: 'DELETE' }),
 
   // Settings
   getSettings: (groupId: string) => request<any>(`/groups/${groupId}/settings`),

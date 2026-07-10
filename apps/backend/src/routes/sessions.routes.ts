@@ -1,4 +1,8 @@
 import type { FastifyInstance } from "fastify";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { z } from "zod";
 import { prisma } from "../db.js";
 
 interface RawTranscriptSegment {
@@ -15,7 +19,6 @@ interface RawTranscriptJson {
   chunks?: RawTranscriptChunk[];
 }
 
-/** Normalisiert Transcript.rawJson (Prisma Json) zu einer flachen Segment-Liste, egal ob chunked oder flach. */
 function extractTranscriptSegments(rawJson: unknown): { speaker: string; text: string }[] {
   const raw = rawJson as RawTranscriptJson | null | undefined;
   const chunkedSegments = raw?.chunks?.flatMap((c) => c.segments ?? []);
@@ -23,10 +26,44 @@ function extractTranscriptSegments(rawJson: unknown): { speaker: string; text: s
   return segments.map((s) => ({ speaker: s.speaker ?? "", text: s.text ?? "" }));
 }
 
+const SESSION_IMAGE_DIR = path.resolve(process.cwd(), "..", "..", "storage", "session-images");
+const ALLOWED_IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const DEFAULT_IMAGE_MODEL = "black-forest-labs/flux-schnell";
+
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
+function extractOutputUrl(output: unknown): string | null {
+  if (typeof output === "string") return output.startsWith("http") ? output : null;
+  if (Array.isArray(output)) { for (const item of output) { const u = extractOutputUrl(item); if (u) return u; } return null; }
+  if (output && typeof output === "object") {
+    const r = output as Record<string, unknown>;
+    if (typeof r.url === "string") return r.url;
+    if (typeof r.output === "string") return r.output;
+    if (r.output) return extractOutputUrl(r.output);
+  }
+  return null;
+}
+
+async function readErrorBody(res: Response) {
+  const text = await res.text();
+  if (!text) return "";
+  try { return JSON.stringify(JSON.parse(text)); } catch { return text; }
+}
+
+/** Prüft ob User GM in der Kampagnen-Gruppe ist */
+async function isGm(campaignId: string, userId: string): Promise<boolean> {
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    include: { group: { include: { memberships: { where: { userId, role: "GM", leftAt: null } } } } }
+  });
+  return !!(campaign?.group.memberships.length);
+}
+
 export async function sessionsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
 
-  // GET /sessions/:id — full session detail with transcript + summary
+  // GET /sessions/:id — full session detail + campaign background for consistency
   app.get("/sessions/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const { sub } = req.user as { sub: string };
@@ -34,7 +71,11 @@ export async function sessionsRoutes(app: FastifyInstance) {
     const session = await prisma.session.findUnique({
       where: { id },
       include: {
-        campaign: { include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } } },
+        campaign: {
+          include: {
+            group: { include: { memberships: { where: { userId: sub, leftAt: null } } } }
+          }
+        },
         recordings: true,
         transcript: true,
         summary: true,
@@ -45,7 +86,11 @@ export async function sessionsRoutes(app: FastifyInstance) {
     if (!session) return reply.status(404).send({ error: "Not found" });
     if (!session.campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
 
-    return reply.send(session);
+    // Campaign-Hintergrundbild für seitenweiten Parallax mitgeben
+    return reply.send({
+      ...session,
+      campaignBackgroundImageUrl: session.campaign.backgroundImageUrl
+    });
   });
 
   // PATCH /sessions/:id — Titel manuell ändern
@@ -66,7 +111,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
     return reply.send({ id: updated.id, title: updated.title });
   });
 
-  // PUT /sessions/:id/speakers — map Discord user IDs (+ optional Diarization-Label) to character names
+  // PUT /sessions/:id/speakers
   app.put("/sessions/:id/speakers", async (req, reply) => {
     const { id } = req.params as { id: string };
     const { sub } = req.user as { sub: string };
@@ -88,7 +133,6 @@ export async function sessionsRoutes(app: FastifyInstance) {
     if (!session) return reply.status(404).send({ error: "Not found" });
     if (!session.campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
 
-    // Upsert all speaker maps
     await Promise.all(speakers.map(s =>
       prisma.speakerMap.upsert({
         where: { sessionId_discordUserId: { sessionId: id, discordUserId: s.discordUserId } },
@@ -105,8 +149,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
     return reply.send({ updated: speakers.length });
   });
 
-  // GET /sessions/:id/diarization-labels — alle im Transkript vorkommenden Sprecher-Labels
-  // (z.B. SPEAKER_00, SPEAKER_01) — Hilfe für die Sprecher-Zuordnung im Panel
+  // GET /sessions/:id/diarization-labels
   app.get("/sessions/:id/diarization-labels", async (req, reply) => {
     const { id } = req.params as { id: string };
     const { sub } = req.user as { sub: string };
@@ -128,15 +171,153 @@ export async function sessionsRoutes(app: FastifyInstance) {
     for (const seg of allSegments) {
       const label = seg.speaker || "UNKNOWN";
       const entry = labels.get(label);
-      if (entry) {
-        entry.count++;
-      } else {
-        labels.set(label, { count: 1, sample: seg.text.slice(0, 120) });
-      }
+      if (entry) { entry.count++; } else { labels.set(label, { count: 1, sample: seg.text.slice(0, 120) }); }
     }
 
-    return reply.send(
-      Array.from(labels.entries()).map(([label, info]) => ({ label, ...info }))
-    );
+    return reply.send(Array.from(labels.entries()).map(([label, info]) => ({ label, ...info })));
+  });
+
+  // POST /sessions/:id/image — Session-Bild hochladen (GM only)
+  app.post("/sessions/:id/image", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { sub } = req.user as { sub: string };
+
+    const session = await prisma.session.findUnique({ where: { id }, include: { campaign: true } });
+    if (!session) return reply.status(404).send({ error: "Not found" });
+    if (!(await isGm(session.campaignId, sub))) return reply.status(403).send({ error: "Only GMs can upload session images" });
+
+    const data = await req.file({ limits: { fileSize: MAX_IMAGE_BYTES } });
+    if (!data) return reply.status(400).send({ error: "No file uploaded" });
+    if (!ALLOWED_IMAGE_MIME.has(data.mimetype)) return reply.status(400).send({ error: "Only png/jpeg/webp allowed" });
+
+    const buffer = await data.toBuffer();
+    const ext = path.extname(data.filename) || ".png";
+    const fileName = `${id}-${randomUUID()}${ext}`;
+
+    await mkdir(SESSION_IMAGE_DIR, { recursive: true });
+    await writeFile(path.join(SESSION_IMAGE_DIR, fileName), buffer);
+
+    if (session.sessionImageUrl) {
+      const oldFile = path.basename(session.sessionImageUrl);
+      await unlink(path.join(SESSION_IMAGE_DIR, oldFile)).catch(() => undefined);
+    }
+
+    const sessionImageUrl = `/uploads/session-images/${fileName}`;
+    await prisma.session.update({ where: { id }, data: { sessionImageUrl } });
+
+    return reply.send({ sessionImageUrl });
+  });
+
+  // POST /sessions/:id/generate-image — Session-Bild via Replicate generieren (GM only)
+  app.post("/sessions/:id/generate-image", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { sub } = req.user as { sub: string };
+    const body = z.object({ prompt: z.string().optional() }).safeParse(req.body ?? {});
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
+
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: {
+        campaign: { include: { group: { include: { settings: true } } } },
+        summary: true,
+        speakerMaps: true
+      }
+    });
+    if (!session) return reply.status(404).send({ error: "Not found" });
+    if (!(await isGm(session.campaignId, sub))) return reply.status(403).send({ error: "Only GMs can generate session images" });
+
+    const replicateApiKey = session.campaign.group.settings?.replicateApiKey?.trim();
+    if (!replicateApiKey) return reply.status(400).send({ error: "No Replicate API key configured" });
+
+    const imageGenModel = session.campaign.group.settings?.imageGenModel?.trim() || DEFAULT_IMAGE_MODEL;
+
+    // Prompt: Vom User explizit angegeben, oder den vorausgefüllten aus der Summary, oder Fallback
+    let prompt = body.data.prompt?.trim()
+      || session.summary?.sessionImagePrompt?.trim()
+      || "";
+
+    if (!prompt) {
+      // Fallback: Baue Prompt aus Session-Daten
+      const chars = session.speakerMaps.map(sm => sm.characterName || sm.discordName).filter(Boolean);
+      const charList = chars.length > 0 ? chars.slice(0, 5).join(", ") : "unknown adventurers";
+      prompt = `Epic fantasy illustration for D&D session "${session.title || `Session #${session.sessionNumber || '?'}`}". Characters: ${charList}. Cinematic scene, dramatic lighting, richly detailed tabletop RPG artwork.`;
+    }
+
+    const predictionUrl = `https://api.replicate.com/v1/models/${imageGenModel}/predictions`;
+    const createRes = await fetch(predictionUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${replicateApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ input: { prompt, aspect_ratio: "16:9", output_format: "webp" } })
+    });
+
+    if (!createRes.ok) {
+      const details = await readErrorBody(createRes);
+      return reply.status(502).send({ error: `Replicate request failed: ${details || createRes.statusText}` });
+    }
+
+    let prediction = (await createRes.json()) as { id: string; status: string; output?: unknown; error?: string | null; urls?: { get?: string } };
+    let attempts = 0;
+    const maxAttempts = 150;
+
+    while (prediction.status === "starting" || prediction.status === "processing" || prediction.status === "queued") {
+      if (attempts++ >= maxAttempts) return reply.status(504).send({ error: "Replicate prediction timed out" });
+      await sleep(2000);
+      const pollRes = await fetch(
+        prediction.urls?.get ?? `https://api.replicate.com/v1/predictions/${prediction.id}`,
+        { headers: { Authorization: `Bearer ${replicateApiKey}` } }
+      );
+      if (!pollRes.ok) {
+        const details = await readErrorBody(pollRes);
+        return reply.status(502).send({ error: `Replicate polling failed: ${details || pollRes.statusText}` });
+      }
+      prediction = (await pollRes.json()) as typeof prediction;
+    }
+
+    if (prediction.status !== "succeeded") {
+      return reply.status(502).send({ error: prediction.error ? `Replicate failed: ${prediction.error}` : `Replicate status: ${prediction.status}` });
+    }
+
+    const outputUrl = extractOutputUrl(prediction.output);
+    if (!outputUrl) return reply.status(502).send({ error: "Replicate returned no image URL" });
+
+    const imageRes = await fetch(outputUrl);
+    if (!imageRes.ok) {
+      const details = await readErrorBody(imageRes);
+      return reply.status(502).send({ error: `Could not download image: ${details || imageRes.statusText}` });
+    }
+
+    const buffer = Buffer.from(await imageRes.arrayBuffer());
+    const fileName = `${id}.webp`;
+
+    await mkdir(SESSION_IMAGE_DIR, { recursive: true });
+    await writeFile(path.join(SESSION_IMAGE_DIR, fileName), buffer);
+
+    if (session.sessionImageUrl) {
+      const oldFile = path.basename(session.sessionImageUrl);
+      if (oldFile !== fileName) await unlink(path.join(SESSION_IMAGE_DIR, oldFile)).catch(() => undefined);
+    }
+
+    const sessionImageUrl = `/uploads/session-images/${fileName}`;
+    await prisma.session.update({ where: { id }, data: { sessionImageUrl } });
+
+    return reply.send({ sessionImageUrl });
+  });
+
+  // DELETE /sessions/:id/image — Session-Bild entfernen (GM only)
+  app.delete("/sessions/:id/image", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { sub } = req.user as { sub: string };
+
+    const session = await prisma.session.findUnique({ where: { id }, include: { campaign: true } });
+    if (!session) return reply.status(404).send({ error: "Not found" });
+    if (!(await isGm(session.campaignId, sub))) return reply.status(403).send({ error: "Only GMs can remove session images" });
+
+    if (session.sessionImageUrl) {
+      const oldFile = path.basename(session.sessionImageUrl);
+      await unlink(path.join(SESSION_IMAGE_DIR, oldFile)).catch(() => undefined);
+    }
+
+    await prisma.session.update({ where: { id }, data: { sessionImageUrl: null } });
+    return reply.send({ removed: true });
   });
 }

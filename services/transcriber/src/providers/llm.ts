@@ -11,6 +11,7 @@ export interface SummaryResult {
   loot: Array<{ item: string; foundBy: string }>;
   locations: Array<{ name: string; description: string }>;
   openThreads: string[];
+  sessionImagePrompt?: string;
   model: string;
   provider: string;
 }
@@ -158,12 +159,30 @@ export async function generateSummary(
   systemPrompt?: string,
   campaignContext?: string
 ): Promise<SummaryResult> {
+  let result: SummaryResult;
   switch (config.provider) {
-    case "anthropic": return summarizeAnthropic(segments, speakerMap, config, systemPrompt, campaignContext);
-    case "gemini": return summarizeGemini(segments, speakerMap, config, systemPrompt, campaignContext);
-    case "openai": return summarizeOpenAI(segments, speakerMap, config, systemPrompt, campaignContext);
-    case "siliconflow": return summarizeSiliconFlow(segments, speakerMap, config, systemPrompt, campaignContext);
-    case "ollama": return summarizeOllama(segments, speakerMap, config, systemPrompt, campaignContext);
+    case "anthropic": result = await summarizeAnthropic(segments, speakerMap, config, systemPrompt, campaignContext); break;
+    case "gemini": result = await summarizeGemini(segments, speakerMap, config, systemPrompt, campaignContext); break;
+    case "openai": result = await summarizeOpenAI(segments, speakerMap, config, systemPrompt, campaignContext); break;
+    case "siliconflow": result = await summarizeSiliconFlow(segments, speakerMap, config, systemPrompt, campaignContext); break;
+    case "ollama": result = await summarizeOllama(segments, speakerMap, config, systemPrompt, campaignContext); break;
     default: throw new Error(`Unknown LLM provider: ${config.provider}`);
   }
+
+  // Generate sessionImagePrompt from the summary data + speaker info
+  const chars = Object.values(speakerMap).filter(Boolean);
+  const charList = chars.length > 0 ? chars.slice(0, 6).join(", ") : "unknown adventurers";
+  const locations = result.locations.slice(0, 3).map(l => l.name).filter(Boolean);
+  const locationStr = locations.length > 0 ? ` at ${locations.join(" and ")}` : "";
+  const firstParagraph = result.narrative.split("\n\n")[0]?.slice(0, 300) ?? "";
+
+  result.sessionImagePrompt = [
+    `Epic fantasy illustration for a D&D session scene.`,
+    `Characters present: ${charList}.`,
+    locations.length > 0 ? `Location${locations.length > 1 ? "s" : ""}: ${locations.join(", ")}.` : "",
+    `Scene: ${firstParagraph}`,
+    `Style: Cinematic, dramatic lighting, richly detailed tabletop RPG artwork, wide horizontal composition. No text or UI elements.`
+  ].filter(Boolean).join(" ").slice(0, 1000);
+
+  return result;
 }

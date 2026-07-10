@@ -59,6 +59,12 @@ await app.register(fastifyStatic, {
   decorateReply: false
 });
 
+await app.register(fastifyStatic, {
+  root: path.resolve(process.cwd(), "..", "..", "storage", "session-images"),
+  prefix: "/uploads/session-images/",
+  decorateReply: false
+});
+
 await app.register(authPlugin);
 
 // Routes
