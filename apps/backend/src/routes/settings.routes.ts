@@ -31,17 +31,34 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (!membership) return reply.status(403).send({ error: "Not a member" });
 
     const settings = await prisma.groupSettings.findUnique({ where: { groupId } });
-    // Mask API keys in response (show first 7 characters, then stars)
+
+    // Check if this DM has admin keys granted (by a SUPER_ADMIN)
+    const adminGrant = await prisma.adminApiKeyGrant.findFirst({
+      where: { dmId: sub, revokedAt: null },
+      select: { superAdminId: true }
+    });
+
+    const maskKey = (key: string | null) => key ? (key.length > 7 ? `${key.substring(0, 7)}***` : "***") : null;
+
     if (settings) {
-      const maskKey = (key: string | null) => key ? (key.length > 7 ? `${key.substring(0, 7)}***` : "***") : null;
+      // Build response based on whether we're using admin keys or own keys
       const masked = { ...settings };
       if (masked.whisperApiKey) masked.whisperApiKey = maskKey(masked.whisperApiKey);
       if (masked.replicateApiKey) masked.replicateApiKey = maskKey(masked.replicateApiKey);
       if (masked.huggingfaceToken) masked.huggingfaceToken = maskKey(masked.huggingfaceToken);
       if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
-      return reply.send(masked);
+
+      return reply.send({
+        ...masked,
+        usingAdminKeys: !!adminGrant,
+        adminKeyProviderId: adminGrant?.superAdminId ?? null
+      });
     }
-    return reply.send(null);
+
+    return reply.send({
+      usingAdminKeys: !!adminGrant,
+      adminKeyProviderId: adminGrant?.superAdminId ?? null
+    });
   });
 
   // PUT /groups/:groupId/settings — only GMs

@@ -1,6 +1,6 @@
 import { auth } from './auth.js';
 import { browser } from '$app/environment';
-import type { AggregatedWiki, WikiNPC } from './types.js';
+import type { AggregatedWiki, WikiNPC, User } from './types.js';
 
 const BASE = '/api';
 
@@ -182,4 +182,20 @@ export const api = {
     request<AggregatedWiki>(`/wiki/${campaignId}`),
   getWikiNPCs: (campaignId: string) =>
     request<WikiNPC[]>(`/wiki/${campaignId}/npcs`),
+
+  // ─── Admin ─────────────────────────────────────────────────
+  getAdminUsers: () =>
+    request<any[]>('/admin/users'),
+  createAdminUser: (data: { email: string; password: string; displayName: string }) =>
+    request<any>('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateAdminUser: (id: string, data: { displayName?: string; email?: string; isActive?: boolean }) =>
+    request<any>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  grantAdminKeys: (userId: string) =>
+    request<any>(`/admin/users/${userId}/grant-keys`, { method: 'POST' }),
+  revokeAdminKeys: (userId: string) =>
+    request<any>(`/admin/users/${userId}/grant-keys`, { method: 'DELETE' }),
+  getAdminGrants: () =>
+    request<any[]>('/admin/grants'),
+  getAdminOverview: () =>
+    request<any[]>('/admin/overview'),
 };

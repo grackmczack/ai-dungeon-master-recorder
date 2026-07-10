@@ -2,6 +2,10 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  role?: 'SUPER_ADMIN' | 'DM';
+  isActive?: boolean;
+  hasAdminKeys?: boolean;
+  adminKeyProvider?: string | null;
   createdAt: string;
 }
 

@@ -167,7 +167,24 @@ docker compose up -d --build
 git pull && docker compose up -d --build
 ```
 
-**Bekannter Gotcha — Prisma `db push` schlägt beim Backend-Start fehl:**
+### Datenbank-Migration (nach Schema-Änderungen)
+
+```bash
+# Lokal
+docker exec dnd-backend sh -c "npx prisma db push --schema ./prisma/schema.prisma --skip-generate"
+
+# Oder via Docker-Neustart (start.sh führt db push automatisch aus)
+docker compose up -d --build
+```
+
+**Nach dem ersten Deployment der Multi-User-Features:**
+Der erste existierende User muss manuell zum SUPER_ADMIN befördert werden:
+```bash
+docker exec dnd-postgres psql -U ai_dungeon -d ai_dungeon_master_recorder \
+  -c "UPDATE \"User\" SET role='SUPER_ADMIN' WHERE email='deine@email.de';"
+```
+
+**Bekannter Gotcha — Prisma `db push` schlägt beim Backend-Start fehl:****
 Wenn `docker logs dnd-backend` beim Start `Could not parse schema engine response` zeigt: Prismas
 auto-heruntergeladene Schema-Engine-Binary (genutzt von `prisma db push` in `start.sh`) linkt gegen
 OpenSSL 1.1 (`libssl.so.1.1`), aktuelle Alpine-Images liefern aber nur OpenSSL 3.x. Der Fix ist
@@ -266,13 +283,44 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | POST | `/sessions/:id/generate-image` | Session-Bild via Replicate generieren (GM-only) |
 | DELETE | `/sessions/:id/image` | Session-Bild entfernen (GM-only) |
 | GET | `/campaigns/:id/sessions` | Paginierte Sessions einer Kampagne (?skip=N&take=N) |
+| GET | `/campaigns/:id/wiki` | Quest-Wiki Aggregation (Stufe 1) |
+| GET | `/wiki/:campaignId/npcs` | Nur NSCs aus dem Wiki |
 | POST | `/internal/sessions` | (intern) Session anlegen via Bot |
+
+### Admin (nur SUPER_ADMIN)
+| Method | Path | Beschreibung |
+|--------|------|--------------|
+| GET | `/admin/users` | Alle DMs auflisten |
+| POST | `/admin/users` | Neuen DM anlegen |
+| PATCH | `/admin/users/:id` | DM bearbeiten (Name, Email, aktiv/deaktiv) |
+| GET | `/admin/grants` | Alle aktiven Key-Grants |
+| POST | `/admin/users/:id/grant-keys` | Admin-API-Keys für DM freigeben |
+| DELETE | `/admin/users/:id/grant-keys` | Key-Grant entziehen |
+| GET | `/admin/overview` | DM-Übersicht mit Gruppen & Kampagnen |
+
+### Multi-User & Admin-System
+- **SUPER_ADMIN** verwaltet alle DMs, kann Accounts anlegen/deaktivieren
+- **Key-Grant-System:** Super-Admin kann seine API-Keys an DMs verleihen (Checkbox im Admin-Panel). DM sieht in Settings: "🔑 Du nutzt die Admin-API-Keys". Transcriber löst automatisch die Admin-Settings auf.
+- Bei Revoke fällt der DM auf eigene Keys zurück
+- Datenmodell: `User.role` (SUPER_ADMIN|DM), `User.isActive`, `AdminApiKeyGrant`-Tabelle
 
 ---
 
 ## Datenmodell
 
 ```
+User (SUPER_ADMIN oder DM)
+  ├── role: SUPER_ADMIN | DM
+  ├── isActive: Boolean
+  ├── grantedKeys: AdminApiKeyGrant[] (als Super-Admin verliehene Keys)
+  └── receivedKeys: AdminApiKeyGrant[] (als DM erhaltene Keys)
+
+AdminApiKeyGrant
+  ├── superAdminId → User
+  ├── dmId → User
+  ├── grantedAt
+  └── revokedAt? (null = aktiv)
+
 Group (Discord-Server / Spielgruppe)
   ├── GroupMembership (Mitglied — braucht KEINEN eigenen Login/Account in v1;
   │     userId optional (nur GM/DM), discordName, characterName, partyRole,

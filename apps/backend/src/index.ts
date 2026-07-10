@@ -14,6 +14,7 @@ import { campaignsRoutes } from "./routes/campaigns.routes.js";
 import { internalRoutes } from "./routes/internal.routes.js";
 import { membersRoutes } from "./routes/members.routes.js";
 import { wikiRoutes } from "./routes/wiki.routes.js";
+import { adminRoutes } from "./routes/admin.routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -77,6 +78,7 @@ await app.register(campaignsRoutes);
 await app.register(internalRoutes);
 await app.register(membersRoutes);
 await app.register(wikiRoutes);
+await app.register(adminRoutes);
 
 // Health
 app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString(), version: "0.1.0" }));

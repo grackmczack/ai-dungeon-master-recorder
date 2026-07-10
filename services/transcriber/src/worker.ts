@@ -19,9 +19,48 @@ const connection = new IORedis({
 async function getSettings(guildId: string) {
   const group = await prisma.group.findFirst({
     where: { discordGuildId: guildId },
-    include: { settings: true }
+    include: { settings: true, memberships: { where: { role: "GM", leftAt: null }, select: { userId: true }, take: 1 } }
   });
-  return group?.settings ?? null;
+
+  const settings = group?.settings ?? null;
+  const dmUserId = group?.memberships[0]?.userId;
+
+  // Check if this DM has admin keys granted by a SUPER_ADMIN
+  if (dmUserId) {
+    const adminGrant = await prisma.adminApiKeyGrant.findFirst({
+      where: { dmId: dmUserId, revokedAt: null },
+      select: { superAdminId: true, superAdmin: { select: { role: true } } }
+    });
+
+    if (adminGrant && adminGrant.superAdmin.role === "SUPER_ADMIN") {
+      // Try to find the super-admin's settings for any group they own
+      const adminSettings = await prisma.groupSettings.findFirst({
+        where: {
+          group: {
+            memberships: {
+              some: { userId: adminGrant.superAdminId, role: "GM", leftAt: null }
+            }
+          }
+        },
+        select: {
+          whisperProvider: true, whisperApiKey: true, whisperEndpoint: true,
+          huggingfaceToken: true, replicateApiKey: true, imageGenModel: true,
+          llmProvider: true, llmApiKey: true, llmModel: true, llmEndpoint: true,
+          summaryLanguage: true, postSummaryChannelId: true,
+          llmSystemPrompt: true, llmCampaignContext: true
+        }
+      });
+
+      if (adminSettings) {
+        console.log(`[WORKER] 🔑 Using super-admin API keys for DM ${dmUserId} (granted by ${adminGrant.superAdminId})`);
+        return adminSettings;
+      }
+      // Fallback: if no admin settings yet, return DM's own settings
+      console.log(`[WORKER] ⚠️ Admin key grant active but no super-admin settings found — using DM's own settings`);
+    }
+  }
+
+  return settings;
 }
 
 async function findSession(data: TranscriptionJobData) {

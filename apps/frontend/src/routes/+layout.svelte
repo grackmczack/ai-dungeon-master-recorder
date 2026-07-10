@@ -9,7 +9,7 @@
 
   let { children } = $props();
 
-  const { isAuthenticated, user } = auth;
+  const { isAuthenticated, user, token } = auth;
 
   const PUBLIC_ROUTES = ['/login', '/register'];
 
@@ -41,7 +41,8 @@
     } catch { statusInfo.set(null); }
   }
 
-  onMount(async () => {
+  onMount(() => {
+    (async () => {
     const isPublic = PUBLIC_ROUTES.some(r => $page.url.pathname.startsWith(r));
     if (!$isAuthenticated && !isPublic) {
       goto('/login');
@@ -61,6 +62,7 @@
       const interval = setInterval(pollStatus, 10000);
       return () => clearInterval(interval);
     }
+    })();
   });
 
   function handleLogout() {
@@ -77,6 +79,9 @@
       </a>
       <a href="/dashboard" class="text-sm text-gray-400 hover:text-white transition">Dashboard</a>
       <a href="/docs" class="text-sm text-gray-400 hover:text-white transition">Dokumentation</a>
+      {#if $user?.role === 'SUPER_ADMIN'}
+        <a href="/admin" class="text-sm text-brand-400 hover:text-brand-300 transition">Admin</a>
+      {/if}
     </div>
     <div class="flex items-center gap-4">\      {#if $statusInfo}
         <div class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border {

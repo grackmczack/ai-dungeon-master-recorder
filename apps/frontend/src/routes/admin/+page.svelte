@@ -1,0 +1,346 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+  import { auth } from '$lib/auth.js';
+  import { api } from '$lib/api.js';
+  import type { User } from '$lib/types.js';
+
+  let users: any[] = $state([]);
+  let grants: any[] = $state([]);
+  let overview: any[] = $state([]);
+  let loading = $state(true);
+  let error = $state('');
+  let activeTab: 'users' | 'grants' | 'overview' = $state('users');
+  let currentUser: User | null = $state(null);
+
+  // Create DM form
+  let showCreateForm = $state(false);
+  let newEmail = $state('');
+  let newPassword = $state('');
+  let newDisplayName = $state('');
+  let creating = $state(false);
+  let createError = $state('');
+
+  // Request state per user
+  let togglingKeys: Record<string, boolean> = $state({});
+  let togglingStatus: Record<string, boolean> = $state({});
+
+  onMount(async () => {
+    try {
+      currentUser = await api.me();
+      if (currentUser?.role !== 'SUPER_ADMIN') {
+        goto('/dashboard');
+        return;
+      }
+      await loadAll();
+    } catch (e: any) {
+      if (e.statusCode === 403) goto('/dashboard');
+      error = e.error ?? 'Fehler beim Laden';
+    } finally {
+      loading = false;
+    }
+  });
+
+  async function loadAll() {
+    const [userList, grantList, overviewList] = await Promise.all([
+      api.getAdminUsers(),
+      api.getAdminGrants(),
+      api.getAdminOverview()
+    ]);
+    users = userList;
+    grants = grantList;
+    overview = overviewList;
+  }
+
+  async function createDM() {
+    creating = true;
+    createError = '';
+    try {
+      await api.createAdminUser({ email: newEmail, password: newPassword, displayName: newDisplayName });
+      showCreateForm = false;
+      newEmail = '';
+      newPassword = '';
+      newDisplayName = '';
+      await loadAll();
+    } catch (e: any) {
+      createError = e.error?.fieldErrors ?? e.error ?? 'Fehler beim Anlegen';
+    } finally {
+      creating = false;
+    }
+  }
+
+  async function toggleKeys(userId: string, hasKeys: boolean) {
+    togglingKeys[userId] = true;
+    try {
+      if (hasKeys) {
+        await api.revokeAdminKeys(userId);
+      } else {
+        await api.grantAdminKeys(userId);
+      }
+      await loadAll();
+    } catch (e: any) {
+      error = e.error ?? 'Fehler beim Ändern';
+    } finally {
+      togglingKeys[userId] = false;
+    }
+  }
+
+  async function toggleActive(userId: string, isActive: boolean) {
+    togglingStatus[userId] = true;
+    try {
+      await api.updateAdminUser(userId, { isActive: !isActive });
+      await loadAll();
+    } catch (e: any) {
+      error = e.error ?? 'Fehler beim Ändern';
+    } finally {
+      togglingStatus[userId] = false;
+    }
+  }
+
+  function formatDate(d: string) {
+    return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+</script>
+
+<svelte:head>
+  <title>Admin — D&D Recorder</title>
+</svelte:head>
+
+<div class="max-w-6xl mx-auto px-6 py-10">
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-3xl font-bold text-white">Admin</h1>
+      <p class="text-gray-500 mt-1">DM-Verwaltung & API-Key-Grants</p>
+    </div>
+    <a href="/dashboard" class="text-gray-500 hover:text-white text-sm transition">← Dashboard</a>
+  </div>
+
+  {#if loading}
+    <div class="animate-pulse space-y-4">
+      {#each [1,2,3] as _}
+        <div class="h-20 bg-surface-800 rounded-2xl border border-surface-600"></div>
+      {/each}
+    </div>
+  {:else if error}
+    <div class="bg-red-900/20 border border-red-700/40 rounded-2xl p-6 text-center">
+      <p class="text-red-400">{error}</p>
+    </div>
+  {:else}
+    <!-- Tab Switcher -->
+    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 w-fit border border-surface-600">
+      <button onclick={() => activeTab = 'users'}
+        class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === 'users' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
+        👥 DMs ({users.length})
+      </button>
+      <button onclick={() => activeTab = 'grants'}
+        class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === 'grants' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
+        🔑 Key-Grants ({grants.length})
+      </button>
+      <button onclick={() => activeTab = 'overview'}
+        class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === 'overview' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
+        📊 Übersicht
+      </button>
+    </div>
+
+    {#if activeTab === 'users'}
+      <div class="space-y-4">
+        <!-- Actions -->
+        <div class="flex justify-end">
+          <button onclick={() => showCreateForm = !showCreateForm}
+            class="text-sm bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg transition">
+            + DM anlegen
+          </button>
+        </div>
+
+        <!-- Create Form -->
+        {#if showCreateForm}
+          <form onsubmit={(e) => { e.preventDefault(); createDM(); }}
+            class="bg-surface-800 border border-brand-500/30 rounded-xl p-4 space-y-3">
+            <h3 class="text-sm font-semibold text-white">Neuen DM anlegen</h3>
+            <div class="grid grid-cols-3 gap-3">
+              <input bind:value={newDisplayName} placeholder="Anzeigename" required
+                class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500" />
+              <input bind:value={newEmail} type="email" placeholder="E-Mail" required
+                class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500" />
+              <input bind:value={newPassword} type="password" placeholder="Passwort (min. 8 Zeichen)" required minlength="8"
+                class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500" />
+            </div>
+            <div class="flex gap-2">
+              <button type="submit" disabled={creating}
+                class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                {creating ? 'Anlegen...' : 'DM erstellen'}
+              </button>
+              <button type="button" onclick={() => showCreateForm = false}
+                class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Abbrechen</button>
+            </div>
+            {#if createError}<p class="text-red-400 text-xs">{JSON.stringify(createError)}</p>{/if}
+          </form>
+        {/if}
+
+        <!-- DM List -->
+        <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-surface-700">
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">DM</th>
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Status</th>
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Kampagnen</th>
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Admin-Keys</th>
+                <th class="text-right px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each users as user (user.id)}
+                <tr class="border-b border-surface-700 last:border-0 hover:bg-surface-700/50 transition">
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-full bg-surface-600 flex items-center justify-center text-sm font-medium text-white shrink-0">
+                        {user.displayName[0]?.toUpperCase()}
+                      </div>
+                      <div>
+                        <p class="font-medium text-white">{user.displayName}</p>
+                        <p class="text-xs text-gray-500">{user.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-5 py-3">
+                    <span class="text-xs px-2 py-1 rounded-full {user.isActive ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}">
+                      {user.isActive ? '● Aktiv' : '○ Deaktiviert'}
+                    </span>
+                  </td>
+                  <td class="px-5 py-3 text-gray-400">
+                    {user.campaignCount ?? 0}
+                  </td>
+                  <td class="px-5 py-3">
+                    {#if user.hasAdminKeys}
+                      <span class="text-xs px-2 py-1 rounded-full bg-brand-500/10 text-brand-400">
+                        🔑 Admin-Keys aktiv (seit {formatDate(user.keyGrantedAt)})
+                      </span>
+                    {:else}
+                      <span class="text-xs text-gray-600">Eigene Keys</span>
+                    {/if}
+                  </td>
+                  <td class="px-5 py-3">
+                    <div class="flex items-center justify-end gap-2">
+                      <!-- Key-Grant Toggle -->
+                      <label class="flex items-center gap-2 cursor-pointer" title="Admin-API-Keys für diesen DM freigeben">
+                        <span class="text-xs text-gray-500 select-none">🔑</span>
+                        <div class="relative">
+                          <input type="checkbox"
+                            checked={user.hasAdminKeys}
+                            onchange={() => toggleKeys(user.id, user.hasAdminKeys)}
+                            disabled={togglingKeys[user.id]}
+                            class="sr-only peer" />
+                          <div class="w-9 h-5 bg-surface-700 peer-checked:bg-brand-600 rounded-full transition-colors"></div>
+                          <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+                        </div>
+                      </label>
+
+                      <!-- Active Toggle -->
+                      <label class="flex items-center gap-2 cursor-pointer" title="DM aktivieren/deaktivieren">
+                        <span class="text-xs text-gray-500 select-none">{user.isActive ? '🟢' : '🔴'}</span>
+                        <div class="relative">
+                          <input type="checkbox"
+                            checked={user.isActive}
+                            onchange={() => toggleActive(user.id, user.isActive)}
+                            disabled={togglingStatus[user.id]}
+                            class="sr-only peer" />
+                          <div class="w-9 h-5 bg-red-500/30 peer-checked:bg-green-600 rounded-full transition-colors"></div>
+                          <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+                        </div>
+                      </label>
+                    </div>
+                  </td>
+                </tr>
+              {:else}
+                <tr>
+                  <td colspan="5" class="px-5 py-12 text-center text-gray-600 text-sm">
+                    Keine DMs registriert
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    {:else if activeTab === 'grants'}
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-surface-700">
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">DM</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Freigegeben am</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each grants as grant (grant.id)}
+              <tr class="border-b border-surface-700 last:border-0">
+                <td class="px-5 py-3">
+                  <p class="font-medium text-white">{grant.dmDisplayName}</p>
+                  <p class="text-xs text-gray-500">{grant.dmEmail}</p>
+                </td>
+                <td class="px-5 py-3 text-gray-400">{formatDate(grant.grantedAt)}</td>
+                <td class="px-5 py-3">
+                  <span class="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400">● Aktiv</span>
+                </td>
+              </tr>
+            {:else}
+              <tr>
+                <td colspan="3" class="px-5 py-12 text-center text-gray-600 text-sm">
+                  Keine aktiven Key-Grants
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+
+    {:else if activeTab === 'overview'}
+      <div class="space-y-6">
+        {#each overview as dm (dm.id)}
+          <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5">
+            <div class="flex items-start justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-surface-600 flex items-center justify-center text-sm font-semibold text-white">
+                  {dm.displayName[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <h3 class="font-semibold text-white">{dm.displayName}</h3>
+                  <p class="text-xs text-gray-500">{dm.email}</p>
+                </div>
+              </div>
+              <span class="text-xs px-2 py-1 rounded-full {dm.isActive ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}">
+                {dm.isActive ? 'Aktiv' : 'Deaktiviert'}
+              </span>
+            </div>
+
+            {#if dm.groups.length > 0}
+              <div class="space-y-2">
+                <p class="text-xs text-gray-600 uppercase tracking-wider mb-2">Gruppen & Kampagnen</p>
+                {#each dm.groups as group}
+                  <div class="flex items-center justify-between bg-surface-700/50 rounded-lg px-3 py-2">
+                    <span class="text-sm text-gray-300">{group.name}</span>
+                    <span class="text-xs text-gray-500">{group.campaignCount} Kampagne{group.campaignCount !== 1 ? 'n' : ''}</span>
+                  </div>
+                {/each}
+              </div>
+              <div class="mt-4 pt-4 border-t border-surface-700 flex items-center gap-3">
+                <span class="text-xs text-gray-500">Gesamt: {dm.groups.length} Gruppe{dm.groups.length !== 1 ? 'n' : ''} · {dm.groups.reduce((sum: number, g: any) => sum + g.campaignCount, 0)} Kampagne{dm.groups.reduce((sum: number, g: any) => sum + g.campaignCount, 0) !== 1 ? 'n' : ''}</span>
+                {#if dm.hasAdminKeys}
+                  <span class="text-xs bg-brand-500/10 text-brand-400 px-2 py-0.5 rounded-full">🔑 Admin-Keys aktiv</span>
+                {/if}
+              </div>
+            {:else}
+              <p class="text-sm text-gray-600 italic">Keine Gruppen</p>
+            {/if}
+          </div>
+        {:else}
+          <div class="text-center py-12 text-gray-600 text-sm">Keine DMs mit Gruppen</div>
+        {/each}
+      </div>
+    {/if}
+  {/if}
+</div>

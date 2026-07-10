@@ -13,10 +13,34 @@ model User {
   email        String   @unique
   passwordHash String
   displayName  String
+  role         UserRole @default(DM)
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   memberships GroupMembership[]
+  // Keys die dieser Admin an andere DMs verliehen hat
+  grantedKeys AdminApiKeyGrant[] @relation("GrantedBy")
+  // Keys die diesem DM von einem Super-Admin verliehen wurden
+  receivedKeys AdminApiKeyGrant[] @relation("GrantedTo")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  DM
+}
+
+model AdminApiKeyGrant {
+  id           String   @id @default(cuid())
+  superAdminId String
+  dmId         String
+  grantedAt    DateTime @default(now())
+  revokedAt    DateTime?
+
+  superAdmin User @relation("GrantedBy", fields: [superAdminId], references: [id])
+  dm         User @relation("GrantedTo", fields: [dmId], references: [id])
+
+  @@unique([superAdminId, dmId])
 }
 
 model Group {

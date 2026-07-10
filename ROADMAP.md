@@ -108,33 +108,32 @@
   - Ein alter `@@unique([userId, groupId])`-Constraint aus der Zeit vor "userId optional" musste zusaetzlich manuell per SQL entfernt werden, bevor `db push` durchlief.
 - Nach allen Fixes: alle 7 Container laufen, `/groups` liefert 200, Storage-Verzeichnisse existieren im Container. Live verifiziert unter `https://dndbot.haffelpaff.de/`.
 
-### Sprecher-Zuordnung -- Problem geloest (Zwischenschritt)
+### Sprecher-Zuordnung -- vollstaendig geloest ✅ (v0.2.0, 09.07.2026)
 
-**Problem:** Im Transkript stehen nur `SPEAKER_00`, `SPEAKER_01` etc. -- keine Namen. Manuelle Zuordnung war fehleranfaellig, weil es gar keine UI-Verbindung zwischen Label und Zuordnung gab (Bug: `getSpeakerName()` matchte fälschlich gegen `discordUserId` statt gegen das Label).
+**Umgesetzt:**
+- [x] **Per-User Speaker-Tracking im Recorder:** `voice-recorder.service.ts` loggt pro Discord-User-ID, wann jemand spricht (Start/Stop-Timestamps mit 200ms Silence-Threshold). Logs werden als `.speakers.json` neben jedem WAV-Chunk gespeichert.
+- [x] **Automatisches Mapping im Transcriber:** Der Worker matched die Zeitfenster aus `.speakers.json` gegen WhisperX-Diarization-Segmente (`SPEAKER_00` etc.) via Time-Overlap. Bestes Match pro Label wird automatisch in `SpeakerMap.diarizationLabel` geschrieben.
+- [x] **Manuelle Nachbearbeitung bleibt moeglich:** Speaker-Tab mit Diarization-Label + Transkript-Ausschnitt + Dropdown-Zuordnung existiert weiterhin als Fallback/Optimierung.
+- [x] Neues Feld `SpeakerMap.diarizationLabel` + Endpoint `GET /sessions/:id/diarization-labels`.
+- [x] Transkript-Anzeige nutzt `diarizationLabel` zum Aufloesen der Sprechernamen.
 
-**Umgesetzt (Zwischenschritt / Option C erweitert):**
-- [x] Neues Feld `SpeakerMap.diarizationLabel` -- verknüpft das anonyme Label mit der echten Zuordnung.
-- [x] Neuer Endpoint `GET /sessions/:id/diarization-labels` -- listet alle im Transkript vorkommenden Labels + Text-Ausschnitt + Segment-Anzahl.
-- [x] Sprecher-Tab zeigt jetzt: Ausschnitt aus dem, was jedes Label gesagt hat, direkt über der Zuordnungstabelle + Dropdown zur Label-Auswahl je Discord-User.
-- [x] Bugfix: Transkript-Anzeige nutzt jetzt korrekt `diarizationLabel` zum Auflösen der Sprechernamen (vorher lief das ins Leere, weil Label und `discordUserId` nie identisch sind).
-
-**Noch offen (langfristiger Fix):**
-- **Option A -- Discord-Audio-Stream:** Beim Aufnehmen ueber den Discord-Bot den Audio-Stream pro User getrennt aufnehmen (Discord sendet pro User einen eigenen Audio-Stream). Dann ist die Zuordnung trivial: User-ID -> Charaktername, kein manuelles Raten mehr nötig.
-  - **Wichtiger Fund beim Code-Review:** `apps/discord-recorder/src/services/voice-recorder.service.ts` empfängt technisch bereits pro-User-Audio-Streams (Klasse `ParticipantAudio`, ein Stream je `userId`) -- diese werden aber aktuell in `writeMixedFrame()` zu einer einzigen Mono-Datei zusammengemischt, bevor sie auf die Platte geschrieben werden. Das heisst: Die Rohdaten pro Sprecher sind zum Aufnahmezeitpunkt schon da, sie werden nur verworfen.
-  - **Konkreter Implementierungsweg fuer Option A:** Statt (oder zusaetzlich zu) `writeMixedFrame()` pro `ParticipantAudio` einen eigenen Chunk-Stream mit userId-Tag schreiben, oder zumindest Zeitfenster protokollieren, wann welcher userId aktiv Audio gesendet hat (Start/Stop-Timestamps). Diese Timeline dann im transcriber mit den WhisperX-Diarization-Segmenten abgleichen (Zeit-Overlap-Match) -> automatische Label-zu-User-Zuordnung statt manuellem Raten.
-  - Aufwand dadurch geringer als urspruenglich angenommen -- kein Bot-Rewrite noetig, nur Erweiterung der bestehenden Aufnahme-Pipeline.
-  - Das ist weiterhin der eigentliche Root-Fix -- die jetzige Loesung (Diarization-Label + Transkript-Ausschnitt anzeigen) ist ein deutlich verbesserter Workaround, kein Ersatz.
+**Ergebnis:** Speaker werden jetzt vollautomatisch zugeordnet -- kein manuelles Raten mehr noetig.
 
 ---
 
-## Multi-User / Admin (v1-Vorbereitung)
+## Multi-User / Admin (v1 -- in Arbeit)
 
 - [ ] **Super-Admin (DM-Verwaltung):**
   - Userverwaltung fuer alle DMs
   - Uebersicht: welcher DM hat welche Kampagnen
   - DM-Accounts anlegen / deaktivieren
+- [ ] **Admin-API-Key-Grant:**
+  - Super-Admin kann seine API-Keys an DMs verleihen (Checkbox pro DM)
+  - DM sieht "🔑 Du nutzt die Admin-API-Keys" in Settings
+  - Bei Revoke faellt DM auf eigene Keys zurueck
+  - Datenmodell: `AdminApiKeyGrant` Tabelle
 - [ ] **DM-Registrierung:**
-  - DMs koennen sich registrieren
+  - DMs koennen sich registrieren (bestehend, `/register`)
   - DM kann Discord-Bot in seinen Server einladen (OAuth-Flow oder Invite-Link)
 - [ ] **Profilbereich fuer DMs:**
   - Eigenes Profil verwalten (Name, Discord-Verbindung, Avatar)
@@ -142,38 +141,13 @@
 
 ---
 
-## Dokumentationsbereich (v1 -- Geruest)
+## Dokumentationsbereich (v1 -- erledigt ✅)
 
-Neuer Bereich im Top-Menue verlinkt. Technisch einfaches Erklaerungslevel, dezente D&D-Metaphern, kein Fachjargon.
-Noch nicht ausformuliert -- nur Struktur anlegen.
+Der Dokumentationsbereich ist vollstaendig implementiert und im Top-Menue (`/docs`) verlinkt.
 
-```
-Dokumentation/
-+-- Erste Schritte (Installationsanleitung)
-+-- Der Bote -- Bot einladen & einrichten  <-- NEU: Bereich fuer DMs zum Einladen des Bots!
-+-- Das Abenteuer beginnt -- Benutzerhandbuch
-|   +-- Dashboard-Uebersicht
-|   +-- Kampagne anlegen & verwalten
-|   +-- Mitglieder verwalten
-|   +-- Sessions & Aufnahmen
-|   +-- Tagebuch & Summaries
-|   +-- Quest-Wiki
-+-- Der Bot -- Dein Bote
-|   +-- Bot einladen
-|   +-- Bot-Befehle & Funktionen
-|   +-- Was postet der Bot wann?
-+-- Der Workflow -- Von der Aufnahme zur Summary
-|   +-- Schritt 1: Aufnahme starten
-|   +-- Schritt 2: Transkription
-|   +-- Schritt 3: Summary & Titel generieren
-|   +-- Schritt 4: Sprecher zuordnen
-|   +-- Schritt 5: Im Discord posten
-+-- Felder & ihre Wirkung
-|   +-- Kampagnen-Kontext
-|   +-- System-Prompt
-|   +-- Charakter-Sheet
-+-- Haeufige Fragen (FAQ)
-```
+- [x] 7 Sektionen mit vollstaendigem Inhalt: Erste Schritte, Bot-Befehle, Workflow, Kampagnen & Sessions, Mitglieder, Einstellungen & API-Keys, FAQ.
+- [x] Mobile-Dropdown fuer Kategorie-Auswahl.
+- [x] Styling mit eigenen CSS-Klassen (Tabellen, Code-Blocks, Listen).
 
 ---
 

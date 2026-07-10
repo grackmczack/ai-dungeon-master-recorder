@@ -52,11 +52,24 @@ export async function authRoutes(app: FastifyInstance) {
     const payload = req.user as { sub: string };
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, displayName: true, createdAt: true, memberships: {
-        include: { group: { select: { id: true, name: true } } }
-      }}
+      select: {
+        id: true, email: true, displayName: true, role: true, isActive: true,
+        createdAt: true,
+        memberships: {
+          include: { group: { select: { id: true, name: true } } }
+        },
+        receivedKeys: {
+          where: { revokedAt: null },
+          select: { grantedAt: true, superAdmin: { select: { id: true, displayName: true } } }
+        }
+      }
     });
     if (!user) return reply.status(404).send({ error: "User not found" });
-    return reply.send(user);
+
+    return reply.send({
+      ...user,
+      hasAdminKeys: user.receivedKeys.length > 0,
+      adminKeyProvider: user.receivedKeys[0]?.superAdmin?.displayName ?? null
+    });
   });
 }

@@ -6,6 +6,7 @@
   let groups: any[] = $state([]);
   let selectedGroupId = $state('');
   let settings: any = $state(null);
+  let usingAdminKeys = $state(false);
   let form: any = $state({});
   let loading = $state(true);
   let saving = $state(false);
@@ -61,6 +62,7 @@
     if (!selectedGroupId) return;
     try {
       settings = await api.getSettings(selectedGroupId);
+      usingAdminKeys = settings?.usingAdminKeys ?? false;
       form = settings ? { ...settings } : {
         whisperProvider: 'openai', llmProvider: 'anthropic',
         summaryLanguage: 'de', llmModel: 'claude-opus-4-8',
@@ -117,6 +119,18 @@
   <a href="/dashboard" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-8 transition">← Dashboard</a>
   <h1 class="text-2xl font-bold text-white mb-2">Einstellungen</h1>
   <p class="text-gray-500 text-sm mb-8">API-Keys und Provider-Konfiguration pro Gruppe</p>
+
+  {#if usingAdminKeys}
+    <div class="mb-6 bg-brand-500/10 border border-brand-500/30 rounded-2xl p-5">
+      <div class="flex items-start gap-3">
+        <span class="text-2xl shrink-0">🔑</span>
+        <div>
+          <h3 class="font-semibold text-brand-400">Admin-API-Keys aktiv</h3>
+          <p class="text-sm text-gray-400 mt-1 leading-relaxed">Du nutzt die API-Keys des Super-Admins. Alle Kosten für Transkription, Zusammenfassung und Bildgenerierung werden über den Admin-Account abgerechnet. Die Felder unten sind schreibgeschützt — du brauchst keine eigenen Keys zu hinterlegen.</p>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if loading}
     <div class="animate-pulse h-96 bg-surface-800 rounded-2xl"></div>
