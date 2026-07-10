@@ -82,7 +82,7 @@ export interface Transcript {
   // rawJson kann direkt { segments } sein oder { chunks: [{ segments, chunkIndex, durationSeconds }] }
   rawJson: {
     segments?: TranscriptSegment[];
-    chunks?: Array<{ segments: TranscriptSegment[]; chunkIndex: number; durationSeconds: number }>;
+    chunks?: Array<{ segments: TranscriptSegment[]; chunkIndex: number; durationSeconds: number }>
     language?: string;
     provider?: string;
   };
@@ -100,11 +100,11 @@ export interface TranscriptSegment {
 export interface Summary {
   id: string;
   narrative: string;
-  npcs: Array<{ name: string; description: string; firstMention: string }>;
-  quests: Array<{ title: string; status: string; notes: string }>;
-  loot: Array<{ item: string; foundBy: string }>;
-  locations: Array<{ name: string; description: string }>;
-  openThreads: string[];
+  npcs: Array<{ name: string; description: string; firstMention: string }>
+  quests: Array<{ title: string; status: string; notes: string }>
+  loot: Array<{ item: string; foundBy: string }>
+  locations: Array<{ name: string; description: string }>
+  openThreads: string[]
   model: string;
   provider: string;
 }
@@ -113,6 +113,7 @@ export interface SpeakerMap {
   id: string;
   discordUserId: string;
   discordName: string;
+  discordDisplayName?: string;
   characterName?: string;
   playerName?: string;
   diarizationLabel?: string;
@@ -146,41 +147,61 @@ export interface ApiError {
 // ─── Quest-Wiki Types ───────────────────────────────────────
 
 export interface WikiNPC {
+  id?: string;
   name: string;
   description: string;
+  status?: string;
   firstSeenSessionId: string | null;
   lastSeenSessionId: string | null;
   firstSeenSessionNumber: number | null;
   lastSeenSessionNumber: number | null;
   sessionCount: number;
+  sessionIds?: string[];
+  source?: string;
 }
 
 export interface WikiQuest {
+  id?: string;
   title: string;
   status: string;
+  description?: string;
   notes: string;
   firstSeenSessionId: string | null;
   lastSeenSessionId: string | null;
   allNotes: string[];
+  sessionIds?: string[];
+  source?: string;
 }
 
 export interface WikiLocation {
+  id?: string;
   name: string;
   description: string;
   sessionCount: number;
+  sessionIds?: string[];
+  source?: string;
 }
 
 export interface WikiThread {
+  id?: string;
   text: string;
+  description?: string;
+  status?: string;
   sessionId: string | null;
   sessionNumber: number | null;
+  sessionIds?: string[];
+  source?: string;
 }
 
 export interface WikiLoot {
+  id?: string;
   item: string;
+  description?: string;
   foundBy: string;
   sessionId: string | null;
   sessionNumber: number | null;
+  sessionIds?: string[];
+  source?: string;
 }
 
 export interface AggregatedWiki {
@@ -192,4 +213,151 @@ export interface AggregatedWiki {
   locations: WikiLocation[];
   threads: WikiThread[];
   loot: WikiLoot[];
+}
+
+// ─── CRUD Types ─────────────────────────────────────────────
+
+export interface CampaignNPC {
+  id: string;
+  campaignId: string;
+  name: string;
+  description?: string;
+  status?: string;
+  sessionIds?: string[];
+  source?: string;
+}
+
+export interface CampaignQuest {
+  id: string;
+  campaignId: string;
+  title: string;
+  description?: string;
+  status?: string;
+  sessionIds?: string[];
+  source?: string;
+}
+
+export interface CampaignLocation {
+  id: string;
+  campaignId: string;
+  name: string;
+  description?: string;
+  sessionIds?: string[];
+  source?: string;
+}
+
+export interface CampaignThread {
+  id: string;
+  campaignId: string;
+  title: string;
+  text?: string;
+  description?: string;
+  status?: string;
+  sessionIds?: string[];
+  source?: string;
+}
+
+export interface CampaignLoot {
+  id: string;
+  campaignId: string;
+  name: string;
+  description?: string;
+  sessionIds?: string[];
+  source?: string;
+}
+
+export interface CreateNPCInput {
+  name: string;
+  description?: string;
+  status?: string;
+}
+
+export interface UpdateNPCInput {
+  name?: string;
+  description?: string;
+  status?: string;
+}
+
+export interface CreateQuestInput {
+  title: string;
+  description?: string;
+  status?: string;
+}
+
+export interface UpdateQuestInput {
+  title?: string;
+  description?: string;
+  status?: string;
+}
+
+export interface CreateLocationInput {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateLocationInput {
+  name?: string;
+  description?: string;
+}
+
+export interface CreateThreadInput {
+  title: string;
+  description?: string;
+  status?: string;
+}
+
+export interface UpdateThreadInput {
+  title?: string;
+  description?: string;
+  status?: string;
+}
+
+export interface CreateLootInput {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateLootInput {
+  name?: string;
+  description?: string;
+}
+
+// ─── Session-Level CRUD Types ───────────────────────────────
+
+export interface SessionNPC {
+  sessionId: string;
+  campaignId: string;
+  name: string;
+  description?: string;
+  status?: string;
+}
+
+export interface SessionQuest {
+  sessionId: string;
+  campaignId: string;
+  title: string;
+  description?: string;
+  status?: string;
+}
+
+export interface SessionLocation {
+  sessionId: string;
+  campaignId: string;
+  name: string;
+  description?: string;
+}
+
+export interface SessionThread {
+  sessionId: string;
+  campaignId: string;
+  title: string;
+  description?: string;
+  status?: string;
+}
+
+export interface SessionLoot {
+  sessionId: string;
+  campaignId: string;
+  name: string;
+  description?: string;
 }

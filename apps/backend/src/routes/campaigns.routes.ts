@@ -328,7 +328,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
     interface NPCEntry { name: string; description: string; firstMention: string; }
     interface QuestEntry { title: string; status: string; notes: string; }
     interface LocationEntry { name: string; description: string; }
-    interface LootEntry { item: string; foundBy: string; }
+    interface LootEntry { item: string; foundBy: string; source?: string; description?: string | undefined; }
 
     // NSCs: deduplizieren via name (case-insensitive), Beschreibungen mergen
     const npcMap = new Map<string, { name: string; descriptions: string[]; firstMention: string }>();
@@ -348,10 +348,6 @@ export async function campaignsRoutes(app: FastifyInstance) {
         }
       }
     }
-    const npcs = Array.from(npcMap.values()).map(n => ({
-      ...n,
-      description: n.descriptions.join(" ")
-    }));
 
     // Quests: deduplizieren via title, letzter Status gewinnt
     const questMap = new Map<string, { title: string; status: string; notes: string[] }>();
@@ -372,13 +368,9 @@ export async function campaignsRoutes(app: FastifyInstance) {
         }
       }
     }
-    const quests = Array.from(questMap.values()).map(q => ({
-      ...q,
-      notes: q.notes.join(" | ")
-    }));
 
     // Orte: deduplizieren via name
-    const locationMap = new Map<string, { name: string; description: string }>();
+    const locationMap = new Map<string, { name: string; description: string; source?: string }>();
     for (const s of summaries) {
       const locs = (s.locations as unknown as LocationEntry[]) ?? [];
       for (const l of locs) {
@@ -388,7 +380,6 @@ export async function campaignsRoutes(app: FastifyInstance) {
         }
       }
     }
-    const locations = Array.from(locationMap.values());
 
     // Beute: alle Items flach sammeln (keine Deduplizierung)
     const loot: LootEntry[] = [];
@@ -405,14 +396,89 @@ export async function campaignsRoutes(app: FastifyInstance) {
         if (t?.trim()) threadSet.add(t.trim());
       }
     }
+
+    // ─── Manuelle Einträge mergen (source='manual') ───
+    const [manualNpcs, manualQuests, manualLocations, manualThreads, manualLoots] = await Promise.all([
+      prisma.campaignNPC.findMany({ where: { campaignId: id, source: "manual" } }),
+      prisma.campaignQuest.findMany({ where: { campaignId: id, source: "manual" } }),
+      prisma.campaignLocation.findMany({ where: { campaignId: id, source: "manual" } }),
+      prisma.campaignThread.findMany({ where: { campaignId: id, source: "manual" } }),
+      prisma.campaignLoot.findMany({ where: { campaignId: id, source: "manual" } })
+    ]);
+
+    // NSCs
+    for (const m of manualNpcs) {
+      const key = m.name.toLowerCase().trim();
+      const existing = npcMap.get(key);
+      if (existing) {
+        if (m.description?.trim()) existing.descriptions.push(m.description.trim());
+      } else {
+        npcMap.set(key, {
+          name: m.name.trim(),
+          descriptions: m.description?.trim() ? [m.description.trim()] : [],
+          firstMention: "Manuell angelegt"
+        });
+      }
+    }
+    const npcsFinal = Array.from(npcMap.entries()).map(([key, n]) => {
+      const isManual = manualNpcs.some(m => m.name.toLowerCase().trim() === key);
+      return {
+        ...n,
+        description: n.descriptions.join(" "),
+        source: isManual ? "manual" : "aggregated"
+      };
+    });
+
+    // Quests
+    for (const m of manualQuests) {
+      const key = m.title.toLowerCase().trim();
+      const existing = questMap.get(key);
+      if (existing) {
+        existing.status = m.status || existing.status;
+        if (m.description?.trim()) existing.notes.push(m.description.trim());
+      } else {
+        questMap.set(key, {
+          title: m.title.trim(),
+          status: m.status || "new",
+          notes: m.description?.trim() ? [m.description.trim()] : []
+        });
+      }
+    }
+    const questsFinal = Array.from(questMap.entries()).map(([key, q]) => ({
+      ...q,
+      notes: q.notes.join(" | "),
+      source: manualQuests.some(m => m.title.toLowerCase().trim() === key) ? "manual" : "aggregated"
+    }));
+
+    // Orte
+    for (const m of manualLocations) {
+      const key = m.name.toLowerCase().trim();
+      if (!locationMap.has(key)) {
+        locationMap.set(key, { name: m.name.trim(), description: m.description?.trim() ?? "", source: "manual" });
+      }
+    }
+    const locationsFinal = Array.from(locationMap.entries()).map(([key, l]) => ({
+      ...l,
+      source: manualLocations.some(m => m.name.toLowerCase().trim() === key) ? "manual" : "aggregated"
+    }));
+
+    // Beute (manuell, flach)
+    for (const m of manualLoots) {
+      loot.push({ item: m.name, foundBy: "", source: "manual", description: m.description ?? undefined });
+    }
+
+    // Offene Fäden (manuell)
+    for (const m of manualThreads) {
+      threadSet.add(m.title.trim());
+    }
     const openThreads = Array.from(threadSet);
 
     return reply.send({
       campaignId: id,
       sessionCount: summaries.length,
-      npcs,
-      quests,
-      locations,
+      npcs: npcsFinal,
+      quests: questsFinal,
+      locations: locationsFinal,
       loot,
       openThreads
     });

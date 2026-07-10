@@ -182,6 +182,21 @@ const worker = new Worker<TranscriptionJobData>(
 
     if (speakerLogs.length > 0 && session) {
       console.log(`[WORKER] Gleiche Transkript-Segmente mit ${speakerLogs.length} Voice-Logs ab...`);
+
+      // Aktive GroupMemberships laden, um characterName nachtragen zu können,
+      // falls die SpeakerMap beim Session-Start nicht korrekt vorbefüllt wurde.
+      const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
+      let memberships: Array<{ discordName: string | null; discordDisplayName: string | null; characterName: string | null }> = [];
+      try {
+        const grp = await prisma.group.findFirst({
+          where: { discordGuildId: session.discordGuildId ?? guildId },
+          include: { memberships: { where: { leftAt: null }, select: { discordName: true, discordDisplayName: true, characterName: true } } }
+        });
+        memberships = grp?.memberships ?? [];
+      } catch (e) {
+        console.log(`[WORKER] Konnte GroupMemberships für Backfill nicht laden:`, e);
+      }
+
       const scores: Record<string, Record<string, number>> = {};
       
       for (const seg of transcript.segments) {
@@ -214,11 +229,30 @@ const worker = new Worker<TranscriptionJobData>(
         
         if (bestUser) {
           console.log(`[WORKER] -> ${label} ist Discord-User ${bestUser} (Score: ${Math.round(maxScore)}ms)`);
-          
-          // Trage das gefundene Label in die SpeakerMap ein
+
+          // Bestehenden SpeakerMap-Eintrag laden (wurde beim Session-Start vorbefüllt).
+          const existing = await prisma.speakerMap.findUnique({
+            where: { sessionId_discordUserId: { sessionId: session.id, discordUserId: bestUser } }
+          });
+
+          // Falls characterName fehlt: aus GroupMembership nachtragen (Match über discordName).
+          const data: { diarizationLabel: string; characterName?: string; playerName?: string } = { diarizationLabel: label };
+          if (existing && !existing.characterName && existing.discordName) {
+            const m = memberships.find(mm =>
+              (mm.discordName && norm(mm.discordName) === norm(existing.discordName)) ||
+              (mm.discordDisplayName && norm(mm.discordDisplayName) === norm(existing.discordName))
+            );
+            if (m?.characterName) {
+              data.characterName = m.characterName;
+              if (!existing.playerName) data.playerName = m.discordDisplayName ?? m.discordName ?? undefined;
+              console.log(`[WORKER]    + characterName '${m.characterName}' aus GroupMembership nachgetragen`);
+            }
+          }
+
+          // Trage das gefundene Label (und ggf. characterName) in die SpeakerMap ein.
           await prisma.speakerMap.updateMany({
             where: { sessionId: session.id, discordUserId: bestUser },
-            data: { diarizationLabel: label }
+            data
           });
         }
       }
@@ -298,9 +332,14 @@ const worker = new Worker<TranscriptionJobData>(
       await prisma.session.update({ where: { id: session.id }, data: { status: "SUMMARIZING" } });
 
       const speakerMaps = await prisma.speakerMap.findMany({ where: { sessionId: session.id } });
+      // Wichtig: buildPrompt() löst Sprecher anhand des Diarisierungs-Labels auf
+      // (seg.speaker ist z.B. "SPEAKER_00"), daher muss der Map-Key das Label sein,
+      // nicht die discordUserId. Sonst landet "SPEAKER_00" im Transcript und im sessionImagePrompt.
       const speakerMap: Record<string, string> = {};
       for (const sm of speakerMaps) {
-        speakerMap[sm.discordUserId] = sm.characterName ?? sm.playerName ?? sm.discordName;
+        const key = sm.diarizationLabel ?? sm.discordUserId;
+        if (!key) continue;
+        speakerMap[key] = sm.characterName ?? sm.playerName ?? sm.discordName;
       }
 
       const llmConfig: LLMConfig = {

@@ -40,6 +40,7 @@ model GroupMembership {
   groupId       String
   role          Role      @default(PLAYER)
   discordName   String?
+  discordDisplayName String?
   characterName String?
   partyRole     String?
   avatarUrl          String?

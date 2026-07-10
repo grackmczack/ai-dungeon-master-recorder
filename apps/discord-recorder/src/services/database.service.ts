@@ -31,8 +31,9 @@ export async function createSessionRecord(params: {
   durationSeconds: number;
   participantIds: string[];
   participantNames: Map<string, string>;
+  participantDisplayNames?: Map<string, string> | undefined;
 }): Promise<SessionRecord> {
-  const { guildId, guildName, filename, filePath, durationSeconds, participantIds, participantNames } = params;
+  const { guildId, guildName, filename, filePath, durationSeconds, participantIds, participantNames, participantDisplayNames } = params;
 
   const data = await backendPost("/internal/sessions", {
     guildId,
@@ -42,7 +43,8 @@ export async function createSessionRecord(params: {
     durationSeconds,
     participants: participantIds.map(id => ({
       discordUserId: id,
-      discordName: participantNames.get(id) ?? id
+      discordName: participantNames.get(id) ?? id,
+      discordDisplayName: participantDisplayNames?.get(id) ?? participantNames.get(id) ?? id
     }))
   }) as SessionRecord;
 

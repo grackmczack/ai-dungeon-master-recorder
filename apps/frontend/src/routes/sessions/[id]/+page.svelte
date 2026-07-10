@@ -39,6 +39,10 @@
   let uploadingSessionImage = $state(false);
   let uploadSessionImageError = $state('');
 
+  // Wiki quick-create state
+  type WikiCreateState = 'saving' | 'saved' | 'error';
+  let wikiCreateStatus: Record<string, WikiCreateState> = $state({});
+
   onMount(async () => {
     try {
       const loaded = await api.getSession($page.params.id!);
@@ -187,6 +191,79 @@
       alert(e.error ?? 'Fehler beim Speichern');
     } finally {
       savingSpeakers = false;
+    }
+  }
+
+  function wikiKey(kind: 'npc' | 'quest' | 'location', label: string): string {
+    return `${kind}:${label.toLowerCase().trim()}`;
+  }
+
+  function setWikiCreateStatus(key: string, status: WikiCreateState) {
+    wikiCreateStatus = { ...wikiCreateStatus, [key]: status };
+  }
+
+  function wikiCreateButtonLabel(key: string): string {
+    if (wikiCreateStatus[key] === 'saving') return '...';
+    if (wikiCreateStatus[key] === 'saved') return '✓';
+    if (wikiCreateStatus[key] === 'error') return '!';
+    return '+';
+  }
+
+  function normalizeQuestStatus(status: string): 'DISCOVERED' | 'ACTIVE' | 'COMPLETED' | 'FAILED' {
+    const normalized = status.toUpperCase();
+    if (normalized === 'ACTIVE') return 'ACTIVE';
+    if (normalized === 'COMPLETED') return 'COMPLETED';
+    if (normalized === 'FAILED') return 'FAILED';
+    return 'DISCOVERED';
+  }
+
+  async function createWikiNPC(npc: { name: string; description: string }) {
+    if (!session) return;
+    const key = wikiKey('npc', npc.name);
+    setWikiCreateStatus(key, 'saving');
+    try {
+      await api.createSessionNPC(session.id, session.campaignId, {
+        name: npc.name,
+        description: npc.description || undefined,
+        status: 'ACTIVE'
+      });
+      setWikiCreateStatus(key, 'saved');
+    } catch (e: any) {
+      setWikiCreateStatus(key, 'error');
+      alert(e.error ?? 'NSC konnte nicht ins Wiki übernommen werden');
+    }
+  }
+
+  async function createWikiQuest(quest: { title: string; status: string; notes: string }) {
+    if (!session) return;
+    const key = wikiKey('quest', quest.title);
+    setWikiCreateStatus(key, 'saving');
+    try {
+      await api.createSessionQuest(session.id, session.campaignId, {
+        title: quest.title,
+        description: quest.notes || undefined,
+        status: normalizeQuestStatus(quest.status)
+      });
+      setWikiCreateStatus(key, 'saved');
+    } catch (e: any) {
+      setWikiCreateStatus(key, 'error');
+      alert(e.error ?? 'Quest konnte nicht ins Wiki übernommen werden');
+    }
+  }
+
+  async function createWikiLocation(loc: { name: string; description: string }) {
+    if (!session) return;
+    const key = wikiKey('location', loc.name);
+    setWikiCreateStatus(key, 'saving');
+    try {
+      await api.createSessionLocation(session.id, session.campaignId, {
+        name: loc.name,
+        description: loc.description || undefined
+      });
+      setWikiCreateStatus(key, 'saved');
+    } catch (e: any) {
+      setWikiCreateStatus(key, 'error');
+      alert(e.error ?? 'Ort konnte nicht ins Wiki übernommen werden');
     }
   }
 
@@ -371,9 +448,20 @@
                 <h3 class="text-sm font-medium text-yellow-400 uppercase tracking-wider mb-4">🧙 NSCs</h3>
                 <div class="space-y-3">
                   {#each session.summary.npcs as npc}
+                    {@const createKey = wikiKey('npc', npc.name)}
                     <div class="border-l-2 border-yellow-500/30 pl-3">
-                      <p class="font-medium text-white text-sm">{npc.name}</p>
-                      <p class="text-xs text-gray-500 mt-0.5">{npc.description}</p>
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <p class="font-medium text-white text-sm">{npc.name}</p>
+                          <p class="text-xs text-gray-500 mt-0.5">{npc.description}</p>
+                        </div>
+                        <button type="button" onclick={() => createWikiNPC(npc)}
+                          disabled={wikiCreateStatus[createKey] === 'saving' || wikiCreateStatus[createKey] === 'saved'}
+                          title="Als verknüpften Wiki-NSC anlegen"
+                          class="shrink-0 w-7 h-7 rounded-lg border border-surface-600 hover:border-yellow-500/50 text-gray-500 hover:text-yellow-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
+                          {wikiCreateButtonLabel(createKey)}
+                        </button>
+                      </div>
                     </div>
                   {/each}
                 </div>
@@ -386,14 +474,25 @@
                 <h3 class="text-sm font-medium text-blue-400 uppercase tracking-wider mb-4">⚔️ Quests</h3>
                 <div class="space-y-3">
                   {#each session.summary.quests as quest}
+                    {@const createKey = wikiKey('quest', quest.title)}
                     <div class="border-l-2 border-blue-500/30 pl-3">
-                      <div class="flex items-center gap-2">
-                        <p class="font-medium text-white text-sm">{quest.title}</p>
-                        <span class="text-xs px-1.5 py-0.5 rounded {quest.status === 'completed' ? 'bg-green-500/20 text-green-400' : quest.status === 'new' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-700 text-gray-400'}">
-                          {quest.status}
-                        </span>
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <p class="font-medium text-white text-sm">{quest.title}</p>
+                            <span class="text-xs px-1.5 py-0.5 rounded {quest.status === 'completed' ? 'bg-green-500/20 text-green-400' : quest.status === 'new' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-700 text-gray-400'}">
+                              {quest.status}
+                            </span>
+                          </div>
+                          {#if quest.notes}<p class="text-xs text-gray-500 mt-0.5">{quest.notes}</p>{/if}
+                        </div>
+                        <button type="button" onclick={() => createWikiQuest(quest)}
+                          disabled={wikiCreateStatus[createKey] === 'saving' || wikiCreateStatus[createKey] === 'saved'}
+                          title="Als verknüpfte Wiki-Quest anlegen"
+                          class="shrink-0 w-7 h-7 rounded-lg border border-surface-600 hover:border-blue-500/50 text-gray-500 hover:text-blue-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
+                          {wikiCreateButtonLabel(createKey)}
+                        </button>
                       </div>
-                      {#if quest.notes}<p class="text-xs text-gray-500 mt-0.5">{quest.notes}</p>{/if}
                     </div>
                   {/each}
                 </div>
@@ -422,9 +521,20 @@
                 <h3 class="text-sm font-medium text-green-400 uppercase tracking-wider mb-4">🗺️ Orte</h3>
                 <div class="space-y-3">
                   {#each session.summary.locations as loc}
+                    {@const createKey = wikiKey('location', loc.name)}
                     <div class="border-l-2 border-green-500/30 pl-3">
-                      <p class="font-medium text-white text-sm">{loc.name}</p>
-                      {#if loc.description}<p class="text-xs text-gray-500 mt-0.5">{loc.description}</p>{/if}
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <p class="font-medium text-white text-sm">{loc.name}</p>
+                          {#if loc.description}<p class="text-xs text-gray-500 mt-0.5">{loc.description}</p>{/if}
+                        </div>
+                        <button type="button" onclick={() => createWikiLocation(loc)}
+                          disabled={wikiCreateStatus[createKey] === 'saving' || wikiCreateStatus[createKey] === 'saved'}
+                          title="Als verknüpften Wiki-Ort anlegen"
+                          class="shrink-0 w-7 h-7 rounded-lg border border-surface-600 hover:border-green-500/50 text-gray-500 hover:text-green-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
+                          {wikiCreateButtonLabel(createKey)}
+                        </button>
+                      </div>
                     </div>
                   {/each}
                 </div>

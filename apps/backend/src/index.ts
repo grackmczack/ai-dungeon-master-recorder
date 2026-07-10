@@ -14,6 +14,7 @@ import { campaignsRoutes } from "./routes/campaigns.routes.js";
 import { internalRoutes } from "./routes/internal.routes.js";
 import { membersRoutes } from "./routes/members.routes.js";
 import { wikiRoutes } from "./routes/wiki.routes.js";
+import { wikiCrudRoutes } from "./routes/wiki-crud.routes.js";
 import { adminRoutes } from "./routes/admin.routes.js";
 
 declare module "fastify" {
@@ -35,7 +36,14 @@ await app.register(jwt, {
   secret: process.env.JWT_SECRET ?? "dev_secret_change_me_in_production"
 });
 
-await app.register(multipart);
+await app.register(multipart, {
+  limits: {
+    // Hard cap on multipart payloads (files + fields). The per-route
+    // req.file() call additionally enforces MAX_UPLOAD_BYTES on the file itself.
+    fileSize: 20 * 1024 * 1024, // 20 MB
+    files: 1
+  }
+});
 
 // Statisches Serving für hochgeladene Avatare + Charakterbögen (PDF)
 // Static file serving for all storage directories
@@ -78,6 +86,7 @@ await app.register(campaignsRoutes);
 await app.register(internalRoutes);
 await app.register(membersRoutes);
 await app.register(wikiRoutes);
+await app.register(wikiCrudRoutes);
 await app.register(adminRoutes);
 
 // Health

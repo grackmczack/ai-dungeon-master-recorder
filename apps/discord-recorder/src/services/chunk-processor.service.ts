@@ -21,6 +21,7 @@ interface SessionMeta {
   guildName?: string | undefined;
   participantIds: string[];
   participantNames: Map<string, string>;
+  participantDisplayNames?: Map<string, string>;
   discordChannelId: string;
   sessionId?: string;
 }
@@ -42,7 +43,8 @@ export class ChunkProcessorService {
         filePath: "",
         durationSeconds: 0,
         participantIds: meta.participantIds,
-        participantNames: meta.participantNames
+        participantNames: meta.participantNames,
+        participantDisplayNames: meta.participantDisplayNames
       });
       meta.sessionId = record.sessionId;
       this.sessionMetas.set(guildId, meta);

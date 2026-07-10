@@ -46,13 +46,17 @@ export function createRecordCommand(
         // Participant-Namen vorab sammeln
         const voiceChannel = interaction.member.voice.channel;
         const participantIds: string[] = [];
-        const participantNames = new Map<string, string>();
+        const participantNames = new Map<string, string>();        // Username (eindeutig, z.B. "veganrevlady")
+        const participantDisplayNames = new Map<string, string>(); // Anzeigename (z.B. "Rose")
 
         if (voiceChannel) {
           for (const [, member] of voiceChannel.members) {
             if (member.user.bot) continue;
             participantIds.push(member.user.id);
-            participantNames.set(member.user.id, member.displayName);
+            // discordName = eindeutiger Username (matcht GroupMembership.discordName),
+            // participantDisplayNames = Server-Nickname / globaler Anzeigename.
+            participantNames.set(member.user.id, member.user.username);
+            participantDisplayNames.set(member.user.id, member.displayName);
           }
         }
 
@@ -62,13 +66,14 @@ export function createRecordCommand(
           guildName: interaction.guild?.name,
           participantIds,
           participantNames,
+          participantDisplayNames,
           discordChannelId: channelId
         });
 
         await voiceRecorderService.start(interaction.member, onChunkReady, onAutoStop);
 
         const participantList = participantIds
-          .map(id => participantNames.get(id) ?? id)
+          .map(id => participantDisplayNames.get(id) ?? participantNames.get(id) ?? id)
           .join(", ");
 
         await interaction.editReply(

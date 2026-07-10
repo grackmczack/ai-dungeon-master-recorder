@@ -26,7 +26,7 @@ export async function internalRoutes(app: FastifyInstance) {
       filename: string;
       filePath: string;
       durationSeconds: number;
-      participants: Array<{ discordUserId: string; discordName: string }>;
+      participants: Array<{ discordUserId: string; discordName: string; discordDisplayName?: string }>;
     };
 
     // Group finden oder anlegen
@@ -84,10 +84,41 @@ export async function internalRoutes(app: FastifyInstance) {
       }
     });
 
-    // SpeakerMaps anlegen
+    // SpeakerMaps anlegen — dabei charakter-/spieler-namen aus den aktiven
+    // GroupMemberships vorbefüllen, damit der Transcriber nur noch das
+    // diarizationLabel nachtragen muss (nicht die Character-Zuordnung).
     if (participants.length > 0) {
+      // Aktive Mitglieder der Gruppe laden für das Matching.
+      const memberships = await prisma.groupMembership.findMany({
+        where: { groupId: group.id, leftAt: null }
+      });
+
+      const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
+
+      const findMembership = (p: { discordName: string; discordDisplayName?: string }) => {
+        // 1. exakt über discordName (Username, z.B. "veganrevlady")
+        let m = memberships.find(mm => mm.discordName && norm(mm.discordName) === norm(p.discordName));
+        // 2. Fallback: über discordDisplayName gegen membership.discordName ODER discordDisplayName
+        if (!m && p.discordDisplayName) {
+          m = memberships.find(mm =>
+            (mm.discordName && norm(mm.discordName) === norm(p.discordDisplayName)) ||
+            (mm.discordDisplayName && norm(mm.discordDisplayName) === norm(p.discordDisplayName))
+          );
+        }
+        return m ?? null;
+      };
+
       await prisma.speakerMap.createMany({
-        data: participants.map(p => ({ sessionId: session.id, ...p })),
+        data: participants.map(p => {
+          const m = findMembership(p);
+          return {
+            sessionId: session.id,
+            discordUserId: p.discordUserId,
+            discordName: p.discordName,
+            characterName: m?.characterName ?? null,
+            playerName: m?.discordDisplayName ?? p.discordDisplayName ?? m?.discordName ?? null
+          };
+        }),
         skipDuplicates: true
       });
     }

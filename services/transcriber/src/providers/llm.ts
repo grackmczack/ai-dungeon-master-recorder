@@ -33,6 +33,13 @@ Analysiere das folgende Transkript einer Spielsitzung und erstelle:
 5. Beute und gefundene Gegenstände
 6. Besuchte/erwähnte Orte
 7. Offene Fäden (ungeklärte Dinge, Mysterien, nächste Schritte)
+8. Einen sessionImagePrompt: EIN englischer Bild-Prompt (1-2 Sätze) für ein Bildgenerierungs-Modell (DALL-E/Flux), der den epischsten / dramatischsten / prägnantesten Moment der Session als visuelle Szene einfängt.
+   - Verwende ECHTE Charakternamen aus dem Transkript (NICHT "SPEAKER_00" oder ähnliche Diarisierungs-Labels — nutze stattdessen die aufgelösten Sprechernamen).
+   - Erwähne zentrale Orte, die in der Szene vorkommen.
+   - Beschreibe das visuell markanteste Highlight (z.B. einen Kampf, eine Enthüllung, einen heldenhaften Moment) konkret und atmosphärisch.
+   - Schreibe den Prompt AUSSCHLIESSLICH auf ENGLISCH (Bildmodelle arbeiten am besten mit englischen Prompts).
+   - Füge einen Fantasy-Illustrations-Stil-Hinweis an (z.B. "epic fantasy illustration, cinematic lighting, detailed tabletop RPG artwork").
+   - KEIN Text, keine UI-Elemente, keine Schriftzüge im Bild.
 
 Antworte NUR als valides JSON in diesem Format:
 {
@@ -42,7 +49,8 @@ Antworte NUR als valides JSON in diesem Format:
   "quests": [{"title": "...", "status": "new|ongoing|completed", "notes": "..."}],
   "loot": [{"item": "...", "foundBy": "..."}],
   "locations": [{"name": "...", "description": "..."}],
-  "openThreads": ["..."]
+  "openThreads": ["..."],
+  "sessionImagePrompt": "..."
 }`;
 
 export { DEFAULT_SYSTEM_PROMPT };
@@ -62,11 +70,16 @@ function buildPrompt(
     .join("\n");
 
   const prompt = systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+  // Falls ein GM-eigener System-Prompt genutzt wird, der sessionImagePrompt nicht erwähnt,
+  // hängen wir die Anforderung an, damit das Feld trotzdem im JSON landet.
+  const imagePromptRequirement = prompt.includes("sessionImagePrompt")
+    ? ""
+    : `\n\nWICHTIG: Gib AUCH ein Feld "sessionImagePrompt" zurück (String, 1-2 englische Sätze) — ein Bild-Prompt für DALL-E/Flux, der den epischsten Moment der Session mit echten Charakternamen, zentralen Orten und einem Fantasy-Illustrations-Stil einfängt. Kein Text im Bild.`;
   const contextBlock = campaignContext
     ? `\n\nKAMPAGNEN-KONTEXT (vom Spielleiter bereitgestellt):\n${campaignContext}\n`
     : "";
 
-  return `${prompt}${contextBlock}\n\nTRANSKRIPT:\n${transcript}`;
+  return `${prompt}${imagePromptRequirement}${contextBlock}\n\nTRANSKRIPT:\n${transcript}`;
 }
 
 async function summarizeAnthropic(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
@@ -169,20 +182,26 @@ export async function generateSummary(
     default: throw new Error(`Unknown LLM provider: ${config.provider}`);
   }
 
-  // Generate sessionImagePrompt from the summary data + speaker info
-  const chars = Object.values(speakerMap).filter(Boolean);
-  const charList = chars.length > 0 ? chars.slice(0, 6).join(", ") : "unknown adventurers";
-  const locations = result.locations.slice(0, 3).map(l => l.name).filter(Boolean);
-  const locationStr = locations.length > 0 ? ` at ${locations.join(" and ")}` : "";
-  const firstParagraph = result.narrative.split("\n\n")[0]?.slice(0, 300) ?? "";
+  // The LLM is now asked to generate sessionImagePrompt directly (capturing the
+  // epic highlight). Only fall back to a programmatic prompt if the model omitted it.
+  const llmPrompt = result.sessionImagePrompt?.trim();
+  if (llmPrompt) {
+    result.sessionImagePrompt = llmPrompt.slice(0, 1000);
+  } else {
+    console.log(`[SUMMARY] ⚠️ LLM did not return sessionImagePrompt — using programmatic fallback`);
+    const chars = Object.values(speakerMap).filter(Boolean);
+    const charList = chars.length > 0 ? chars.slice(0, 6).join(", ") : "unknown adventurers";
+    const locations = (result.locations ?? []).slice(0, 3).map(l => l.name).filter(Boolean);
+    const firstParagraph = result.narrative.split("\n\n")[0]?.slice(0, 300) ?? "";
 
-  result.sessionImagePrompt = [
-    `Epic fantasy illustration for a D&D session scene.`,
-    `Characters present: ${charList}.`,
-    locations.length > 0 ? `Location${locations.length > 1 ? "s" : ""}: ${locations.join(", ")}.` : "",
-    `Scene: ${firstParagraph}`,
-    `Style: Cinematic, dramatic lighting, richly detailed tabletop RPG artwork, wide horizontal composition. No text or UI elements.`
-  ].filter(Boolean).join(" ").slice(0, 1000);
+    result.sessionImagePrompt = [
+      `Epic fantasy illustration for a D&D session scene.`,
+      `Characters present: ${charList}.`,
+      locations.length > 0 ? `Location${locations.length > 1 ? "s" : ""}: ${locations.join(", ")}.` : "",
+      `Scene: ${firstParagraph}`,
+      `Style: Cinematic, dramatic lighting, richly detailed tabletop RPG artwork, wide horizontal composition. No text or UI elements.`
+    ].filter(Boolean).join(" ").slice(0, 1000);
+  }
 
   return result;
 }

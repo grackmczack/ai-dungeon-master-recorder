@@ -24,6 +24,7 @@ const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
 
 const CreateMemberSchema = z.object({
   discordName: z.string().min(1).optional(),
+  discordDisplayName: z.string().min(1).optional(),
   characterName: z.string().min(1).optional(),
   partyRole: z.string().optional(),
   role: z.enum(["GM", "PLAYER", "OBSERVER"]).default("PLAYER"),
@@ -32,6 +33,7 @@ const CreateMemberSchema = z.object({
 
 const UpdateMemberSchema = z.object({
   discordName: z.string().min(1).optional().nullable(),
+  discordDisplayName: z.string().min(1).optional().nullable(),
   characterName: z.string().min(1).optional().nullable(),
   partyRole: z.string().optional().nullable(),
   role: z.enum(["GM", "PLAYER", "OBSERVER"]).optional(),
@@ -87,6 +89,7 @@ export async function membersRoutes(app: FastifyInstance) {
         groupId,
         role: body.data.role,
         discordName: body.data.discordName,
+        discordDisplayName: body.data.discordDisplayName,
         characterName: body.data.characterName,
         partyRole: body.data.partyRole,
         notes: body.data.notes

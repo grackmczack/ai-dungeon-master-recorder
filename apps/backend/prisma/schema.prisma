@@ -67,6 +67,10 @@ model GroupMembership {
   // in verschiedenen Kampagnen unterschiedliche Charaktere haben — daher liegt
   // die Zuordnung pro Membership, nicht global am User.
   discordName       String?
+  // Discord-Anzeigename / Server-Nickname des realen Spielers (z.B. "Rose").
+  // discordName ist der eindeutige Username (z.B. "veganrevlady"), discordDisplayName
+  // der (nicht eindeutige) Anzeigename. Das Matching zur SpeakerMap läuft über discordName.
+  discordDisplayName String?
   characterName     String?
   // Freitext-Rolle innerhalb der Gruppe (z.B. "Tank", "Healer", "Scout") — nicht zu verwechseln mit Role (GM/PLAYER/OBSERVER)
   partyRole         String?
@@ -104,6 +108,11 @@ model Campaign {
 
   group    Group     @relation(fields: [groupId], references: [id])
   sessions Session[]
+  npcs     CampaignNPC[]
+  quests   CampaignQuest[]
+  locations CampaignLocation[]
+  threads  CampaignThread[]
+  loots    CampaignLoot[]
 }
 
 model Session {
@@ -125,6 +134,12 @@ model Session {
   transcript  Transcript?
   summary     Summary?
   speakerMaps SpeakerMap[]
+  threadsOpened   CampaignThread[] @relation("ThreadOpenedIn")
+  threadsResolved CampaignThread[] @relation("ThreadResolvedIn")
+  questsOpened    CampaignQuest[]  @relation("QuestOpenedIn")
+  questsResolved  CampaignQuest[]  @relation("QuestResolvedIn")
+  npcsFirstSeen   CampaignNPC[]    @relation("NPCFirstSeen")
+  npcsLastSeen    CampaignNPC[]    @relation("NPCLastSeen")
 }
 
 enum SessionStatus {
@@ -228,13 +243,18 @@ model GroupSettings {
 model CampaignThread {
   id                  String       @id @default(cuid())
   campaignId          String
+  campaign            Campaign     @relation(fields: [campaignId], references: [id])
   title               String
   description         String?
   status              ThreadStatus @default(OPEN)
   openedInSessionId   String?
+  openedInSession     Session?     @relation("ThreadOpenedIn", fields: [openedInSessionId], references: [id])
   resolvedInSessionId String?
+  resolvedInSession   Session?     @relation("ThreadResolvedIn", fields: [resolvedInSessionId], references: [id])
   // Verknüpfte Fäden (z.B. ein Faden baut auf einem anderen auf)
   linkedThreadIds     String[]     @default([])
+  // Sessions, in denen dieser Faden vorkommt
+  sessionIds          String[]     @default([])
   // Quelle: 'aggregated' = automatisch aus Summary extrahiert, 'manual' = DM hat es angelegt
   source              String       @default("aggregated")
   createdAt           DateTime     @default(now())
@@ -246,10 +266,13 @@ model CampaignThread {
 model CampaignNPC {
   id                 String    @id @default(cuid())
   campaignId         String
+  campaign           Campaign  @relation(fields: [campaignId], references: [id])
   name               String
   description        String?
   firstSeenSessionId String?
+  firstSeenSession   Session?  @relation("NPCFirstSeen", fields: [firstSeenSessionId], references: [id])
   lastSeenSessionId  String?
+  lastSeenSession    Session?  @relation("NPCLastSeen", fields: [lastSeenSessionId], references: [id])
   status             NPCStatus @default(ACTIVE)
   // Sessions, in denen dieser NSC auftauchte
   sessionIds         String[]  @default([])
@@ -264,6 +287,7 @@ model CampaignNPC {
 model CampaignLocation {
   id          String   @id @default(cuid())
   campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
   name        String
   description String?
   sessionIds  String[] @default([])
@@ -278,15 +302,35 @@ model CampaignLocation {
 model CampaignQuest {
   id                  String      @id @default(cuid())
   campaignId          String
+  campaign            Campaign    @relation(fields: [campaignId], references: [id])
   title               String
   description         String?
   status              QuestStatus @default(DISCOVERED)
   openedInSessionId   String?
+  openedInSession     Session?    @relation("QuestOpenedIn", fields: [openedInSessionId], references: [id])
   resolvedInSessionId String?
+  resolvedInSession   Session?    @relation("QuestResolvedIn", fields: [resolvedInSessionId], references: [id])
   rewardItems         String[]    @default([])
+  sessionIds          String[]    @default([])
   source              String      @default("aggregated")
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
+
+  @@index([campaignId])
+}
+
+model CampaignLoot {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  name        String
+  description String?
+  // Sessions, in denen diese Beute gefunden wurde
+  sessionIds  String[] @default([])
+  // Quelle: 'aggregated' = automatisch aus Summary extrahiert, 'manual' = DM hat es angelegt
+  source      String   @default("aggregated")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([campaignId])
 }
