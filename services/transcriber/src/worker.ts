@@ -95,6 +95,27 @@ const worker = new Worker<TranscriptionJobData>(
     const session = await findSession(job.data);
     if (session) {
       await prisma.session.update({ where: { id: session.id }, data: { status: "TRANSCRIBING" } });
+
+      // FIX: Update the recording filename in DB from "pending" to the actual mp3 filename
+      if (!isChunked || chunkIndex === 0) {
+        await prisma.recording.updateMany({
+          where: { sessionId: session.id, filename: { contains: "pending" } },
+          data: { filename, filePath, durationSeconds }
+        });
+      } else {
+        const exists = await prisma.recording.findFirst({ where: { sessionId: session.id, filename } });
+        if (!exists) {
+          await prisma.recording.create({
+            data: {
+              sessionId: session.id,
+              filename,
+              filePath,
+              durationSeconds,
+              format: "mp3"
+            }
+          });
+        }
+      }
     }
 
     const settings = await getSettings(guildId);
