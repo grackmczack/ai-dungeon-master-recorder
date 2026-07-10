@@ -76,6 +76,7 @@
         🎲 DM Recorder
       </a>
       <a href="/dashboard" class="text-sm text-gray-400 hover:text-white transition">Dashboard</a>
+      <a href="/docs" class="text-sm text-gray-400 hover:text-white transition">Dokumentation</a>
     </div>
     <div class="flex items-center gap-4">\      {#if $statusInfo}
         <div class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border {

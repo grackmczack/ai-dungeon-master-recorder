@@ -30,6 +30,7 @@ services:
       - ./storage/avatars:/app/storage/avatars
       - ./storage/character-sheets:/app/storage/character-sheets
       - ./storage/campaign-backgrounds:/app/storage/campaign-backgrounds
+      - ./storage/session-images:/app/storage/session-images
     networks:
       - dnd-network
     depends_on:
