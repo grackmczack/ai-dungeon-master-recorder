@@ -276,9 +276,9 @@
   {#if group && backgroundImageUrl(group.campaigns?.[0])}
     <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
       <div class="absolute -inset-y-[15%] inset-x-0" use:parallax={0.15}>
-        <img src={backgroundImageUrl(group.campaigns[0])!} alt="" class="w-full h-full object-cover opacity-15" />
+        <img src={backgroundImageUrl(group.campaigns[0])!} alt="" class="w-full h-full object-cover opacity-30" />
       </div>
-      <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/80 to-surface-900/50"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/60 to-surface-900/40"></div>
     </div>
   {/if}
 
