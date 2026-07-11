@@ -46,6 +46,13 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 - **Live-Status-Widget** (zeigt ob gerade aufgenommen/transkribiert wird)
 - **Einstellungen** — API-Keys, Provider-Wahl, System-Prompt, Kampagnen-Kontext
 
+### Session Images
+- **Automatischer Prompt:** Nach jeder Session generiert die LLM-Zusammenfassung (DeepSeek V3 via SiliconFlow) einen englischen Bild-Prompt, der den epischen Moment der Sitzung beschreibt
+- **Generate-Button:** Der DM kann per Klick ein Session-Illustrationsbild via AI erzeugen lassen
+- **Avatar-Referenzen:** Charakter-Avatare der Kampagnen-Mitglieder dienen als Style-Referenz für img2img-Modelle
+- **Unterstützte Modelle:** Qwen Image Edit Plus (mit Avatar-Feed), Flux Schnell (reiner Text-Prompt)
+- **Settings-UI:** API-Keys und Provider/Model-Auswahl für Bildgenerierung getrennt konfigurierbar (überarbeitete Settings-Seite)
+
 ### Infrastruktur
 - Docker Compose (5 Services: Bot, Backend, Transcriber, Frontend, Nginx, Postgres, Redis)
 - Git-basiertes Deployment (`git pull && docker compose up -d --build`)

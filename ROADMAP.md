@@ -38,16 +38,15 @@
 - [x] Parallax-Effekt beim Scrollen -- eigene Svelte-Actions `$lib/actions/parallax.ts` (`parallax` fuer Kachel-Hintergruende, `parallaxFixed` fuer seitenweite fixed Hintergruende).
 - [x] Durchgaengiger Seiten-Hintergrund: Kampagnen-Hintergrundbild erscheint auch auf der Session-Detailseite als seitenweiter Parallax-Hintergrund (konsistentes Raumerlebnis).
 
-### Session-Bild (Replicate)
+### Session-Bild-Generierung — teilweise umgesetzt 🚧 (v1, 10.07.2026)
 
-- [x] Manueller Button in der Session-Ansicht: "Session-Bild generieren" + Upload-Option.
-- [x] Nutzt Replicate API (kompatibel mit jedem Modell, default `black-forest-labs/flux-schnell`).
-- [x] Statusanzeige waehrend der Generierung (Spinner + Fehlerbehandlung).
-- [x] Automatischer Prompt aus Session-Daten: Charaktere + Orte + erster Paragraf der Summary werden zu einem Image-Prompt zusammengebaut (`sessionImagePrompt` in `Summary`).
-- [x] Prompt vom DM ueberschreibbar (Textfeld vorausgefuellt, editierbar).
-- [x] Session-Bild wird als Header-Kachel zwischen Titel und Tabs angezeigt (mit eigenem Parallax-Effekt).
-- [x] Entfernen via Button + Bestaetigungsdialog.
-- [x] Session-Paginierung: max. 10 Sessions pro Kampagne initial geladen, "Mehr laden"-Button.
+- [x] `sessionImagePrompt`-Feld: LLM-Summarizer (DeepSeek V3 via SiliconFlow) generiert englischen Image-Prompt aus der Session-Erzählung — gespeichert in `Summary.sessionImagePrompt`
+- [x] `sessionImageModel` / `sessionImageProvider` in `GroupSettings` — konfigurierbar vom DM
+- [x] Settings-UI überarbeitet: API-Keys von Provider/Model-Selectoren getrennt, eigene Sektionen
+- [x] DB-Migrationen für neue Felder (`sessionImagePrompt`, `sessionImageModel`, `sessionImageProvider`)
+- [ ] Avatar-Bild-Feed: Charakter-Avatare als img2img-Referenz an Modelle wie `qwen-image-edit-plus` übergeben
+- [ ] Frontend: "Session-Bild generieren"-Button in der Session-Ansicht
+- [ ] Modell-spezifische Input-Schemata (Qwen mit Avatar-Referenzen, Flux Schnell nur Text-Prompt)
 
 ### Quest-Wiki (neues Feature)
 

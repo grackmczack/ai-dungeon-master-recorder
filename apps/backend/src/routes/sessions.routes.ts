@@ -287,15 +287,14 @@ export async function sessionsRoutes(app: FastifyInstance) {
       } else {
         // Keine Avatare gefunden — falle zurück auf reinen Text-Prompt
         console.log(`[generate-image] No avatar URLs found for characters, using text-only prompt`);
-        inputPayload = { prompt, aspect_ratio: "16:9", output_format: "webp" };
+        inputPayload = { prompt, aspect_ratio: "16:9", output_format: "webp", go_fast: true };
       }
     } else {
       // Standard text-to-image (flux-schnell etc.)
-      inputPayload = { prompt, aspect_ratio: "16:9", output_format: "webp" };
+      inputPayload = { prompt, aspect_ratio: "16:9", output_format: "webp", go_fast: true };
     }
 
     const predictionUrl = `https://api.replicate.com/v1/models/${sessionImageModel}/predictions`;
-    const predictionBody = isImageEditModel ? inputPayload : { input: { prompt, aspect_ratio: "16:9", output_format: "webp" } };
     const createRes = await fetch(predictionUrl, {
       method: "POST",
       headers: { Authorization: `Bearer ${replicateApiKey}`, "Content-Type": "application/json" },
