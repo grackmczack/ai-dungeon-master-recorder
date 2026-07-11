@@ -140,13 +140,37 @@ async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: R
     body: JSON.stringify({
       model,
       messages: [{ role: "user", content: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }],
-      response_format: { type: "json_object" }
+      max_tokens: 4096
     })
   });
 
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`SiliconFlow API error ${res.status}: ${errBody.slice(0, 500)}`);
+  }
+
   const data = await res.json() as any;
-  const text = data.choices?.[0]?.message?.content ?? "{}";
-  const json = JSON.parse(text);
+  const raw = data.choices?.[0]?.message?.content ?? "{}";
+
+  // Tolerant JSON extraction: try direct parse, then regex extraction
+  let json: any;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        json = JSON.parse(match[0]);
+      } catch {
+        console.warn(`[SUMMARY] SiliconFlow returned non-JSON output (first 300 chars): ${raw.slice(0, 300)}`);
+        json = {};
+      }
+    } else {
+      console.warn(`[SUMMARY] SiliconFlow returned no JSON block (first 300 chars): ${raw.slice(0, 300)}`);
+      json = {};
+    }
+  }
+
   return { ...json, model, provider: "siliconflow" };
 }
 
@@ -192,7 +216,7 @@ export async function generateSummary(
     const chars = Object.values(speakerMap).filter(Boolean);
     const charList = chars.length > 0 ? chars.slice(0, 6).join(", ") : "unknown adventurers";
     const locations = (result.locations ?? []).slice(0, 3).map(l => l.name).filter(Boolean);
-    const firstParagraph = result.narrative.split("\n\n")[0]?.slice(0, 300) ?? "";
+    const firstParagraph = (result.narrative ?? "").split("\n\n")[0]?.slice(0, 300) ?? "";
 
     result.sessionImagePrompt = [
       `Epic fantasy illustration for a D&D session scene.`,
