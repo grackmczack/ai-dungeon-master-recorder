@@ -132,7 +132,7 @@ async function summarizeOpenAI(segments: TranscriptSegment[], speakerMap: Record
 async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
   const apiKey = config.apiKey ?? process.env.SILICONFLOW_API_KEY;
   const model = config.model ?? "deepseek-ai/DeepSeek-V3";
-  const endpoint = config.endpoint ?? "https://api.siliconflow.cn/v1/chat/completions";
+  const endpoint = config.endpoint ?? "https://api.siliconflow.com/v1/chat/completions";
 
   const res = await fetch(endpoint, {
     method: "POST",
