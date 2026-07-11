@@ -25,12 +25,18 @@
     { value: 'siliconflow', label: 'SiliconFlow (DeepSeek)' },
     { value: 'ollama', label: 'Ollama (Lokal)' }
   ];
-  const IMAGE_PROVIDERS = [
+  const SESSION_IMAGE_PROVIDERS = [
     { value: 'replicate', label: 'Replicate' }
   ];
   const SESSION_IMAGE_MODELS = [
     { value: 'qwen/qwen-image-edit-plus', label: 'Qwen Image Edit Plus (mit Avatar-Referenzen)' },
     { value: 'black-forest-labs/flux-schnell', label: 'Flux Schnell (nur Text, kein Avatar-Input)' }
+  ];
+  const IMAGE_GEN_MODELS = [
+    { value: 'black-forest-labs/flux-schnell', label: 'Flux Schnell' },
+    { value: 'stability-ai/sdxl', label: 'Stable Diffusion XL' },
+    { value: 'black-forest-labs/flux-pro', label: 'Flux Pro' },
+    { value: 'black-forest-labs/flux-dev', label: 'Flux Dev' }
   ];
   const LLM_MODELS: Record<string, Array<{value: string, label: string}>> = {
     anthropic: [
@@ -52,6 +58,20 @@
     ollama: []
   };
 
+  // Dynamic labels for API key fields based on current provider selections
+  let llmKeyLabel = $derived(
+    ({ anthropic: 'Anthropic (Claude) API Key', openai: 'OpenAI (GPT) API Key', gemini: 'Google Gemini API Key', siliconflow: 'SiliconFlow (DeepSeek) API Key', ollama: 'LLM API Key' } as Record<string, string>)[form.llmProvider] ?? 'LLM API Key'
+  );
+  let llmKeyPlaceholder = $derived(
+    ({ anthropic: 'sk-ant-...', openai: 'sk-...', gemini: 'AI...', siliconflow: 'sk-...', ollama: '(lokal, kein Key nötig)' } as Record<string, string>)[form.llmProvider] ?? 'API-Key...'
+  );
+  let whisperKeyLabel = $derived(
+    ({ openai: 'OpenAI API Key', replicate: 'Replicate API Key', selfhosted: 'Whisper API Key' } as Record<string, string>)[form.whisperProvider] ?? 'Whisper API Key'
+  );
+  let whisperKeyPlaceholder = $derived(
+    ({ openai: 'sk-...', replicate: 'r8_...', selfhosted: '(self-hosted, kein Key nötig)' } as Record<string, string>)[form.whisperProvider] ?? 'API-Key...'
+  );
+
   onMount(async () => {
     try {
       groups = await api.getGroups();
@@ -71,23 +91,32 @@
       settings = await api.getSettings(selectedGroupId);
       usingAdminKeys = settings?.usingAdminKeys ?? false;
       form = settings ? { ...settings } : {
-        whisperProvider: 'openai', llmProvider: 'anthropic',
-        summaryLanguage: 'de', llmModel: 'claude-opus-4-8',
+        whisperProvider: 'openai',
+        whisperApiKey: '',
+        whisperEndpoint: '',
+        llmProvider: 'anthropic',
+        llmModel: 'claude-opus-4-8',
+        llmApiKey: '',
+        llmEndpoint: '',
+        llmSystemPrompt: '',
+        llmCampaignContext: '',
         replicateApiKey: '',
         imageGenModel: 'black-forest-labs/flux-schnell',
         huggingfaceToken: '',
-        llmSystemPrompt: '', llmCampaignContext: ''
+        sessionImageProvider: 'replicate',
+        sessionImageModel: 'qwen/qwen-image-edit-plus',
+        summaryLanguage: 'de',
+        postSummaryChannelId: ''
       };
     } catch {
       form = {
-        whisperProvider: 'openai',
-        llmProvider: 'anthropic',
-        summaryLanguage: 'de',
-        replicateApiKey: '',
-        imageGenModel: 'black-forest-labs/flux-schnell',
+        whisperProvider: 'openai', whisperApiKey: '', whisperEndpoint: '',
+        llmProvider: 'anthropic', llmModel: 'claude-opus-4-8', llmApiKey: '', llmEndpoint: '',
+        llmSystemPrompt: '', llmCampaignContext: '',
+        replicateApiKey: '', imageGenModel: 'black-forest-labs/flux-schnell',
         huggingfaceToken: '',
-        llmSystemPrompt: '',
-        llmCampaignContext: ''
+        sessionImageProvider: 'replicate', sessionImageModel: 'qwen/qwen-image-edit-plus',
+        summaryLanguage: 'de', postSummaryChannelId: ''
       };
     }
   }
@@ -98,8 +127,8 @@
     saved = false;
     error = '';
     try {
-      // Don't send masked keys back
       const payload = { ...form };
+      // Don't send masked keys back
       if (payload.whisperApiKey === '***') delete payload.whisperApiKey;
       if (payload.replicateApiKey === '***') delete payload.replicateApiKey;
       if (!payload.replicateApiKey?.trim()) delete payload.replicateApiKey;
@@ -107,9 +136,12 @@
       if (payload.huggingfaceToken === '***') delete payload.huggingfaceToken;
       if (!payload.huggingfaceToken?.trim()) delete payload.huggingfaceToken;
       if (payload.llmApiKey === '***') delete payload.llmApiKey;
-      // Clean session image fields — empty strings → null
+      // Clean optional fields — empty strings → null
       if (!payload.sessionImageProvider?.trim()) { payload.sessionImageProvider = null; }
       if (!payload.sessionImageModel?.trim()) { payload.sessionImageModel = null; }
+      if (!payload.llmEndpoint?.trim()) { payload.llmEndpoint = null; }
+      if (!payload.whisperEndpoint?.trim()) { payload.whisperEndpoint = null; }
+      if (!payload.postSummaryChannelId?.trim()) { payload.postSummaryChannelId = null; }
       await api.updateSettings(selectedGroupId, payload);
       saved = true;
       setTimeout(() => saved = false, 3000);
@@ -164,9 +196,63 @@
         <div class="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-400 text-sm">✅ Gespeichert</div>
       {/if}
 
-      <!-- Transkription -->
+      <!-- ─────────── API Keys ─────────── -->
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+        <h2 class="font-semibold text-white flex items-center gap-2">🔑 API Keys</h2>
+        <p class="text-xs text-gray-500">Zentrale Verwaltung aller API-Keys. Die Feature-Sektionen unten wählen nur noch Provider + Modell — der zugehörige Key wird automatisch aus dieser Sektion verwendet.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Whisper/Transcription key — label changes with whisper provider -->
+          <div class="space-y-2">
+            <label class="text-sm text-gray-400">{whisperKeyLabel}</label>
+            <input bind:value={form.whisperApiKey} type="text" autocomplete="off"
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
+              placeholder={whisperKeyPlaceholder} />
+            {#if form.whisperProvider === 'openai'}
+              <p class="text-xs text-gray-600">Genutzt für OpenAI Whisper Transkription.</p>
+            {:else if form.whisperProvider === 'replicate'}
+              <p class="text-xs text-gray-600">Genutzt für Replicate WhisperX Transkription. Geteilt mit Bildgenerierung (gleicher Replicate Key).</p>
+            {:else}
+              <p class="text-xs text-gray-600">Genutzt für Self-Hosted Whisper. Leer lassen falls kein Key benötigt.</p>
+            {/if}
+          </div>
+
+          <!-- LLM key — label changes with LLM provider -->
+          <div class="space-y-2">
+            <label class="text-sm text-gray-400">{llmKeyLabel}</label>
+            <input bind:value={form.llmApiKey} type="text" autocomplete="off"
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
+              placeholder={llmKeyPlaceholder} />
+            <p class="text-xs text-gray-600">
+              Genutzt für KI-Zusammenfassungen.
+              {form.llmProvider === 'ollama' ? ' Lokaler Ollama-Server — kein Key nötig.' : ''}
+            </p>
+          </div>
+
+          <!-- Replicate key -->
+          <div class="space-y-2">
+            <label class="text-sm text-gray-400">Replicate API Key</label>
+            <input bind:value={form.replicateApiKey} type="text" autocomplete="off"
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
+              placeholder="r8_..." />
+            <p class="text-xs text-gray-600">Genutzt für Bildgenerierung (Hintergründe, Session-Bilder, NPC-Portraits). Wird auch für Replicate WhisperX verwendet falls als Whisper-Provider gewählt.</p>
+          </div>
+
+          <!-- HuggingFace token -->
+          <div class="space-y-2">
+            <label class="text-sm text-gray-400">HuggingFace Token</label>
+            <input bind:value={form.huggingfaceToken} type="text" autocomplete="off"
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
+              placeholder="hf_..." />
+            <p class="text-xs text-gray-600">Genutzt für Speaker-Diarization via pyannote. Auf huggingface.co/settings/tokens erstellen.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─────────── Transkription ─────────── -->
       <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">🎙️ Transkription</h2>
+        <p class="text-xs text-gray-500">Provider für die Sprach-zu-Text-Transkription. Der API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
         <div class="space-y-2">
           <label class="text-sm text-gray-400">Provider</label>
@@ -174,13 +260,6 @@
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
             {#each WHISPER_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
           </select>
-        </div>
-
-        <div class="space-y-2">
-          <label class="text-sm text-gray-400">API Key {form.whisperProvider === 'openai' ? '(OpenAI)' : form.whisperProvider === 'replicate' ? '(Replicate)' : ''}</label>
-          <input bind:value={form.whisperApiKey} type="text" autocomplete="off"
-            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
-            placeholder="sk-..." />
         </div>
 
         {#if form.whisperProvider === 'selfhosted'}
@@ -193,67 +272,60 @@
         {/if}
       </div>
 
-      <!-- Bildgenerierung -->
+      <!-- ─────────── Bildgenerierung ─────────── -->
       <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
-        <h2 class="font-semibold text-white flex items-center gap-2">🎨 Bildgenerierung (Kampagnen-Hintergründe, NPC-Portraits)</h2>
+        <h2 class="font-semibold text-white flex items-center gap-2">🎨 Bildgenerierung</h2>
+        <p class="text-xs text-gray-500">Hintergründe & NPC-Portraits für Kampagnen. Läuft immer über Replicate — der API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Replicate API Key</label>
-          <input bind:value={form.replicateApiKey} type="text" autocomplete="off"
-            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
-            placeholder="r8_..." />
-          <p class="text-xs text-gray-600">Dieser Key wird für ALLE Bildgenerierungen (Kampagnen-Hintergründe + Session-Bilder) genutzt, da beide über Replicate laufen.</p>
+          <label class="text-sm text-gray-400">Provider</label>
+          <div class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-gray-400 text-sm">
+            Replicate
+          </div>
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Bildmodell (Hintergründe/Portraits)</label>
-          <input bind:value={form.imageGenModel}
-            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
-            placeholder="black-forest-labs/flux-schnell" />
-          <p class="text-xs text-gray-600">Standard: `black-forest-labs/flux-schnell`. Andere öffentliche Replicate-Modelle funktionieren ebenfalls.</p>
+          <label class="text-sm text-gray-400">Modell</label>
+          <select bind:value={form.imageGenModel}
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
+            {#each IMAGE_GEN_MODELS as m}<option value={m.value}>{m.label}</option>{/each}
+          </select>
+          <p class="text-xs text-gray-600">Modell für Kampagnen-Hintergründe und NPC-Portraits.</p>
         </div>
       </div>
 
-      <!-- Session-Bild Modell -->
+      <!-- ─────────── Session-Bild ─────────── -->
       <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">🖼️ Session-Bild</h2>
-        <p class="text-xs text-gray-500">Modell für die Generierung des Session-Header-Bildes. Nutzercharakter-Avatare werden bei img2img-Modellen automatisch als Referenz mitgesendet.</p>
+        <p class="text-xs text-gray-500">Modell für die Generierung des Session-Header-Bildes. Der Replicate API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="text-sm text-gray-400">Provider</label>
-            <select bind:value={form.sessionImageProvider}
-              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
-              <option value="">— Standard (Replicate) —</option>
-              {#each IMAGE_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
-            </select>
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm text-gray-400">Modell</label>
-            <select bind:value={form.sessionImageModel}
-              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
-              <option value="">— Standard (Qwen Image Edit Plus) —</option>
-              {#each SESSION_IMAGE_MODELS as m}<option value={m.value}>{m.label}</option>{/each}
-            </select>
-          </div>
+        <div class="space-y-2">
+          <label class="text-sm text-gray-400">Provider</label>
+          <select bind:value={form.sessionImageProvider}
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
+            <option value="">— Standard (Replicate) —</option>
+            {#each SESSION_IMAGE_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm text-gray-400">Modell</label>
+          <select bind:value={form.sessionImageModel}
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
+            <option value="">— Standard (Qwen Image Edit Plus) —</option>
+            {#each SESSION_IMAGE_MODELS as m}<option value={m.value}>{m.label}</option>{/each}
+          </select>
         </div>
         <p class="text-xs text-gray-600">
-          <strong>Qwen Image Edit Plus</strong>: Nutzt Charakter-Avatare als Bild-Referenz → Charaktere bleiben visuell konsistent.
-          <br><strong>Flux Schnell</strong>: Reiner Text→Bild — schnell, aber ohne Avatar-Bezug.
+          <strong>Qwen Image Edit Plus</strong>: Nutzt Charakter-Avatare als Bild-Referenz → Charaktere bleiben visuell konsistent.<br>
+          <strong>Flux Schnell</strong>: Reiner Text→Bild — schnell, aber ohne Avatar-Bezug.
         </p>
       </div>
 
-      <!-- HuggingFace / Speaker Diarization -->
+      <!-- ─────────── Sprecher-Erkennung ─────────── -->
       <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">🔊 Sprecher-Erkennung (HuggingFace)</h2>
-
-        <div class="space-y-2">
-          <label class="text-sm text-gray-400">HuggingFace Token</label>
-          <input bind:value={form.huggingfaceToken} type="text" autocomplete="off"
-            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
-            placeholder="hf_..." />
-          <p class="text-xs text-gray-600">Wird für Speaker-Diarization via pyannote benötigt. Auf huggingface.co/settings/tokens erstellen.</p>
-        </div>
+        <p class="text-xs text-gray-500">Der HuggingFace Token wird aus der »API Keys«-Sektion oben verwendet.</p>
 
         <div class="pt-2 border-t border-surface-600">
           <p class="text-xs text-gray-500 mb-3">Folgende Modelle müssen mit deinem Account freigeschaltet sein:</p>
@@ -286,9 +358,10 @@
         </div>
       </div>
 
-      <!-- LLM -->
+      <!-- ─────────── KI-Zusammenfassung ─────────── -->
       <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">✍️ KI-Zusammenfassung</h2>
+        <p class="text-xs text-gray-500">Provider & Modell für Session-Zusammenfassungen. Der API-Key wird aus der »API Keys«-Sektion oben verwendet (je nach gewähltem Provider).</p>
 
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
@@ -313,19 +386,12 @@
           </div>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-sm text-gray-400">API Key</label>
-          <input bind:value={form.llmApiKey} type="text" autocomplete="off"
-            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
-            placeholder="sk-ant-..." />
-        </div>
-
         {#if form.llmProvider === 'ollama' || form.llmProvider === 'siliconflow'}
           <div class="space-y-2">
             <label class="text-sm text-gray-400">Endpoint URL</label>
             <input bind:value={form.llmEndpoint}
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
-              placeholder={form.llmProvider === 'ollama' ? 'http://localhost:11434/api/generate' : 'https://api.siliconflow.cn/v1/chat/completions'} />
+              placeholder={form.llmProvider === 'ollama' ? 'http://localhost:11434/api/generate' : 'https://api.siliconflow.com/v1/chat/completions'} />
           </div>
         {/if}
 
