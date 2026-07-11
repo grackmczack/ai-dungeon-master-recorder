@@ -1,5 +1,4 @@
 import ffmpeg from "fluent-ffmpeg";
-import { promises as fs } from "node:fs";
 import path from "node:path";
 
 export interface ConversionResult {
@@ -14,12 +13,15 @@ export async function convertWavToMp3(wavPath: string): Promise<ConversionResult
   const mp3Path = path.join(dir, `${base}.mp3`);
   const mp3Filename = `${base}.mp3`;
 
+  // Downsample fuer Whisper: 16kHz mono reicht fuer Spracherkennung
+  // 64kbps ist mehr als genug fuer Sprache (Podcasts nutzen 64kbps stereo)
+  // Reduziert Dateigroesse um ~75% vs 48kHz/128kbps
   await new Promise<void>((resolve, reject) => {
     ffmpeg(wavPath)
       .audioCodec("libmp3lame")
-      .audioBitrate(128)
-      .audioChannels(2)
-      .audioFrequency(48000)
+      .audioBitrate(64)
+      .audioChannels(1)
+      .audioFrequency(16000)
       .format("mp3")
       .on("end", () => resolve())
       .on("error", (err) => reject(err))
@@ -34,8 +36,8 @@ export async function convertWavToMp3(wavPath: string): Promise<ConversionResult
     });
   });
 
-  // Remove original WAV to save space
-  await fs.unlink(wavPath);
+  // WAV NICHT loeschen — wird erst nach erfolgreicher Transkription+Summary bereinigt
+  // Dies ermoeglicht Crash-Recovery
 
   return { mp3Path, mp3Filename, durationSeconds };
 }
