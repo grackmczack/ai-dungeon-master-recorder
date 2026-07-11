@@ -25,6 +25,13 @@
     { value: 'siliconflow', label: 'SiliconFlow (DeepSeek)' },
     { value: 'ollama', label: 'Ollama (Lokal)' }
   ];
+  const IMAGE_PROVIDERS = [
+    { value: 'replicate', label: 'Replicate' }
+  ];
+  const SESSION_IMAGE_MODELS = [
+    { value: 'qwen/qwen-image-edit-plus', label: 'Qwen Image Edit Plus (mit Avatar-Referenzen)' },
+    { value: 'black-forest-labs/flux-schnell', label: 'Flux Schnell (nur Text, kein Avatar-Input)' }
+  ];
   const LLM_MODELS: Record<string, Array<{value: string, label: string}>> = {
     anthropic: [
       { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
@@ -100,6 +107,9 @@
       if (payload.huggingfaceToken === '***') delete payload.huggingfaceToken;
       if (!payload.huggingfaceToken?.trim()) delete payload.huggingfaceToken;
       if (payload.llmApiKey === '***') delete payload.llmApiKey;
+      // Clean session image fields — empty strings → null
+      if (!payload.sessionImageProvider?.trim()) { payload.sessionImageProvider = null; }
+      if (!payload.sessionImageModel?.trim()) { payload.sessionImageModel = null; }
       await api.updateSettings(selectedGroupId, payload);
       saved = true;
       setTimeout(() => saved = false, 3000);
@@ -185,22 +195,52 @@
 
       <!-- Bildgenerierung -->
       <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
-        <h2 class="font-semibold text-white flex items-center gap-2">🎨 Bildgenerierung</h2>
+        <h2 class="font-semibold text-white flex items-center gap-2">🎨 Bildgenerierung (Kampagnen-Hintergründe, NPC-Portraits)</h2>
 
         <div class="space-y-2">
           <label class="text-sm text-gray-400">Replicate API Key</label>
           <input bind:value={form.replicateApiKey} type="text" autocomplete="off"
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
             placeholder="r8_..." />
+          <p class="text-xs text-gray-600">Dieser Key wird für ALLE Bildgenerierungen (Kampagnen-Hintergründe + Session-Bilder) genutzt, da beide über Replicate laufen.</p>
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Bildmodell</label>
+          <label class="text-sm text-gray-400">Bildmodell (Hintergründe/Portraits)</label>
           <input bind:value={form.imageGenModel}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
             placeholder="black-forest-labs/flux-schnell" />
           <p class="text-xs text-gray-600">Standard: `black-forest-labs/flux-schnell`. Andere öffentliche Replicate-Modelle funktionieren ebenfalls.</p>
         </div>
+      </div>
+
+      <!-- Session-Bild Modell -->
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+        <h2 class="font-semibold text-white flex items-center gap-2">🖼️ Session-Bild</h2>
+        <p class="text-xs text-gray-500">Modell für die Generierung des Session-Header-Bildes. Nutzercharakter-Avatare werden bei img2img-Modellen automatisch als Referenz mitgesendet.</p>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="text-sm text-gray-400">Provider</label>
+            <select bind:value={form.sessionImageProvider}
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
+              <option value="">— Standard (Replicate) —</option>
+              {#each IMAGE_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
+            </select>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm text-gray-400">Modell</label>
+            <select bind:value={form.sessionImageModel}
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
+              <option value="">— Standard (Qwen Image Edit Plus) —</option>
+              {#each SESSION_IMAGE_MODELS as m}<option value={m.value}>{m.label}</option>{/each}
+            </select>
+          </div>
+        </div>
+        <p class="text-xs text-gray-600">
+          <strong>Qwen Image Edit Plus</strong>: Nutzt Charakter-Avatare als Bild-Referenz → Charaktere bleiben visuell konsistent.
+          <br><strong>Flux Schnell</strong>: Reiner Text→Bild — schnell, aber ohne Avatar-Bezug.
+        </p>
       </div>
 
       <!-- HuggingFace / Speaker Diarization -->

@@ -16,7 +16,9 @@ const SettingsSchema = z.object({
   llmSystemPrompt: z.string().optional().nullable(),
   llmCampaignContext: z.string().optional().nullable(),
   summaryLanguage: z.enum(["de", "en"]).optional(),
-  postSummaryChannelId: z.string().optional().nullable()
+  postSummaryChannelId: z.string().optional().nullable(),
+  sessionImageProvider: z.enum(["replicate"]).optional().nullable(),
+  sessionImageModel: z.string().optional().nullable()
 });
 
 export async function settingsRoutes(app: FastifyInstance) {

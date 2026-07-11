@@ -221,6 +221,8 @@ model GroupSettings {
   huggingfaceToken     String?
   replicateApiKey      String?
   imageGenModel        String  @default("black-forest-labs/flux-schnell")
+  sessionImageProvider String?
+  sessionImageModel    String?
   llmProvider          String  @default("anthropic")
   llmApiKey            String?
   llmModel             String?

@@ -30,6 +30,7 @@ const SESSION_IMAGE_DIR = path.resolve(process.cwd(), "..", "..", "storage", "se
 const ALLOWED_IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_IMAGE_MODEL = "black-forest-labs/flux-schnell";
+const DEFAULT_SESSION_IMAGE_MODEL = "qwen/qwen-image-edit-plus";
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -230,6 +231,8 @@ export async function sessionsRoutes(app: FastifyInstance) {
     if (!replicateApiKey) return reply.status(400).send({ error: "No Replicate API key configured" });
 
     const imageGenModel = session.campaign.group.settings?.imageGenModel?.trim() || DEFAULT_IMAGE_MODEL;
+    const sessionImageProvider = session.campaign.group.settings?.sessionImageProvider?.trim() || "replicate";
+    const sessionImageModel = session.campaign.group.settings?.sessionImageModel?.trim() || DEFAULT_SESSION_IMAGE_MODEL;
 
     // Prompt: Vom User explizit angegeben, oder den vorausgefüllten aus der Summary, oder Fallback
     let prompt = body.data.prompt?.trim()
@@ -243,11 +246,60 @@ export async function sessionsRoutes(app: FastifyInstance) {
       prompt = `Epic fantasy illustration for D&D session "${session.title || `Session #${session.sessionNumber || '?'}`}". Characters: ${charList}. Cinematic scene, dramatic lighting, richly detailed tabletop RPG artwork.`;
     }
 
-    const predictionUrl = `https://api.replicate.com/v1/models/${imageGenModel}/predictions`;
+    // Für qwen-image-edit-plus: Charakter-Avatare als Referenzbilder übergeben
+    const isImageEditModel = sessionImageModel.includes("image-edit") || sessionImageModel.includes("qwen-image");
+    let inputPayload: Record<string, unknown> = { prompt };
+
+    if (isImageEditModel && session.speakerMaps.length > 0) {
+      // Hole GroupMemberships für die Charaktere in dieser Session
+      const characterNames = session.speakerMaps
+        .map(sm => sm.characterName)
+        .filter(Boolean) as string[];
+
+      const membersWithAvatars = await prisma.groupMembership.findMany({
+        where: {
+          groupId: session.campaign.groupId,
+          characterName: { in: characterNames },
+          avatarUrl: { not: null },
+          leftAt: null
+        },
+        select: { characterName: true, avatarUrl: true }
+      });
+
+      const avatarUrls = membersWithAvatars
+        .filter(m => m.avatarUrl)
+        .map(m => {
+          // avatarUrl ist relativ (z.B. "/uploads/avatars/xxx.png")
+          // Replicate braucht öffentlich erreichbare URLs
+          const baseUrl = process.env.PUBLIC_BASE_URL ?? "https://dndbot.haffelpaff.de";
+          return `${baseUrl}${m.avatarUrl}`;
+        });
+
+      if (avatarUrls.length > 0) {
+        inputPayload = {
+          prompt,
+          image: avatarUrls,
+          aspect_ratio: "16:9",
+          output_format: "webp",
+          go_fast: true
+        };
+        console.log(`[generate-image] Using image-edit model with ${avatarUrls.length} avatar reference(s): ${avatarUrls.join(", ")}`);
+      } else {
+        // Keine Avatare gefunden — falle zurück auf reinen Text-Prompt
+        console.log(`[generate-image] No avatar URLs found for characters, using text-only prompt`);
+        inputPayload = { prompt, aspect_ratio: "16:9", output_format: "webp" };
+      }
+    } else {
+      // Standard text-to-image (flux-schnell etc.)
+      inputPayload = { prompt, aspect_ratio: "16:9", output_format: "webp" };
+    }
+
+    const predictionUrl = `https://api.replicate.com/v1/models/${sessionImageModel}/predictions`;
+    const predictionBody = isImageEditModel ? inputPayload : { input: { prompt, aspect_ratio: "16:9", output_format: "webp" } };
     const createRes = await fetch(predictionUrl, {
       method: "POST",
       headers: { Authorization: `Bearer ${replicateApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ input: { prompt, aspect_ratio: "16:9", output_format: "webp" } })
+      body: JSON.stringify({ input: inputPayload })
     });
 
     if (!createRes.ok) {
