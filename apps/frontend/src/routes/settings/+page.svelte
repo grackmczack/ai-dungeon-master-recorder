@@ -72,6 +72,10 @@
     ({ openai: 'sk-...', replicate: 'r8_...', selfhosted: '(self-hosted, kein Key nötig)' } as Record<string, string>)[form.whisperProvider] ?? 'API-Key...'
   );
 
+  function isMaskedKey(value: unknown): boolean {
+    return typeof value === 'string' && value.includes('***');
+  }
+
   onMount(async () => {
     try {
       groups = await api.getGroups();
@@ -129,13 +133,13 @@
     try {
       const payload = { ...form };
       // Don't send masked keys back
-      if (payload.whisperApiKey === '***') delete payload.whisperApiKey;
-      if (payload.replicateApiKey === '***') delete payload.replicateApiKey;
+      if (isMaskedKey(payload.whisperApiKey)) delete payload.whisperApiKey;
+      if (isMaskedKey(payload.replicateApiKey)) delete payload.replicateApiKey;
       if (!payload.replicateApiKey?.trim()) delete payload.replicateApiKey;
       if (!payload.imageGenModel?.trim()) delete payload.imageGenModel;
-      if (payload.huggingfaceToken === '***') delete payload.huggingfaceToken;
+      if (isMaskedKey(payload.huggingfaceToken)) delete payload.huggingfaceToken;
       if (!payload.huggingfaceToken?.trim()) delete payload.huggingfaceToken;
-      if (payload.llmApiKey === '***') delete payload.llmApiKey;
+      if (isMaskedKey(payload.llmApiKey)) delete payload.llmApiKey;
       // Clean optional fields — empty strings → null
       if (!payload.sessionImageProvider?.trim()) { payload.sessionImageProvider = null; }
       if (!payload.sessionImageModel?.trim()) { payload.sessionImageModel = null; }
@@ -205,7 +209,7 @@
           <!-- Whisper/Transcription key — label changes with whisper provider -->
           <div class="space-y-2">
             <label for="whisper-api-key" class="text-sm text-gray-400">{whisperKeyLabel}</label>
-            <input id="whisper-api-key" bind:value={form.whisperApiKey} type="password" autocomplete="new-password"
+            <input id="whisper-api-key" bind:value={form.whisperApiKey} type={isMaskedKey(form.whisperApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder={whisperKeyPlaceholder} />
             {#if form.whisperProvider === 'openai'}
@@ -220,7 +224,7 @@
           <!-- LLM key — label changes with LLM provider -->
           <div class="space-y-2">
             <label for="llm-api-key" class="text-sm text-gray-400">{llmKeyLabel}</label>
-            <input id="llm-api-key" bind:value={form.llmApiKey} type="password" autocomplete="new-password"
+            <input id="llm-api-key" bind:value={form.llmApiKey} type={isMaskedKey(form.llmApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder={llmKeyPlaceholder} />
             <p class="text-xs text-gray-600">
@@ -232,7 +236,7 @@
           <!-- Replicate key -->
           <div class="space-y-2">
             <label for="replicate-api-key" class="text-sm text-gray-400">Replicate API Key</label>
-            <input id="replicate-api-key" bind:value={form.replicateApiKey} type="password" autocomplete="new-password"
+            <input id="replicate-api-key" bind:value={form.replicateApiKey} type={isMaskedKey(form.replicateApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder="r8_..." />
             <p class="text-xs text-gray-600">Genutzt für Bildgenerierung (Hintergründe, Session-Bilder, NPC-Portraits). Wird auch für Replicate WhisperX verwendet falls als Whisper-Provider gewählt.</p>
@@ -241,7 +245,7 @@
           <!-- HuggingFace token -->
           <div class="space-y-2">
             <label for="huggingface-token" class="text-sm text-gray-400">HuggingFace Token</label>
-            <input id="huggingface-token" bind:value={form.huggingfaceToken} type="password" autocomplete="new-password"
+            <input id="huggingface-token" bind:value={form.huggingfaceToken} type={isMaskedKey(form.huggingfaceToken) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder="hf_..." />
             <p class="text-xs text-gray-600">Genutzt für Speaker-Diarization via pyannote. Auf huggingface.co/settings/tokens erstellen.</p>

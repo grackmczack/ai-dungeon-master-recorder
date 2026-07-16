@@ -43,7 +43,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     });
 
     const maskKey = (key: string | null) =>
-      key ? (key.length > 7 ? `${key.substring(0, 7)}***` : "***") : null;
+      key ? (key.length > 6 ? `${key.substring(0, 6)}***` : "***") : null;
 
     if (settings) {
       // Build response based on whether we're using admin keys or own keys

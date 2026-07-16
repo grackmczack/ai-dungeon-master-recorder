@@ -339,40 +339,48 @@
       </div>
     </div>
 
-    <!-- Session-Bild Header-Kachel (zwischen Tabs und Chronik) -->
+    <!-- Session-Bild Header-Kachel -->
     {#if sessionImageUrl()}
       <div class="mb-6 relative overflow-hidden rounded-2xl h-64 group">
         <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
-          <img src={sessionImageUrl()!} alt="" class="w-full h-full object-cover opacity-60" />
+          <img src={sessionImageUrl()!} alt={`Session-Bild zu ${session.title ?? `Session #${session.sessionNumber ?? '?'}`}`} class="w-full h-full object-cover opacity-60" />
         </div>
         <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-transparent to-surface-900/30 pointer-events-none"></div>
-        <!-- Remove button (GM only, hover) -->
+        <!-- Remove button (GM only) -->
         <div class="absolute top-3 right-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition flex gap-2">
-          <button onclick={removeSessionImage}
+          <button type="button" onclick={removeSessionImage}
             class="bg-red-900/80 hover:bg-red-800 text-red-300 text-xs px-3 py-1.5 rounded-lg backdrop-blur transition">
             ✕ Entfernen
           </button>
         </div>
       </div>
-    {:else if session.status === 'DONE'}
-      <!-- Noch kein Bild — Generate/Upload (GM only) -->
+    {/if}
+
+    {#if session.status === 'DONE'}
+      <!-- Generate/regenerate/upload (GM only) -->
       <div class="mb-6 bg-surface-800 rounded-2xl border border-surface-600 border-dashed p-6">
-        <p class="text-sm text-gray-400 mb-4">🎨 Session-Bild generieren — zeigt eine illustrierte Szene dieser Session als Header</p>
+        <p class="text-sm text-gray-400 mb-4">
+          {sessionImageUrl()
+            ? '🎨 Session-Bild neu generieren oder durch ein eigenes Bild ersetzen'
+            : '🎨 Session-Bild generieren — zeigt eine illustrierte Szene dieser Session als Header'}
+        </p>
         <div class="space-y-3">
+          <label for="session-image-prompt" class="sr-only">Prompt für das Session-Bild</label>
           <textarea
+            id="session-image-prompt"
             bind:value={generateSessionImagePrompt}
             rows="2"
             placeholder="Prompt für die Bildgenerierung..."
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500 resize-none">
           </textarea>
-          <div class="flex items-center gap-3">
-            <button onclick={generateSessionImage} disabled={generatingSessionImage}
+          <div class="flex flex-wrap items-center gap-3">
+            <button type="button" onclick={generateSessionImage} disabled={generatingSessionImage || uploadingSessionImage}
               class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
-              {generatingSessionImage ? 'Generiere...' : '🎨 Generieren'}
+              {generatingSessionImage ? 'Generiere...' : sessionImageUrl() ? '🎨 Neu generieren' : '🎨 Generieren'}
             </button>
             <label class="text-xs text-gray-500 hover:text-brand-400 cursor-pointer border border-surface-600 hover:border-brand-500/40 px-3 py-1.5 rounded-lg transition inline-block">
-              {uploadingSessionImage ? 'Lade hoch...' : '📁 Oder Bild hochladen'}
-              <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange={onSessionImageSelected} disabled={uploadingSessionImage} />
+              {uploadingSessionImage ? 'Lade hoch...' : sessionImageUrl() ? '📁 Bild ersetzen' : '📁 Oder Bild hochladen'}
+              <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange={onSessionImageSelected} disabled={uploadingSessionImage || generatingSessionImage} />
             </label>
           </div>
           {#if generateSessionImageError}<p class="text-red-400 text-xs">{generateSessionImageError}</p>{/if}
