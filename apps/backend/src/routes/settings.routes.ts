@@ -22,15 +22,17 @@ const SettingsSchema = z.object({
 });
 
 export async function settingsRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
+  app.addHook("preHandler", app.authenticate);
 
   // GET /groups/:groupId/settings
   app.get("/groups/:groupId/settings", async (req, reply) => {
     const { groupId } = req.params as { groupId: string };
     const { sub } = req.user as { sub: string };
 
-    const membership = await prisma.groupMembership.findFirst({ where: { groupId, userId: sub, leftAt: null } });
-    if (!membership) return reply.status(403).send({ error: "Not a member" });
+    const membership = await prisma.groupMembership.findFirst({
+      where: { groupId, userId: sub, role: "GM", leftAt: null }
+    });
+    if (!membership) return reply.status(403).send({ error: "Only GMs can view settings" });
 
     const settings = await prisma.groupSettings.findUnique({ where: { groupId } });
 
@@ -40,7 +42,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       select: { superAdminId: true }
     });
 
-    const maskKey = (key: string | null) => key ? (key.length > 7 ? `${key.substring(0, 7)}***` : "***") : null;
+    const maskKey = (key: string | null) =>
+      key ? (key.length > 7 ? `${key.substring(0, 7)}***` : "***") : null;
 
     if (settings) {
       // Build response based on whether we're using admin keys or own keys
@@ -68,7 +71,9 @@ export async function settingsRoutes(app: FastifyInstance) {
     const { groupId } = req.params as { groupId: string };
     const { sub } = req.user as { sub: string };
 
-    const membership = await prisma.groupMembership.findFirst({ where: { groupId, userId: sub, role: "GM", leftAt: null } });
+    const membership = await prisma.groupMembership.findFirst({
+      where: { groupId, userId: sub, role: "GM", leftAt: null }
+    });
     if (!membership) return reply.status(403).send({ error: "Only GMs can change settings" });
 
     const body = SettingsSchema.safeParse(req.body);
@@ -85,7 +90,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const settings = await prisma.groupSettings.upsert({
       where: { groupId },
       update: dataToUpdate,
-      create: { groupId, ...body.data } // beim Create muesste der echte Key mitgeschickt werden
+      create: { groupId, ...dataToUpdate }
     });
 
     return reply.send({ updated: true, id: settings.id });

@@ -3,10 +3,12 @@
   import { goto } from '$app/navigation';
   import { auth } from '$lib/auth.js';
 
-  const { isAuthenticated } = auth;
+  const { isAuthenticated, loading } = auth;
 
   onMount(() => {
-    if ($isAuthenticated) goto('/dashboard');
-    else goto('/login');
+    const unsubscribe = loading.subscribe((isLoading) => {
+      if (!isLoading) goto($isAuthenticated ? '/dashboard' : '/login');
+    });
+    return unsubscribe;
   });
 </script>

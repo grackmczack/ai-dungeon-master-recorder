@@ -23,7 +23,8 @@ const UpdateDMInput = z.object({
 export async function adminRoutes(app: FastifyInstance) {
   // Alle Admin-Routen sind JWT-geschützt
   app.addHook("preHandler", async (req, reply) => {
-    await req.jwtVerify();
+    await app.authenticate(req, reply);
+    if (reply.sent) return;
     const { sub } = req.user as { sub: string };
 
     // Berechtigungs-Check: Nur SUPER_ADMIN darf Admin-Routen nutzen
@@ -60,17 +61,19 @@ export async function adminRoutes(app: FastifyInstance) {
       orderBy: { createdAt: "desc" }
     });
 
-    return reply.send(users.map(u => ({
-      id: u.id,
-      email: u.email,
-      displayName: u.displayName,
-      role: u.role,
-      isActive: u.isActive,
-      createdAt: u.createdAt,
-      campaignCount: u._count.memberships,
-      hasAdminKeys: u.receivedKeys.length > 0,
-      keyGrantedAt: u.receivedKeys[0]?.grantedAt ?? null
-    })));
+    return reply.send(
+      users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        displayName: u.displayName,
+        role: u.role,
+        isActive: u.isActive,
+        createdAt: u.createdAt,
+        campaignCount: u._count.memberships,
+        hasAdminKeys: u.receivedKeys.length > 0,
+        keyGrantedAt: u.receivedKeys[0]?.grantedAt ?? null
+      }))
+    );
   });
 
   /** POST /admin/users — Neuen DM anlegen */
@@ -113,7 +116,14 @@ export async function adminRoutes(app: FastifyInstance) {
         ...(body.data.email !== undefined && { email: body.data.email }),
         ...(body.data.isActive !== undefined && { isActive: body.data.isActive })
       },
-      select: { id: true, email: true, displayName: true, role: true, isActive: true, createdAt: true }
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isActive: true,
+        createdAt: true
+      }
     });
 
     return reply.send(updated);
@@ -131,13 +141,15 @@ export async function adminRoutes(app: FastifyInstance) {
       orderBy: { grantedAt: "desc" }
     });
 
-    return reply.send(grants.map(g => ({
-      id: g.id,
-      dmId: g.dm.id,
-      dmEmail: g.dm.email,
-      dmDisplayName: g.dm.displayName,
-      grantedAt: g.grantedAt
-    })));
+    return reply.send(
+      grants.map((g) => ({
+        id: g.id,
+        dmId: g.dm.id,
+        dmEmail: g.dm.email,
+        dmDisplayName: g.dm.displayName,
+        grantedAt: g.grantedAt
+      }))
+    );
   });
 
   /** POST /admin/users/:id/grant-keys — API-Keys für diesen DM freigeben */
@@ -222,17 +234,19 @@ export async function adminRoutes(app: FastifyInstance) {
       orderBy: { createdAt: "desc" }
     });
 
-    return reply.send(dms.map(dm => ({
-      id: dm.id,
-      email: dm.email,
-      displayName: dm.displayName,
-      isActive: dm.isActive,
-      groups: dm.memberships.map(m => ({
-        id: m.group.id,
-        name: m.group.name,
-        campaignCount: m.group._count.campaigns
-      })),
-      hasAdminKeys: dm.receivedKeys.length > 0
-    })));
+    return reply.send(
+      dms.map((dm) => ({
+        id: dm.id,
+        email: dm.email,
+        displayName: dm.displayName,
+        isActive: dm.isActive,
+        groups: dm.memberships.map((m) => ({
+          id: m.group.id,
+          name: m.group.name,
+          campaignCount: m.group._count.campaigns
+        })),
+        hasAdminKeys: dm.receivedKeys.length > 0
+      }))
+    );
   });
 }

@@ -27,9 +27,9 @@ export function parallax(node: HTMLElement, factor: number = 0.15) {
     }
   }
 
-  if (typeof window !== 'undefined') {
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
+  if (typeof window !== "undefined") {
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
     update();
   }
 
@@ -39,9 +39,9 @@ export function parallax(node: HTMLElement, factor: number = 0.15) {
       update();
     },
     destroy() {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('scroll', onScroll);
-        window.removeEventListener('resize', onScroll);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("scroll", onScroll);
+        window.removeEventListener("resize", onScroll);
       }
     }
   };
@@ -64,8 +64,8 @@ export function parallaxFixed(node: HTMLElement, factor: number = 0.3) {
     }
   }
 
-  if (typeof window !== 'undefined') {
-    window.addEventListener('scroll', onScroll, { passive: true });
+  if (typeof window !== "undefined") {
+    window.addEventListener("scroll", onScroll, { passive: true });
     update();
   }
 
@@ -75,8 +75,8 @@ export function parallaxFixed(node: HTMLElement, factor: number = 0.3) {
       update();
     },
     destroy() {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('scroll', onScroll);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("scroll", onScroll);
       }
     }
   };

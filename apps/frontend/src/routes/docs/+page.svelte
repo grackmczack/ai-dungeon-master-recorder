@@ -6,12 +6,12 @@
   <title>Dokumentation — D&D Recorder</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-6 py-10">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <h1 class="text-3xl font-bold text-white mb-4">📖 Dokumentation</h1>
   <p class="text-gray-400 mb-2">Alles was du über den D&D Bot wissen musst — vom Start bis zur epischen Zusammenfassung</p>
   <p class="text-sm text-gray-600 mb-10">Wähle ein Thema aus der Sidebar oder dem Dropdown-Menü (mobil). Bei Fragen hilft dir der FAQ-Bereich weiter.</p>
 
-  <div class="flex gap-12 border-l border-surface-600">
+  <div class="flex flex-col lg:flex-row gap-6 lg:gap-12 lg:border-l border-surface-600">
     <!-- Sidebar -->
     <nav class="w-64 shrink-0 hidden lg:block">
       <div class="bg-surface-800 rounded-xl border border-surface-600 p-4 sticky top-24 space-y-0.5">
@@ -28,7 +28,8 @@
 
     <!-- Mobile section selector -->
     <div class="lg:hidden w-full mb-6">
-      <select bind:value={activeSection}
+      <label for="docs-section" class="sr-only">Dokumentationsabschnitt</label>
+      <select id="docs-section" bind:value={activeSection}
         class="w-full bg-surface-800 border border-surface-600 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500">
         {#each sections as section}
           <option value={section.id}>{section.title}</option>
@@ -41,7 +42,7 @@
       {#each sections.filter(s => s.id === activeSection) as section}
         <div class="prose prose-invert max-w-none">
           <h2 class="!text-2xl !font-bold !text-white !mb-2 !mt-8">{section.emoji} {section.title}</h2>
-          <div class="bg-surface-800 rounded-2xl border border-surface-600 p-10 space-y-6 text-gray-200 leading-relaxed">
+          <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-10 space-y-6 text-gray-200 leading-relaxed">
             {@html section.content}
           </div>
         </div>
@@ -50,7 +51,7 @@
   </div>
 </div>
 
-<script lang="ts" context="module">
+<script lang="ts" module>
   const sections = [
     {
       id: 'basics',

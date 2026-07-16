@@ -34,7 +34,7 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 - Kampagnen-Kontext vom DM (wird als Hintergrundwissen mitgegeben)
 
 ### Web-Panel
-- **Login** mit JWT-Auth
+- **Login** mit JWT in einem HttpOnly-Session-Cookie
 - **Dashboard** — Gruppen-Übersicht
 - **Kampagnen** mit Session-Timeline, Tagebuch-Tab und Mitgliederverwaltung
 - **Kampagnen-Hintergrundbild** mit Parallax-Scroll-Effekt (Banner über jeder Kampagnen-Karte)
@@ -219,6 +219,7 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 DATABASE_URL=postgresql://...
 BACKEND_INTERNAL_URL=http://dnd-backend:3001
+INTERNAL_TOKEN=         # Gleiches langes Zufallsgeheimnis wie im Backend
 ```
 
 ### apps/backend/.env
@@ -227,6 +228,7 @@ DATABASE_URL=postgresql://ai_dungeon:PASSWORD@postgres:5432/ai_dungeon_master_re
 REDIS_HOST=redis
 REDIS_PORT=6379
 JWT_SECRET=
+INTERNAL_TOKEN=         # Langes Zufallsgeheimnis für Bot → Backend
 PORT=3001
 ```
 
@@ -262,7 +264,7 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | Method | Path | Beschreibung |
 |--------|------|--------------|
 | POST | `/auth/register` | Account erstellen |
-| POST | `/auth/login` | Login → JWT |
+| POST | `/auth/login` | Login → HttpOnly-Session-Cookie |
 | GET | `/auth/me` | Aktueller User |
 | GET | `/groups` | Eigene Gruppen |
 | POST | `/groups` | Gruppe erstellen |

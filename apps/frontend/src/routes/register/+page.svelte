@@ -14,8 +14,8 @@
     loading = true;
     error = '';
     try {
-      const { token, user } = await api.register(email, password, displayName);
-      auth.setAuth(token, user);
+      const { user } = await api.register(email, password, displayName);
+      auth.setAuth(user);
       goto('/dashboard');
     } catch (e: any) {
       error = e.error ?? 'Registrierung fehlgeschlagen';

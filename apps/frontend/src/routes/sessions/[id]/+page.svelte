@@ -83,8 +83,8 @@
     }
   }
 
-  function recordingUrl(filename: string): string {
-    return `/api/uploads/recordings/${filename}`;
+  function recordingUrl(recordingId: string): string {
+    return `/api/sessions/${session?.id}/recordings/${recordingId}`;
   }
 
   function sessionImageUrl(): string | null {
@@ -297,7 +297,7 @@
 {/if}
 
 <div class="max-w-5xl mx-auto px-6 py-10">
-  <a href="javascript:history.back()" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-6 transition">← Zurück</a>
+  <button type="button" onclick={() => history.back()} class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-6 transition">← Zurück</button>
 
   {#if loading}
     <div class="animate-pulse space-y-6">
@@ -347,7 +347,7 @@
         </div>
         <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-transparent to-surface-900/30 pointer-events-none"></div>
         <!-- Remove button (GM only, hover) -->
-        <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition flex gap-2">
+        <div class="absolute top-3 right-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition flex gap-2">
           <button onclick={removeSessionImage}
             class="bg-red-900/80 hover:bg-red-800 text-red-300 text-xs px-3 py-1.5 rounded-lg backdrop-blur transition">
             ✕ Entfernen
@@ -382,7 +382,7 @@
     {/if}
 
     <!-- Tabs -->
-    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 w-fit border border-surface-600">
+    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 max-w-full overflow-x-auto border border-surface-600">
       {#each [['summary', '✍️ Summary'], ['transcript', '📝 Transkript'], ['speakers', '👤 Sprecher']] as [tab, label]}
         <button
           onclick={() => activeTab = tab as any}
@@ -425,12 +425,12 @@
                           🔊 Part {i + 1}
                           {#if rec.durationSeconds}<span class="text-gray-500 font-normal">· {Math.round(rec.durationSeconds / 60)} min</span>{/if}
                         </span>
-                        <a href={recordingUrl(rec.filename)} download
+                        <a href={recordingUrl(rec.id)} download
                           class="text-xs text-brand-400 hover:text-white bg-surface-600 hover:bg-brand-600 px-3 py-1 rounded transition">
                           MP3 Download
                         </a>
                       </div>
-                      <audio controls src={recordingUrl(rec.filename)} preload="none"
+                      <audio controls src={recordingUrl(rec.id)} preload="none"
                         class="w-full h-8 [&::-webkit-media-controls-panel]:bg-surface-800 [&::-webkit-media-controls-current-time-display]:text-gray-200 [&::-webkit-media-controls-time-remaining-display]:text-gray-200">
                       </audio>
                     </div>

@@ -15,7 +15,7 @@ export const statusCommand: DiscordCommand = {
     const lines = [
       "🤖 **AI Dungeon Master Recorder** — Online",
       `📡 Latency: ${interaction.client.ws.ping}ms`,
-      `🎙️ Queue: ${queueSize.length} waiting, ${activeJobs.length} active transcription job(s)`,
+      `🎙️ Queue: ${queueSize.length} waiting, ${activeJobs.length} active transcription job(s)`
     ];
 
     await interaction.reply({ content: lines.join("\n"), ephemeral: true });

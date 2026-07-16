@@ -23,8 +23,8 @@ services:
     restart: unless-stopped
     env_file:
       - apps/backend/.env
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     volumes:
       - ./storage/recordings:/app/storage/recordings
       - ./storage/avatars:/app/storage/avatars

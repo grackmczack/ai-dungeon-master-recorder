@@ -21,12 +21,12 @@
 <div class="max-w-5xl mx-auto px-6 py-10">
   <div class="flex items-center justify-between mb-8">
     <div>
-      <h1 class="text-3xl font-bold text-white">Deine Kampagnen</h1>
-      <p class="text-gray-500 mt-1">Wähle eine Kampagne oder erstelle eine neue</p>
+      <h1 class="text-3xl font-bold text-white">Deine Gruppen</h1>
+      <p class="text-gray-500 mt-1">Wähle eine Spielgruppe oder erstelle eine neue</p>
     </div>
     <a href="/groups/new"
       class="bg-brand-600 hover:bg-brand-500 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
-      <span>+</span> Neue Kampagne
+      <span>+</span> Neue Gruppe
     </a>
   </div>
 
@@ -41,10 +41,10 @@
   {:else if groups.length === 0}
     <div class="text-center py-20">
       <div class="text-6xl mb-4">🗺️</div>
-      <h2 class="text-xl font-semibold text-white mb-2">Noch keine Kampagne</h2>
-      <p class="text-gray-500 mb-6">Erstelle deine erste Kampagne um loszulegen</p>
+      <h2 class="text-xl font-semibold text-white mb-2">Noch keine Gruppe</h2>
+      <p class="text-gray-500 mb-6">Erstelle deine erste Spielgruppe, um loszulegen</p>
       <a href="/groups/new" class="bg-brand-600 hover:bg-brand-500 text-white px-6 py-3 rounded-lg font-medium transition">
-        Erste Kampagne erstellen
+        Erste Gruppe erstellen
       </a>
     </div>
   {:else}
@@ -63,7 +63,7 @@
             <p class="text-sm text-gray-500 mt-1 line-clamp-2">{group.description}</p>
           {/if}
           <div class="flex gap-4 mt-4 text-xs text-gray-600">
-            <span>{group._count?.campaigns ?? 0} Sessions</span>
+            <span>{group._count?.campaigns ?? 0} Kampagnen</span>
             <span>{group._count?.memberships ?? 0} Mitglieder</span>
           </div>
         </a>

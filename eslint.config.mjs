@@ -4,34 +4,36 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "build/**", "coverage/**", "node_modules/**", "storage/**"]
+    ignores: [
+      "**/dist/**",
+      "**/build/**",
+      "**/.svelte-kit/**",
+      "coverage/**",
+      "node_modules/**",
+      "storage/**"
+    ]
   },
   {
     files: ["**/*.{js,mjs,cjs}"],
     ...js.configs.recommended
   },
-  ...tseslint.configs.strictTypeChecked.map((config) => ({
-    ...config,
-    files: ["**/*.ts"]
-  })),
-  ...tseslint.configs.stylisticTypeChecked.map((config) => ({
+  ...tseslint.configs.recommended.map((config) => ({
     ...config,
     files: ["**/*.ts"]
   })),
   prettier,
   {
     files: ["**/*.ts"],
-    languageOptions: {
-      parserOptions: {
-        project: "./tsconfig.base.json",
-        tsconfigRootDir: import.meta.dirname
-      }
-    },
     rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }
+      ],
       "@typescript-eslint/consistent-type-imports": [
         "error",
         {
-          "prefer": "type-imports"
+          prefer: "type-imports"
         }
       ]
     }

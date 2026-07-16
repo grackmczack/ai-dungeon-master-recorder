@@ -90,7 +90,7 @@
 
 - [x] **Titel aenderbar** -- DM kann Titel manuell bearbeiten (`PATCH /sessions/:id`, Edit-UI im Header).
 - [x] **Titel wird mitgeneriert** -- beim LLM-Call wird direkt ein aussagekraeftiger Titel mit generiert (`SummaryResult.title`, max. 8 Woerter, Kapitelname-Stil). Wird nur gesetzt, wenn der DM noch keinen eigenen Titel per `PATCH /sessions/:id` vergeben hat (manuelle Aenderung hat immer Vorrang). Titel erscheint jetzt auch im Discord-Embed statt "Session #N -- Chronik".
-- [x] **MP3-Dateien verlinken** im Summary-Bereich -- direkte Links zu den Audio-Aufnahmen der Session (`/uploads/recordings/:filename` statisch ausgeliefert).
+- [x] **MP3-Dateien verlinken** im Summary-Bereich -- authentifizierte Streams und Downloads über die Session-API.
 - [x] **Sprecher-Tab:**
   - Manuelle Zuordnung: Diarization-Label (z.B. SPEAKER_00) aus dem Transkript werden mit Namen versehen.
   - Felder: `diarizationLabel`, `discordName`, `characterName`, `playerName`.

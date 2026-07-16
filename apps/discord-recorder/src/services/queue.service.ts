@@ -29,7 +29,11 @@ const connection = new IORedis({
   maxRetriesPerRequest: null
 });
 
-export const transcriptionQueue = new Queue<TranscriptionJobData, unknown, "transcribe" | "transcribe-chunk" | "transcribe-batch">("transcription", {
+export const transcriptionQueue = new Queue<
+  TranscriptionJobData,
+  unknown,
+  "transcribe" | "transcribe-chunk" | "transcribe-batch"
+>("transcription", {
   connection,
   defaultJobOptions: {
     attempts: 3,

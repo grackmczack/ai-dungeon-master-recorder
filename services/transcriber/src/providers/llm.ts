@@ -21,6 +21,7 @@ export interface LLMConfig {
   apiKey?: string | undefined;
   model?: string | undefined;
   endpoint?: string | undefined;
+  summaryLanguage?: "de" | "en" | undefined;
 }
 
 const DEFAULT_SYSTEM_PROMPT = `Du bist ein Chronist für eine Pen-&-Paper-Rollenspielgruppe (TTRPG/D&D).
@@ -55,14 +56,15 @@ Antworte NUR als valides JSON in diesem Format:
 
 export { DEFAULT_SYSTEM_PROMPT };
 
-function buildPrompt(
+export function buildPrompt(
   segments: TranscriptSegment[],
   speakerMap: Record<string, string>,
   systemPrompt?: string,
-  campaignContext?: string
+  campaignContext?: string,
+  summaryLanguage: "de" | "en" = "de"
 ): string {
   const transcript = segments
-    .map(s => {
+    .map((s) => {
       const name = speakerMap[s.speaker] ?? s.speaker;
       const ts = `[${Math.floor(s.start / 60)}:${String(Math.floor(s.start % 60)).padStart(2, "0")}]`;
       return `${ts} ${name}: ${s.text}`;
@@ -78,18 +80,37 @@ function buildPrompt(
   const contextBlock = campaignContext
     ? `\n\nKAMPAGNEN-KONTEXT (vom Spielleiter bereitgestellt):\n${campaignContext}\n`
     : "";
+  const languageName = summaryLanguage === "en" ? "English" : "German";
+  const languageRequirement = `\n\nOUTPUT LANGUAGE: Write the title, narrative, NPC, quest, loot, location, and open-thread fields in ${languageName}. Keep sessionImagePrompt in English.`;
 
-  return `${prompt}${imagePromptRequirement}${contextBlock}\n\nTRANSKRIPT:\n${transcript}`;
+  return `${prompt}${imagePromptRequirement}${languageRequirement}${contextBlock}\n\nTRANSKRIPT:\n${transcript}`;
 }
 
-async function summarizeAnthropic(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
+async function summarizeAnthropic(
+  segments: TranscriptSegment[],
+  speakerMap: Record<string, string>,
+  config: LLMConfig,
+  systemPrompt?: string,
+  campaignContext?: string
+): Promise<SummaryResult> {
   const client = new Anthropic({ apiKey: config.apiKey ?? process.env.ANTHROPIC_API_KEY });
   const model = config.model ?? "claude-opus-4-8";
 
   const message = await client.messages.create({
     model,
     max_tokens: 4096,
-    messages: [{ role: "user", content: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }]
+    messages: [
+      {
+        role: "user",
+        content: buildPrompt(
+          segments,
+          speakerMap,
+          systemPrompt,
+          campaignContext,
+          config.summaryLanguage
+        )
+      }
+    ]
   });
 
   const block = message.content[0];
@@ -98,13 +119,34 @@ async function summarizeAnthropic(segments: TranscriptSegment[], speakerMap: Rec
   return { ...json, model, provider: "anthropic" };
 }
 
-async function summarizeGemini(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
+async function summarizeGemini(
+  segments: TranscriptSegment[],
+  speakerMap: Record<string, string>,
+  config: LLMConfig,
+  systemPrompt?: string,
+  campaignContext?: string
+): Promise<SummaryResult> {
   const client = new GoogleGenAI({ apiKey: config.apiKey ?? process.env.GEMINI_API_KEY ?? "" });
   const model = config.model ?? "gemini-2.5-flash";
 
   const result = await client.models.generateContent({
     model,
-    contents: [{ role: "user", parts: [{ text: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }] }]
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: buildPrompt(
+              segments,
+              speakerMap,
+              systemPrompt,
+              campaignContext,
+              config.summaryLanguage
+            )
+          }
+        ]
+      }
+    ]
   });
 
   const candidate = result.candidates?.[0];
@@ -114,13 +156,30 @@ async function summarizeGemini(segments: TranscriptSegment[], speakerMap: Record
   return { ...json, model, provider: "gemini" };
 }
 
-async function summarizeOpenAI(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
+async function summarizeOpenAI(
+  segments: TranscriptSegment[],
+  speakerMap: Record<string, string>,
+  config: LLMConfig,
+  systemPrompt?: string,
+  campaignContext?: string
+): Promise<SummaryResult> {
   const client = new OpenAI({ apiKey: config.apiKey ?? process.env.OPENAI_API_KEY });
   const model = config.model ?? "gpt-4o";
 
   const completion = await client.chat.completions.create({
     model,
-    messages: [{ role: "user", content: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }],
+    messages: [
+      {
+        role: "user",
+        content: buildPrompt(
+          segments,
+          speakerMap,
+          systemPrompt,
+          campaignContext,
+          config.summaryLanguage
+        )
+      }
+    ],
     response_format: { type: "json_object" }
   });
 
@@ -129,7 +188,13 @@ async function summarizeOpenAI(segments: TranscriptSegment[], speakerMap: Record
   return { ...json, model, provider: "openai" };
 }
 
-async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
+async function summarizeSiliconFlow(
+  segments: TranscriptSegment[],
+  speakerMap: Record<string, string>,
+  config: LLMConfig,
+  systemPrompt?: string,
+  campaignContext?: string
+): Promise<SummaryResult> {
   const apiKey = config.apiKey ?? process.env.SILICONFLOW_API_KEY;
   const model = config.model ?? "deepseek-ai/DeepSeek-V3";
   const endpoint = config.endpoint ?? "https://api.siliconflow.com/v1/chat/completions";
@@ -139,7 +204,18 @@ async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: R
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: buildPrompt(segments, speakerMap, systemPrompt, campaignContext) }],
+      messages: [
+        {
+          role: "user",
+          content: buildPrompt(
+            segments,
+            speakerMap,
+            systemPrompt,
+            campaignContext,
+            config.summaryLanguage
+          )
+        }
+      ],
       max_tokens: 4096
     })
   });
@@ -149,7 +225,7 @@ async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: R
     throw new Error(`SiliconFlow API error ${res.status}: ${errBody.slice(0, 500)}`);
   }
 
-  const data = await res.json() as any;
+  const data = (await res.json()) as any;
   const raw = data.choices?.[0]?.message?.content ?? "{}";
 
   // Tolerant JSON extraction: try direct parse, then regex extraction
@@ -162,11 +238,15 @@ async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: R
       try {
         json = JSON.parse(match[0]);
       } catch {
-        console.warn(`[SUMMARY] SiliconFlow returned non-JSON output (first 300 chars): ${raw.slice(0, 300)}`);
+        console.warn(
+          `[SUMMARY] SiliconFlow returned non-JSON output (first 300 chars): ${raw.slice(0, 300)}`
+        );
         json = {};
       }
     } else {
-      console.warn(`[SUMMARY] SiliconFlow returned no JSON block (first 300 chars): ${raw.slice(0, 300)}`);
+      console.warn(
+        `[SUMMARY] SiliconFlow returned no JSON block (first 300 chars): ${raw.slice(0, 300)}`
+      );
       json = {};
     }
   }
@@ -174,17 +254,34 @@ async function summarizeSiliconFlow(segments: TranscriptSegment[], speakerMap: R
   return { ...json, model, provider: "siliconflow" };
 }
 
-async function summarizeOllama(segments: TranscriptSegment[], speakerMap: Record<string, string>, config: LLMConfig, systemPrompt?: string, campaignContext?: string): Promise<SummaryResult> {
+async function summarizeOllama(
+  segments: TranscriptSegment[],
+  speakerMap: Record<string, string>,
+  config: LLMConfig,
+  systemPrompt?: string,
+  campaignContext?: string
+): Promise<SummaryResult> {
   const endpoint = config.endpoint ?? "http://localhost:11434/api/generate";
   const model = config.model ?? "llama3.1";
 
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, prompt: buildPrompt(segments, speakerMap, systemPrompt, campaignContext), stream: false, format: "json" })
+    body: JSON.stringify({
+      model,
+      prompt: buildPrompt(
+        segments,
+        speakerMap,
+        systemPrompt,
+        campaignContext,
+        config.summaryLanguage
+      ),
+      stream: false,
+      format: "json"
+    })
   });
 
-  const data = await res.json() as any;
+  const data = (await res.json()) as any;
   const json = JSON.parse(data.response ?? "{}");
   return { ...json, model, provider: "ollama" };
 }
@@ -198,12 +295,35 @@ export async function generateSummary(
 ): Promise<SummaryResult> {
   let result: SummaryResult;
   switch (config.provider) {
-    case "anthropic": result = await summarizeAnthropic(segments, speakerMap, config, systemPrompt, campaignContext); break;
-    case "gemini": result = await summarizeGemini(segments, speakerMap, config, systemPrompt, campaignContext); break;
-    case "openai": result = await summarizeOpenAI(segments, speakerMap, config, systemPrompt, campaignContext); break;
-    case "siliconflow": result = await summarizeSiliconFlow(segments, speakerMap, config, systemPrompt, campaignContext); break;
-    case "ollama": result = await summarizeOllama(segments, speakerMap, config, systemPrompt, campaignContext); break;
-    default: throw new Error(`Unknown LLM provider: ${config.provider}`);
+    case "anthropic":
+      result = await summarizeAnthropic(
+        segments,
+        speakerMap,
+        config,
+        systemPrompt,
+        campaignContext
+      );
+      break;
+    case "gemini":
+      result = await summarizeGemini(segments, speakerMap, config, systemPrompt, campaignContext);
+      break;
+    case "openai":
+      result = await summarizeOpenAI(segments, speakerMap, config, systemPrompt, campaignContext);
+      break;
+    case "siliconflow":
+      result = await summarizeSiliconFlow(
+        segments,
+        speakerMap,
+        config,
+        systemPrompt,
+        campaignContext
+      );
+      break;
+    case "ollama":
+      result = await summarizeOllama(segments, speakerMap, config, systemPrompt, campaignContext);
+      break;
+    default:
+      throw new Error(`Unknown LLM provider: ${config.provider}`);
   }
 
   // The LLM is now asked to generate sessionImagePrompt directly (capturing the
@@ -215,16 +335,24 @@ export async function generateSummary(
     console.log(`[SUMMARY] ⚠️ LLM did not return sessionImagePrompt — using programmatic fallback`);
     const chars = Object.values(speakerMap).filter(Boolean);
     const charList = chars.length > 0 ? chars.slice(0, 6).join(", ") : "unknown adventurers";
-    const locations = (result.locations ?? []).slice(0, 3).map(l => l.name).filter(Boolean);
+    const locations = (result.locations ?? [])
+      .slice(0, 3)
+      .map((l) => l.name)
+      .filter(Boolean);
     const firstParagraph = (result.narrative ?? "").split("\n\n")[0]?.slice(0, 300) ?? "";
 
     result.sessionImagePrompt = [
       `Epic fantasy illustration for a D&D session scene.`,
       `Characters present: ${charList}.`,
-      locations.length > 0 ? `Location${locations.length > 1 ? "s" : ""}: ${locations.join(", ")}.` : "",
+      locations.length > 0
+        ? `Location${locations.length > 1 ? "s" : ""}: ${locations.join(", ")}.`
+        : "",
       `Scene: ${firstParagraph}`,
       `Style: Cinematic, dramatic lighting, richly detailed tabletop RPG artwork, wide horizontal composition. No text or UI elements.`
-    ].filter(Boolean).join(" ").slice(0, 1000);
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 1000);
   }
 
   return result;

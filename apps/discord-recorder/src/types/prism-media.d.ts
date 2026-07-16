@@ -1,5 +1,5 @@
 declare module "prism-media" {
-  import { Transform } from "node:stream";
+  import type { Transform } from "node:stream";
 
   interface OpusDecoderOptions {
     rate: number;

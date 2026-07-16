@@ -11,7 +11,7 @@ const requiredEnv = ["DISCORD_TOKEN", "DISCORD_CLIENT_ID", "DISCORD_GUILD_ID"] a
 type Env = Record<(typeof requiredEnv)[number], string>;
 
 function loadEnv(): Env {
-  const missing = requiredEnv.filter(k => !process.env[k]);
+  const missing = requiredEnv.filter((k) => !process.env[k]);
   if (missing.length > 0) throw new Error(`Missing env vars: ${missing.join(", ")}`);
   return {
     DISCORD_TOKEN: process.env.DISCORD_TOKEN!,

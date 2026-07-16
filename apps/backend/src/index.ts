@@ -23,17 +23,23 @@ declare module "fastify" {
   }
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+const jwtSecret = process.env.JWT_SECRET;
+if (isProduction && !jwtSecret) {
+  throw new Error("JWT_SECRET is required in production");
+}
+
 const app = Fastify({
   logger: { level: process.env.NODE_ENV === "production" ? "info" : "debug" }
 });
 
 await app.register(cors, {
-  origin: process.env.CORS_ORIGIN ?? true,
+  origin: process.env.CORS_ORIGIN?.split(",").map((origin) => origin.trim()) ?? false,
   credentials: true
 });
 
 await app.register(jwt, {
-  secret: process.env.JWT_SECRET ?? "dev_secret_change_me_in_production"
+  secret: jwtSecret ?? "development-only-secret"
 });
 
 await app.register(multipart, {
@@ -45,21 +51,10 @@ await app.register(multipart, {
   }
 });
 
-// Statisches Serving für hochgeladene Avatare + Charakterbögen (PDF)
-// Static file serving for all storage directories
+// Public image assets contain verified image bytes and fixed extensions.
 await app.register(fastifyStatic, {
   root: path.resolve(process.cwd(), "..", "..", "storage", "avatars"),
   prefix: "/uploads/avatars/",
-  decorateReply: false
-});
-await app.register(fastifyStatic, {
-  root: path.resolve(process.cwd(), "..", "..", "storage", "character-sheets"),
-  prefix: "/uploads/character-sheets/",
-  decorateReply: false
-});
-await app.register(fastifyStatic, {
-  root: path.resolve(process.cwd(), "..", "..", "storage", "recordings"),
-  prefix: "/uploads/recordings/",
   decorateReply: false
 });
 await app.register(fastifyStatic, {
@@ -90,7 +85,7 @@ await app.register(wikiCrudRoutes);
 await app.register(adminRoutes);
 
 // Health
-app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString(), version: "0.1.0" }));
+app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString(), version: "0.2.0" }));
 
 const port = Number(process.env.PORT ?? 3001);
 await app.listen({ port, host: "0.0.0.0" });

@@ -180,8 +180,8 @@
     <!-- Gruppenauswahl -->
     {#if groups.length > 1}
       <div class="mb-6">
-        <label class="block text-sm text-gray-400 mb-2">Gruppe</label>
-        <select bind:value={selectedGroupId} onchange={onGroupChange}
+        <label for="settings-group" class="block text-sm text-gray-400 mb-2">Gruppe</label>
+        <select id="settings-group" bind:value={selectedGroupId} onchange={onGroupChange}
           class="bg-surface-800 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500 transition">
           {#each groups as g}<option value={g.id}>{g.name}</option>{/each}
         </select>
@@ -204,8 +204,8 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Whisper/Transcription key — label changes with whisper provider -->
           <div class="space-y-2">
-            <label class="text-sm text-gray-400">{whisperKeyLabel}</label>
-            <input bind:value={form.whisperApiKey} type="text" autocomplete="off"
+            <label for="whisper-api-key" class="text-sm text-gray-400">{whisperKeyLabel}</label>
+            <input id="whisper-api-key" bind:value={form.whisperApiKey} type="password" autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder={whisperKeyPlaceholder} />
             {#if form.whisperProvider === 'openai'}
@@ -219,8 +219,8 @@
 
           <!-- LLM key — label changes with LLM provider -->
           <div class="space-y-2">
-            <label class="text-sm text-gray-400">{llmKeyLabel}</label>
-            <input bind:value={form.llmApiKey} type="text" autocomplete="off"
+            <label for="llm-api-key" class="text-sm text-gray-400">{llmKeyLabel}</label>
+            <input id="llm-api-key" bind:value={form.llmApiKey} type="password" autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder={llmKeyPlaceholder} />
             <p class="text-xs text-gray-600">
@@ -231,8 +231,8 @@
 
           <!-- Replicate key -->
           <div class="space-y-2">
-            <label class="text-sm text-gray-400">Replicate API Key</label>
-            <input bind:value={form.replicateApiKey} type="text" autocomplete="off"
+            <label for="replicate-api-key" class="text-sm text-gray-400">Replicate API Key</label>
+            <input id="replicate-api-key" bind:value={form.replicateApiKey} type="password" autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder="r8_..." />
             <p class="text-xs text-gray-600">Genutzt für Bildgenerierung (Hintergründe, Session-Bilder, NPC-Portraits). Wird auch für Replicate WhisperX verwendet falls als Whisper-Provider gewählt.</p>
@@ -240,8 +240,8 @@
 
           <!-- HuggingFace token -->
           <div class="space-y-2">
-            <label class="text-sm text-gray-400">HuggingFace Token</label>
-            <input bind:value={form.huggingfaceToken} type="text" autocomplete="off"
+            <label for="huggingface-token" class="text-sm text-gray-400">HuggingFace Token</label>
+            <input id="huggingface-token" bind:value={form.huggingfaceToken} type="password" autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder="hf_..." />
             <p class="text-xs text-gray-600">Genutzt für Speaker-Diarization via pyannote. Auf huggingface.co/settings/tokens erstellen.</p>
@@ -255,8 +255,8 @@
         <p class="text-xs text-gray-500">Provider für die Sprach-zu-Text-Transkription. Der API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Provider</label>
-          <select bind:value={form.whisperProvider}
+          <label for="whisper-provider" class="text-sm text-gray-400">Provider</label>
+          <select id="whisper-provider" bind:value={form.whisperProvider}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
             {#each WHISPER_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
           </select>
@@ -264,8 +264,8 @@
 
         {#if form.whisperProvider === 'selfhosted'}
           <div class="space-y-2">
-            <label class="text-sm text-gray-400">Endpoint URL</label>
-            <input bind:value={form.whisperEndpoint}
+            <label for="whisper-endpoint" class="text-sm text-gray-400">Endpoint URL</label>
+            <input id="whisper-endpoint" bind:value={form.whisperEndpoint}
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
               placeholder="http://your-server:9000/v1/audio/transcriptions" />
           </div>
@@ -278,15 +278,15 @@
         <p class="text-xs text-gray-500">Hintergründe & NPC-Portraits für Kampagnen. Läuft immer über Replicate — der API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Provider</label>
+          <p class="text-sm text-gray-400">Provider</p>
           <div class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-gray-400 text-sm">
             Replicate
           </div>
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Modell</label>
-          <select bind:value={form.imageGenModel}
+          <label for="image-model" class="text-sm text-gray-400">Modell</label>
+          <select id="image-model" bind:value={form.imageGenModel}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
             {#each IMAGE_GEN_MODELS as m}<option value={m.value}>{m.label}</option>{/each}
           </select>
@@ -300,8 +300,8 @@
         <p class="text-xs text-gray-500">Modell für die Generierung des Session-Header-Bildes. Der Replicate API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Provider</label>
-          <select bind:value={form.sessionImageProvider}
+          <label for="session-image-provider" class="text-sm text-gray-400">Provider</label>
+          <select id="session-image-provider" bind:value={form.sessionImageProvider}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
             <option value="">— Standard (Replicate) —</option>
             {#each SESSION_IMAGE_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
@@ -309,8 +309,8 @@
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Modell</label>
-          <select bind:value={form.sessionImageModel}
+          <label for="session-image-model" class="text-sm text-gray-400">Modell</label>
+          <select id="session-image-model" bind:value={form.sessionImageModel}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
             <option value="">— Standard (Qwen Image Edit Plus) —</option>
             {#each SESSION_IMAGE_MODELS as m}<option value={m.value}>{m.label}</option>{/each}
@@ -363,23 +363,23 @@
         <h2 class="font-semibold text-white flex items-center gap-2">✍️ KI-Zusammenfassung</h2>
         <p class="text-xs text-gray-500">Provider & Modell für Session-Zusammenfassungen. Der API-Key wird aus der »API Keys«-Sektion oben verwendet (je nach gewähltem Provider).</p>
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="space-y-2">
-            <label class="text-sm text-gray-400">Provider</label>
-            <select bind:value={form.llmProvider}
+            <label for="llm-provider" class="text-sm text-gray-400">Provider</label>
+            <select id="llm-provider" bind:value={form.llmProvider}
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
               {#each LLM_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
             </select>
           </div>
           <div class="space-y-2">
-            <label class="text-sm text-gray-400">Modell</label>
+            <label for="llm-model" class="text-sm text-gray-400">Modell</label>
             {#if LLM_MODELS[form.llmProvider]?.length}
-              <select bind:value={form.llmModel}
+              <select id="llm-model" bind:value={form.llmModel}
                 class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
                 {#each LLM_MODELS[form.llmProvider] as m}<option value={m.value}>{m.label}</option>{/each}
               </select>
             {:else}
-              <input bind:value={form.llmModel}
+              <input id="llm-model" bind:value={form.llmModel}
                 class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-brand-500"
                 placeholder="Modellname" />
             {/if}
@@ -388,16 +388,16 @@
 
         {#if form.llmProvider === 'ollama' || form.llmProvider === 'siliconflow'}
           <div class="space-y-2">
-            <label class="text-sm text-gray-400">Endpoint URL</label>
-            <input bind:value={form.llmEndpoint}
+            <label for="llm-endpoint" class="text-sm text-gray-400">Endpoint URL</label>
+            <input id="llm-endpoint" bind:value={form.llmEndpoint}
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
               placeholder={form.llmProvider === 'ollama' ? 'http://localhost:11434/api/generate' : 'https://api.siliconflow.com/v1/chat/completions'} />
           </div>
         {/if}
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Zusammenfassungssprache</label>
-          <select bind:value={form.summaryLanguage}
+          <label for="summary-language" class="text-sm text-gray-400">Zusammenfassungssprache</label>
+          <select id="summary-language" bind:value={form.summaryLanguage}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
             <option value="de">Deutsch</option>
             <option value="en">Englisch</option>
@@ -405,23 +405,23 @@
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm text-gray-400">Discord Channel ID für Summary-Posts</label>
-          <input bind:value={form.postSummaryChannelId}
+          <label for="summary-channel" class="text-sm text-gray-400">Discord Channel ID für Summary-Posts</label>
+          <input id="summary-channel" bind:value={form.postSummaryChannelId}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
             placeholder="Discord Channel ID" />
         </div>
 
         <div class="space-y-2">
-          <label class="block text-sm text-gray-400">System-Prompt <span class="text-gray-600 text-xs">(leer = Standard)</span></label>
-          <textarea bind:value={form.llmSystemPrompt} rows="6"
+          <label for="system-prompt" class="block text-sm text-gray-400">System-Prompt <span class="text-gray-600 text-xs">(leer = Standard)</span></label>
+          <textarea id="system-prompt" bind:value={form.llmSystemPrompt} rows="6"
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono placeholder-gray-600 focus:outline-none focus:border-brand-500 transition resize-y"
             placeholder="Du bist ein Chronist für eine Pen-&-Paper-Rollenspielgruppe..."></textarea>
           <p class="text-xs text-gray-600">Überschreibt den Standard-Prompt. Muss valides JSON als Antwort verlangen (narrative, npcs, quests, loot, locations, openThreads).</p>
         </div>
 
         <div class="space-y-2">
-          <label class="block text-sm text-gray-400">Kampagnen-Kontext <span class="text-gray-600 text-xs">(für alle Sessions dieser Gruppe)</span></label>
-          <textarea bind:value={form.llmCampaignContext} rows="4"
+          <label for="campaign-context" class="block text-sm text-gray-400">Kampagnen-Kontext <span class="text-gray-600 text-xs">(für alle Sessions dieser Gruppe)</span></label>
+          <textarea id="campaign-context" bind:value={form.llmCampaignContext} rows="4"
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-brand-500 transition resize-y"
             placeholder="z.B.: Wir spielen D&D 5e. Die Kampagne heißt 'Vergessene Reiche'. Spieler: Arkeles (Magier), Neston (Krieger), Akuma (Schurke). Der DM ist Grack. Das aktuelle Setting ist..."></textarea>
           <p class="text-xs text-gray-600">Dieser Text wird beim LLM als Kontext mitgesendet. Beschreibe Kampagne, Setting, Charaktere und wichtige Hintergrundinfos.</p>

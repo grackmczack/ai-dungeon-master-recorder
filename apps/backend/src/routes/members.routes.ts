@@ -13,13 +13,14 @@ import { z } from "zod";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import { prisma } from "../db.js";
+import { isPdf, safeStorageFilename, verifyImage } from "../lib/uploads.js";
 
 const AVATAR_DIR = path.resolve(process.cwd(), "..", "..", "storage", "avatars");
 const SHEET_DIR = path.resolve(process.cwd(), "..", "..", "storage", "character-sheets");
 
 const ALLOWED_AVATAR_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
-const ALLOWED_SHEET_MIME = new Set(["application/pdf"]);
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
 
 const CreateMemberSchema = z.object({
@@ -52,10 +53,12 @@ async function requireMember(groupId: string, userId: string) {
   });
 }
 
+async function findGroupMember(groupId: string, memberId: string) {
+  return prisma.groupMembership.findFirst({ where: { id: memberId, groupId } });
+}
+
 export async function membersRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (req) => {
-    await req.jwtVerify();
-  });
+  app.addHook("preHandler", app.authenticate);
 
   // GET /groups/:groupId/members — alle Mitglieder inkl. Historie
   app.get("/groups/:groupId/members", async (req, reply) => {
@@ -110,6 +113,9 @@ export async function membersRoutes(app: FastifyInstance) {
     const myMembership = await requireGm(groupId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can edit members" });
 
+    const target = await findGroupMember(groupId, memberId);
+    if (!target) return reply.status(404).send({ error: "Member not found" });
+
     const updated = await prisma.groupMembership.update({
       where: { id: memberId },
       data: body.data,
@@ -128,6 +134,9 @@ export async function membersRoutes(app: FastifyInstance) {
     const myMembership = await requireGm(groupId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can pause members" });
 
+    const target = await findGroupMember(groupId, memberId);
+    if (!target) return reply.status(404).send({ error: "Member not found" });
+
     const updated = await prisma.groupMembership.update({
       where: { id: memberId },
       data: { isPaused: true, pausedAt: new Date(), pauseNote: note ?? null }
@@ -143,6 +152,9 @@ export async function membersRoutes(app: FastifyInstance) {
 
     const myMembership = await requireGm(groupId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can resume members" });
+
+    const target = await findGroupMember(groupId, memberId);
+    if (!target) return reply.status(404).send({ error: "Member not found" });
 
     const updated = await prisma.groupMembership.update({
       where: { id: memberId },
@@ -160,6 +172,9 @@ export async function membersRoutes(app: FastifyInstance) {
     const myMembership = await requireGm(groupId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can remove members" });
 
+    const target = await findGroupMember(groupId, memberId);
+    if (!target) return reply.status(404).send({ error: "Member not found" });
+
     const updated = await prisma.groupMembership.update({
       where: { id: memberId },
       data: { leftAt: new Date(), isPaused: false }
@@ -176,18 +191,16 @@ export async function membersRoutes(app: FastifyInstance) {
     const myMembership = await requireGm(groupId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can upload avatars" });
 
-    const member = await prisma.groupMembership.findFirst({ where: { id: memberId, groupId } });
+    const member = await findGroupMember(groupId, memberId);
     if (!member) return reply.status(404).send({ error: "Member not found" });
 
     const data = await req.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
     if (!data) return reply.status(400).send({ error: "No file uploaded" });
-    if (!ALLOWED_AVATAR_MIME.has(data.mimetype)) {
-      return reply.status(400).send({ error: "Only png/jpeg/webp/gif allowed" });
-    }
-
     const buffer = await data.toBuffer();
-    const ext = path.extname(data.filename) || ".png";
-    const fileName = `${memberId}-${randomUUID()}${ext}`;
+    const image = verifyImage(buffer, ALLOWED_AVATAR_MIME);
+    if (!image)
+      return reply.status(400).send({ error: "Only valid png/jpeg/webp/gif images allowed" });
+    const fileName = `${memberId}-${randomUUID()}${image.extension}`;
 
     await mkdir(AVATAR_DIR, { recursive: true });
     await writeFile(path.join(AVATAR_DIR, fileName), buffer);
@@ -213,18 +226,16 @@ export async function membersRoutes(app: FastifyInstance) {
     const { sub } = req.user as { sub: string };
 
     const myMembership = await requireGm(groupId, sub);
-    if (!myMembership) return reply.status(403).send({ error: "Only GMs can upload character sheets" });
+    if (!myMembership)
+      return reply.status(403).send({ error: "Only GMs can upload character sheets" });
 
-    const member = await prisma.groupMembership.findFirst({ where: { id: memberId, groupId } });
+    const member = await findGroupMember(groupId, memberId);
     if (!member) return reply.status(404).send({ error: "Member not found" });
 
     const data = await req.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
     if (!data) return reply.status(400).send({ error: "No file uploaded" });
-    if (!ALLOWED_SHEET_MIME.has(data.mimetype)) {
-      return reply.status(400).send({ error: "Only PDF allowed" });
-    }
-
     const buffer = await data.toBuffer();
+    if (!isPdf(buffer)) return reply.status(400).send({ error: "Only valid PDF files allowed" });
     const fileName = `${memberId}-${randomUUID()}.pdf`;
 
     await mkdir(SHEET_DIR, { recursive: true });
@@ -242,5 +253,27 @@ export async function membersRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ characterSheetUrl: updated.characterSheetUrl });
+  });
+
+  // GET /groups/:groupId/members/:memberId/character-sheet — authenticated PDF download
+  app.get("/groups/:groupId/members/:memberId/character-sheet", async (req, reply) => {
+    const { groupId, memberId } = req.params as { groupId: string; memberId: string };
+    const { sub } = req.user as { sub: string };
+
+    if (!(await requireMember(groupId, sub))) {
+      return reply.status(403).send({ error: "Not a member" });
+    }
+
+    const member = await findGroupMember(groupId, memberId);
+    if (!member?.characterSheetUrl)
+      return reply.status(404).send({ error: "Character sheet not found" });
+
+    const filename = safeStorageFilename(path.basename(member.characterSheetUrl));
+    if (!filename) return reply.status(404).send({ error: "Character sheet not found" });
+
+    reply.header("Content-Type", "application/pdf");
+    reply.header("Content-Disposition", `inline; filename="${memberId}-character-sheet.pdf"`);
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(createReadStream(path.join(SHEET_DIR, filename)));
   });
 }

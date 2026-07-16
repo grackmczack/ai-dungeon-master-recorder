@@ -6,7 +6,7 @@
  * - Worker entscheidet ob concat oder per-chunk (abhängig vom Provider)
  */
 import { convertWavToMp3 } from "./converter.service.js";
-import { transcriptionQueue, type TranscriptionJobData } from "./queue.service.js";
+import { transcriptionQueue } from "./queue.service.js";
 import { createSessionRecord } from "./database.service.js";
 
 interface ChunkInfo {
@@ -56,22 +56,22 @@ export class ChunkProcessorService {
       this.sessionMetas.set(guildId, meta);
       console.log(`[CHUNK-PROCESSOR] Session ${record.sessionId} in DB angelegt`);
     } catch (e) {
+      this.cleanup(guildId);
       console.error("[CHUNK-PROCESSOR] DB session creation failed:", e);
+      throw e;
     }
   }
 
-  public async processChunk(
-    guildId: string,
-    chunk: ChunkInfo,
-    isLast: boolean
-  ): Promise<void> {
+  public async processChunk(guildId: string, chunk: ChunkInfo, isLast: boolean): Promise<void> {
     const meta = this.sessionMetas.get(guildId);
     if (!meta) {
       console.error(`[CHUNK-PROCESSOR] No session meta for guild ${guildId}`);
       return;
     }
 
-    console.log(`[CHUNK-PROCESSOR] Processing chunk ${chunk.index} for guild ${guildId} (isLast: ${isLast})`);
+    console.log(
+      `[CHUNK-PROCESSOR] Processing chunk ${chunk.index} for guild ${guildId} (isLast: ${isLast})`
+    );
 
     // WAV → MP3 (downsampled 16kHz mono 64kbps)
     let mp3Path = chunk.filePath;
@@ -83,7 +83,9 @@ export class ChunkProcessorService {
       mp3Path = converted.mp3Path;
       mp3Filename = converted.mp3Filename;
       durationSeconds = converted.durationSeconds;
-      console.log(`[CHUNK-PROCESSOR] Chunk ${chunk.index} converted: ${mp3Filename} (${Math.round(durationSeconds)}s, 16kHz mono 64kbps)`);
+      console.log(
+        `[CHUNK-PROCESSOR] Chunk ${chunk.index} converted: ${mp3Filename} (${Math.round(durationSeconds)}s, 16kHz mono 64kbps)`
+      );
     } catch (e) {
       console.error(`[CHUNK-PROCESSOR] Chunk ${chunk.index} conversion failed:`, e);
     }
@@ -99,13 +101,15 @@ export class ChunkProcessorService {
 
     if (isLast) {
       // Session beendet → ALLE Chunks als Batch-Job enqueuen
-      const allChunks = [...chunks].sort((a, b) =>
-        a.filename.localeCompare(b.filename)
-      );
+      const allChunks = [...chunks].sort((a, b) => a.filename.localeCompare(b.filename));
       const totalDuration = allChunks.reduce((sum, c) => sum + c.durationSeconds, 0);
 
-      console.log(`[CHUNK-PROCESSOR] Last chunk processed — ${allChunks.length} chunk(s) total, ${Math.round(totalDuration)}s duration`);
-      console.log(`[CHUNK-PROCESSOR] Enqueuing batch transcription job for session ${meta.sessionId}`);
+      console.log(
+        `[CHUNK-PROCESSOR] Last chunk processed — ${allChunks.length} chunk(s) total, ${Math.round(totalDuration)}s duration`
+      );
+      console.log(
+        `[CHUNK-PROCESSOR] Enqueuing batch transcription job for session ${meta.sessionId}`
+      );
 
       await transcriptionQueue.add("transcribe-batch", {
         sessionId: meta.sessionId ?? guildId,
@@ -115,7 +119,7 @@ export class ChunkProcessorService {
         durationSeconds: totalDuration,
         discordChannelId: meta.discordChannelId,
         // Batch-spezifische Felder
-        batchChunks: allChunks.map(c => ({
+        batchChunks: allChunks.map((c) => ({
           filePath: c.filePath,
           filename: c.filename,
           durationSeconds: c.durationSeconds,

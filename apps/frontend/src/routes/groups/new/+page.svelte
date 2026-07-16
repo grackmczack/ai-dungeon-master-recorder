@@ -25,7 +25,7 @@
 
 <div class="max-w-2xl mx-auto px-6 py-10">
   <a href="/dashboard" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-8 transition">← Zurück</a>
-  <h1 class="text-2xl font-bold text-white mb-8">Neue Kampagne erstellen</h1>
+  <h1 class="text-2xl font-bold text-white mb-8">Neue Gruppe erstellen</h1>
 
   <form onsubmit={create} class="bg-surface-800 rounded-2xl p-8 border border-surface-600 space-y-6">
     {#if error}
@@ -33,22 +33,22 @@
     {/if}
 
     <div class="space-y-2">
-      <label class="block text-sm text-gray-400">Kampagnenname *</label>
-      <input bind:value={name} required
+      <label for="group-name" class="block text-sm text-gray-400">Gruppenname *</label>
+      <input id="group-name" bind:value={name} required
         class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 transition"
         placeholder="z.B. Vergessene Reiche" />
     </div>
 
     <div class="space-y-2">
-      <label class="block text-sm text-gray-400">Beschreibung</label>
-      <textarea bind:value={description} rows="3"
+      <label for="group-description" class="block text-sm text-gray-400">Beschreibung</label>
+      <textarea id="group-description" bind:value={description} rows="3"
         class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 transition resize-none"
         placeholder="Optional: kurze Beschreibung der Gruppe"></textarea>
     </div>
 
     <div class="space-y-2">
-      <label class="block text-sm text-gray-400">Discord Server ID</label>
-      <input bind:value={discordGuildId}
+      <label for="discord-guild-id" class="block text-sm text-gray-400">Discord Server ID</label>
+      <input id="discord-guild-id" bind:value={discordGuildId}
         class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white placeholder-gray-600 font-mono text-sm focus:outline-none focus:border-brand-500 transition"
         placeholder="z.B. 1394755474263375902" />
       <p class="text-xs text-gray-600">Rechtsklick auf deinen Discord-Server → Server-ID kopieren (Developer Mode nötig)</p>
@@ -56,7 +56,7 @@
 
     <button type="submit" disabled={loading}
       class="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition">
-      {loading ? 'Erstellen...' : 'Kampagne erstellen'}
+      {loading ? 'Erstellen...' : 'Gruppe erstellen'}
     </button>
   </form>
 </div>

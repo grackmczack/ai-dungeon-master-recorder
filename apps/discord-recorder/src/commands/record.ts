@@ -8,13 +8,14 @@ export function createRecordCommand(
   chunkProcessor: ChunkProcessorService
 ): DiscordCommand {
   return {
-    data: new SlashCommandBuilder()
-      .setName("record")
-      .setDescription("Start a recording session."),
+    data: new SlashCommandBuilder().setName("record").setDescription("Start a recording session."),
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       if (!interaction.inCachedGuild() || !(interaction.member instanceof GuildMember)) {
-        await interaction.reply({ content: "This command can only be used in a Discord server.", ephemeral: true });
+        await interaction.reply({
+          content: "This command can only be used in a Discord server.",
+          ephemeral: true
+        });
         return;
       }
 
@@ -24,7 +25,10 @@ export function createRecordCommand(
       const channelId = interaction.channelId;
 
       // Chunk-Ready Callback — wird für jeden Chunk aufgerufen
-      const onChunkReady = async (chunk: { filename: string; filePath: string; index: number }, isLast: boolean) => {
+      const onChunkReady = async (
+        chunk: { filename: string; filePath: string; index: number },
+        isLast: boolean
+      ) => {
         await chunkProcessor.processChunk(guildId, chunk, isLast);
       };
 
@@ -35,7 +39,7 @@ export function createRecordCommand(
           await voiceRecorderService.stop(guildId);
           await interaction.followUp(
             "🔇 **Auto-Stop:** Aufnahme wurde automatisch beendet.\n" +
-            "🔄 Transkription läuft — du bekommst eine Nachricht wenn die Summary fertig ist."
+              "🔄 Transkription läuft — du bekommst eine Nachricht wenn die Summary fertig ist."
           );
         } catch (e) {
           console.error("[AUTO-STOP] Error:", e);
@@ -46,7 +50,7 @@ export function createRecordCommand(
         // Participant-Namen vorab sammeln
         const voiceChannel = interaction.member.voice.channel;
         const participantIds: string[] = [];
-        const participantNames = new Map<string, string>();        // Username (eindeutig, z.B. "veganrevlady")
+        const participantNames = new Map<string, string>(); // Username (eindeutig, z.B. "veganrevlady")
         const participantDisplayNames = new Map<string, string>(); // Anzeigename (z.B. "Rose")
 
         if (voiceChannel) {
@@ -60,36 +64,48 @@ export function createRecordCommand(
           }
         }
 
-        // Session in DB anlegen
-        await chunkProcessor.initSession(guildId, {
-          guildId,
-          guildName: interaction.guild?.name,
-          participantIds,
-          participantNames,
-          participantDisplayNames,
-          discordChannelId: channelId
-        });
-
+        // Establish voice first so a failed join cannot leave an orphan DB session.
         await voiceRecorderService.start(interaction.member, onChunkReady, onAutoStop);
+        try {
+          await chunkProcessor.initSession(guildId, {
+            guildId,
+            guildName: interaction.guild?.name,
+            participantIds,
+            participantNames,
+            participantDisplayNames,
+            discordChannelId: channelId
+          });
+        } catch (error) {
+          await voiceRecorderService.cancel(guildId);
+          throw error;
+        }
 
         const participantList = participantIds
-          .map(id => participantDisplayNames.get(id) ?? participantNames.get(id) ?? id)
+          .map((id) => participantDisplayNames.get(id) ?? participantNames.get(id) ?? id)
           .join(", ");
 
         await interaction.editReply(
           `🔴 **Aufnahme gestartet!**\n` +
-          `👥 **Teilnehmer:** ${participantList || "wird erkannt wenn gesprochen wird"}\n` +
-          `📦 Chunks alle 30 Min · Auto-Stop wenn alle weg · Max 4h\n` +
-          `Stoppe mit \`/stop\` wenn ihr fertig seid.`
+            `👥 **Teilnehmer:** ${participantList || "wird erkannt wenn gesprochen wird"}\n` +
+            `📦 Chunks alle 30 Min · Auto-Stop wenn alle weg · Max 4h\n` +
+            `Stoppe mit \`/stop\` wenn ihr fertig seid.`
         );
       } catch (error) {
         chunkProcessor.cleanup(guildId);
         if (error instanceof Error && error.message === "USER_NOT_IN_VOICE_CHANNEL") {
-          await interaction.editReply("Du musst in einem Voice-Channel sein um die Aufnahme zu starten.");
+          await interaction.editReply(
+            "Du musst in einem Voice-Channel sein um die Aufnahme zu starten."
+          );
           return;
         }
         if (error instanceof Error && error.message === "RECORDING_ALREADY_ACTIVE") {
           await interaction.editReply("Es läuft bereits eine Aufnahme in diesem Server.");
+          return;
+        }
+        if (error instanceof Error && error.message === "VOICE_CONNECTION_FAILED") {
+          await interaction.editReply(
+            "Die Voice-Verbindung konnte nicht hergestellt werden. Bitte versuche es erneut."
+          );
           return;
         }
         throw error;

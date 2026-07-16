@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
-  import { auth } from '$lib/auth.js';
   import { parallax, parallaxFixed } from '$lib/actions/parallax.js';
   import WikiView from '$lib/components/WikiView.svelte';
   import type { Group } from '$lib/types.js';
@@ -55,6 +54,14 @@
   // Paginierte Sessions
   let loadingMoreSessions: Record<string, boolean> = $state({});
 
+  // Create-campaign state
+  let showCreateCampaign = $state(false);
+  let newCampaignName = $state('');
+  let newCampaignDescription = $state('');
+  let newCampaignSetting = $state('');
+  let creatingCampaign = $state(false);
+  let createCampaignError = $state('');
+
   const STATUS_LABELS: Record<string, string> = {
     RECORDING: '🔴 Aufnahme',
     PROCESSING: '⏳ Verarbeitung',
@@ -86,6 +93,30 @@
     return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
+  async function createCampaign(e: Event) {
+    e.preventDefault();
+    creatingCampaign = true;
+    createCampaignError = '';
+    try {
+      const campaign = await api.createCampaign(group.id, {
+        name: newCampaignName,
+        description: newCampaignDescription || undefined,
+        setting: newCampaignSetting || undefined
+      });
+      campaign.sessions = [];
+      campaign._count = { sessions: 0 };
+      group.campaigns = [campaign, ...group.campaigns];
+      showCreateCampaign = false;
+      newCampaignName = '';
+      newCampaignDescription = '';
+      newCampaignSetting = '';
+    } catch (e: any) {
+      createCampaignError = e.error ?? 'Kampagne konnte nicht erstellt werden';
+    } finally {
+      creatingCampaign = false;
+    }
+  }
+
   function backgroundImageUrl(campaign: any | null | undefined) {
     if (!campaign?.backgroundImageUrl) return null;
     const version = backgroundVersion[campaign.id] ?? (campaign.updatedAt ? new Date(campaign.updatedAt).getTime() : 0);
@@ -94,11 +125,7 @@
 
   async function saveContext(campaignId: string) {
     try {
-      await fetch(`/api/campaigns/${campaignId}/context`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.getToken()}` },
-        body: JSON.stringify({ campaignContext: contextEdits[campaignId] })
-      });
+      await api.updateCampaignContext(campaignId, contextEdits[campaignId]);
       const c = group?.campaigns.find((c: any) => c.id === campaignId);
       if (c) c.campaignContext = contextEdits[campaignId];
       editingContext = null;
@@ -318,14 +345,20 @@
           <p class="text-xs text-gray-600 mt-1 font-mono">Guild: {group.discordGuildId}</p>
         {/if}
       </div>
-      <a href="/settings?groupId={group.id}"
-        class="text-gray-500 hover:text-white text-sm border border-surface-600 hover:border-surface-500 px-4 py-2 rounded-lg transition">
-        ⚙️ Einstellungen
-      </a>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <button type="button" onclick={() => showCreateCampaign = true}
+          class="text-sm bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg transition">
+          + Kampagne
+        </button>
+        <a href="/settings?groupId={group.id}"
+          class="text-gray-500 hover:text-white text-sm border border-surface-600 hover:border-surface-500 px-4 py-2 rounded-lg transition">
+          ⚙️ Einstellungen
+        </a>
+      </div>
     </div>
 
     <!-- Tab-Switcher für Kampagnen-Ansicht -->
-    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 w-fit border border-surface-600">
+    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 max-w-full overflow-x-auto border border-surface-600">
       <button onclick={() => activeView = 'sessions'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'sessions' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📅 Sessions
@@ -588,15 +621,15 @@
           <!-- Add-Member Form -->
           {#if showAddMember}
             <form onsubmit={(e) => { e.preventDefault(); createMember(); }} class="mb-5 bg-surface-700 rounded-xl p-4 border border-brand-500/30 space-y-3">
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Discordname</label>
-                  <input bind:value={newDiscordName} placeholder="z.B. grackmczack"
+                  <label for="new-member-discord" class="block text-xs text-gray-500 mb-1">Discordname</label>
+                  <input id="new-member-discord" bind:value={newDiscordName} placeholder="z.B. grackmczack"
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
-                  <select bind:value={newRole}
+                  <label for="new-member-role" class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
+                  <select id="new-member-role" bind:value={newRole}
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
                     <option value="PLAYER">🎲 Spieler</option>
                     <option value="GM">🎭 Spielleiter (GM)</option>
@@ -604,15 +637,15 @@
                   </select>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Charaktername</label>
-                  <input bind:value={newCharacterName} placeholder="z.B. Arkeles der Magier"
+                  <label for="new-member-character" class="block text-xs text-gray-500 mb-1">Charaktername</label>
+                  <input id="new-member-character" bind:value={newCharacterName} placeholder="z.B. Arkeles der Magier"
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
-                  <input bind:value={newPartyRole} placeholder="z.B. Tank, Healer, Scout"
+                  <label for="new-member-party-role" class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
+                  <input id="new-member-party-role" bind:value={newPartyRole} placeholder="z.B. Tank, Healer, Scout"
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
               </div>
@@ -711,15 +744,15 @@
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-3 mb-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Discordname</label>
-                  <input bind:value={editDiscordName}
+                  <label for="edit-member-discord" class="block text-xs text-gray-500 mb-1">Discordname</label>
+                  <input id="edit-member-discord" bind:value={editDiscordName}
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
-                  <select bind:value={editRole}
+                  <label for="edit-member-role" class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
+                  <select id="edit-member-role" bind:value={editRole}
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
                     <option value="PLAYER">🎲 Spieler</option>
                     <option value="GM">🎭 Spielleiter (GM)</option>
@@ -727,24 +760,24 @@
                   </select>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Charaktername</label>
-                  <input bind:value={editCharacterName}
+                  <label for="edit-member-character" class="block text-xs text-gray-500 mb-1">Charaktername</label>
+                  <input id="edit-member-character" bind:value={editCharacterName}
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
-                  <input bind:value={editPartyRole} placeholder="z.B. Tank, Healer"
+                  <label for="edit-member-party-role" class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
+                  <input id="edit-member-party-role" bind:value={editPartyRole} placeholder="z.B. Tank, Healer"
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
               </div>
 
               <!-- Charakterbogen -->
               <div class="mb-5 pb-5 border-b border-surface-700">
-                <label class="block text-xs text-gray-500 mb-2">Charakterbogen (PDF)</label>
+                <p class="block text-xs text-gray-500 mb-2">Charakterbogen (PDF)</p>
                 {#if editingMember.characterSheetUrl}
-                  <a href={editingMember.characterSheetUrl} target="_blank" class="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1.5 mb-2">
+                  <a href={`/api/groups/${$page.params.id}/members/${editingMember.id}/character-sheet`} target="_blank" rel="noreferrer" class="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1.5 mb-2">
                     📄 Aktueller Charakterbogen öffnen
                   </a>
                 {/if}
@@ -803,6 +836,36 @@
             </div>
           </div>
         {/if}
+      </div>
+    {/if}
+
+    {#if showCreateCampaign}
+      <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+        <form onsubmit={createCampaign} class="bg-surface-800 rounded-2xl border border-surface-600 p-6 w-full max-w-lg space-y-4">
+          <h2 class="text-xl font-semibold text-white">Neue Kampagne</h2>
+          {#if createCampaignError}<p class="text-sm text-red-400">{createCampaignError}</p>{/if}
+          <div>
+            <label for="campaign-name" class="block text-xs text-gray-500 mb-1">Name *</label>
+            <input id="campaign-name" bind:value={newCampaignName} required maxlength="120"
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label for="campaign-setting" class="block text-xs text-gray-500 mb-1">Setting</label>
+            <input id="campaign-setting" bind:value={newCampaignSetting} maxlength="200"
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label for="campaign-description" class="block text-xs text-gray-500 mb-1">Beschreibung</label>
+            <textarea id="campaign-description" bind:value={newCampaignDescription} maxlength="2000" rows="3"
+              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500"></textarea>
+          </div>
+          <div class="flex gap-3 justify-end">
+            <button type="button" onclick={() => showCreateCampaign = false} class="text-gray-400 hover:text-white px-4 py-2">Abbrechen</button>
+            <button type="submit" disabled={creatingCampaign} class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg">
+              {creatingCampaign ? 'Erstellen...' : 'Erstellen'}
+            </button>
+          </div>
+        </form>
       </div>
     {/if}
   {/if}

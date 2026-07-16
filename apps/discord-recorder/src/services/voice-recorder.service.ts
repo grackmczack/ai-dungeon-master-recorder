@@ -7,7 +7,7 @@ import {
   VoiceConnectionStatus,
   type VoiceConnection
 } from "@discordjs/voice";
-import { GuildMember } from "discord.js";
+import type { Client, GuildMember, VoiceState } from "discord.js";
 import { randomUUID } from "node:crypto";
 import { createWriteStream, promises as fs } from "node:fs";
 import path from "node:path";
@@ -51,6 +51,7 @@ interface ActiveRecording {
   guildId: string;
   sessionId: string;
   connection: VoiceConnection;
+  client: Client;
   participants: Map<string, ParticipantAudio>;
   currentlySpeaking: Map<string, { startMs: number; lastSpokeMs: number }>;
   mixer: NodeJS.Timeout;
@@ -61,6 +62,8 @@ interface ActiveRecording {
   silenceTimer: NodeJS.Timeout | null;
   onChunkReady: (chunk: Chunk, isLast: boolean) => Promise<void>;
   onAutoStop: () => Promise<void>;
+  voiceStateHandler: (oldState: VoiceState, newState: VoiceState) => void;
+  rotation: Promise<void>;
 }
 
 export interface StopResult {
@@ -77,17 +80,27 @@ class ParticipantAudio {
     private readonly opusStream: AudioReceiveStream,
     private readonly decoder: Transform
   ) {
-    this.opusStream.once("close", () => { this.active = false; });
-    this.opusStream.once("end", () => { this.active = false; });
-    this.opusStream.once("error", () => { this.active = false; });
-    this.decoder.once("error", () => { this.active = false; });
+    this.opusStream.once("close", () => {
+      this.active = false;
+    });
+    this.opusStream.once("end", () => {
+      this.active = false;
+    });
+    this.opusStream.once("error", () => {
+      this.active = false;
+    });
+    this.decoder.once("error", () => {
+      this.active = false;
+    });
     this.decoder.on("data", (chunk: Buffer) => {
       this.pending = Buffer.concat([this.pending, chunk]);
     });
     this.opusStream.pipe(this.decoder);
   }
 
-  public get isActive(): boolean { return this.active; }
+  public get isActive(): boolean {
+    return this.active;
+  }
 
   public readFrame(): Buffer | null {
     if (this.pending.length < FRAME_BYTES) return null;
@@ -104,9 +117,9 @@ class ParticipantAudio {
 
 export class VoiceRecorderService {
   private readonly recordings = new Map<string, ActiveRecording>();
+  private readonly startingGuilds = new Set<string>();
 
   public constructor(private readonly recordingsDir = DEFAULT_RECORDINGS_DIR) {}
-
 
   public async start(
     member: GuildMember,
@@ -117,39 +130,89 @@ export class VoiceRecorderService {
     const voiceChannel = voice.channel;
 
     if (!voiceChannel) throw new Error("USER_NOT_IN_VOICE_CHANNEL");
-    if (this.recordings.has(guild.id)) throw new Error("RECORDING_ALREADY_ACTIVE");
-
-    await fs.mkdir(this.recordingsDir, { recursive: true });
-
-    const sessionId = randomUUID();
-    const firstChunk = await this.createChunk(guild.id, sessionId, 0);
+    if (this.recordings.has(guild.id) || this.startingGuilds.has(guild.id)) {
+      throw new Error("RECORDING_ALREADY_ACTIVE");
+    }
+    this.startingGuilds.add(guild.id);
 
     const existingConnection = getVoiceConnection(guild.id);
     existingConnection?.destroy();
 
     console.log(`[RECORDER] Joining ${voiceChannel.id} in guild ${guild.id}`);
-    const connection = joinVoiceChannel({
-      channelId: voiceChannel.id,
-      guildId: guild.id,
-      adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
-      selfDeaf: false,
-      selfMute: false
-    });
+    let connection: VoiceConnection;
+    try {
+      connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: guild.id,
+        adapterCreator: voiceChannel.guild
+          .voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
+        selfDeaf: false,
+        selfMute: false
+      });
+    } catch (error) {
+      this.startingGuilds.delete(guild.id);
+      throw error;
+    }
+
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+    } catch (error) {
+      this.startingGuilds.delete(guild.id);
+      connection.destroy();
+      console.warn(`[RECORDER] Voice connection failed for guild ${guild.id}:`, error);
+      throw new Error("VOICE_CONNECTION_FAILED");
+    }
+
+    const sessionId = randomUUID();
+    let firstChunk: Chunk;
+    try {
+      await fs.mkdir(this.recordingsDir, { recursive: true });
+      firstChunk = await this.createChunk(guild.id, sessionId, 0);
+    } catch (error) {
+      this.startingGuilds.delete(guild.id);
+      connection.destroy();
+      throw error;
+    }
+
+    const voiceStateHandler = (oldState: VoiceState, newState: VoiceState) => {
+      if (oldState.guild.id !== guild.id) return;
+      if (newState.member?.user.bot) return;
+
+      const members = voiceChannel.members.filter((m) => !m.user.bot);
+      if (members.size === 0) {
+        console.log(
+          `[RECORDER] All users left voice channel in guild ${guild.id} — starting silence timer`
+        );
+        if (!recording.silenceTimer) {
+          recording.silenceTimer = setTimeout(() => {
+            console.log(`[RECORDER] Silence timeout — auto-stopping guild ${guild.id}`);
+            void onAutoStop();
+          }, SILENCE_BEFORE_STOP_MS);
+        }
+      }
+    };
 
     const recording: ActiveRecording = {
       guildId: guild.id,
       sessionId,
       connection,
+      client: guild.client,
       participants: new Map(),
       currentlySpeaking: new Map(),
       chunks: [firstChunk],
       currentChunk: firstChunk,
       onChunkReady,
       onAutoStop,
+      voiceStateHandler,
+      rotation: Promise.resolve(),
       silenceTimer: null,
       mixer: setInterval(() => this.writeMixedFrame(recording), FRAME_DURATION_MS),
       chunkTimer: setInterval(() => {
-        void this.rotateChunk(recording);
+        recording.rotation = recording.rotation
+          .then(() => this.rotateChunk(recording))
+          .catch((error) =>
+            console.error(`[RECORDER] Chunk rotation failed for ${guild.id}:`, error)
+          );
       }, CHUNK_INTERVAL_MS),
       maxTimer: setTimeout(() => {
         console.log(`[RECORDER] Max recording time reached for guild ${guild.id} — auto-stopping`);
@@ -168,33 +231,22 @@ export class VoiceRecorderService {
     });
 
     // Voice State: Auto-Stop wenn alle weg sind
-    guild.client.on("voiceStateUpdate", (oldState, newState) => {
-      if (oldState.guild.id !== guild.id) return;
-      if (newState.member?.user.bot) return;
-
-      const members = voiceChannel.members.filter(m => !m.user.bot);
-      if (members.size === 0) {
-        console.log(`[RECORDER] All users left voice channel in guild ${guild.id} — starting silence timer`);
-        if (!recording.silenceTimer) {
-          recording.silenceTimer = setTimeout(() => {
-            console.log(`[RECORDER] Silence timeout — auto-stopping guild ${guild.id}`);
-            void onAutoStop();
-          }, SILENCE_BEFORE_STOP_MS);
-        }
-      }
-    });
+    guild.client.on("voiceStateUpdate", voiceStateHandler);
 
     connection.on("stateChange", (_, newState) => {
       console.log(`[VOICE STATE] ${guild.id}: → ${newState.status}`);
     });
 
-    this.trackCurrentMembers(recording, voiceChannel.members, member.client.user.id);
     this.recordings.set(guild.id, recording);
+    this.startingGuilds.delete(guild.id);
+    try {
+      this.trackCurrentMembers(recording, voiceChannel.members, member.client.user.id);
+    } catch (error) {
+      await this.cancel(guild.id);
+      throw error;
+    }
     console.log(`[RECORDER] Session ${sessionId} started for guild ${guild.id}`);
-
-    void entersState(connection, VoiceConnectionStatus.Ready, 15_000)
-      .then(() => console.log(`[RECORDER] Voice ready for guild ${guild.id}`))
-      .catch((e) => console.warn(`[RECORDER] Voice ready timeout:`, e));
+    console.log(`[RECORDER] Voice ready for guild ${guild.id}`);
   }
 
   private async createChunk(guildId: string, sessionId: string, index: number): Promise<Chunk> {
@@ -202,7 +254,15 @@ export class VoiceRecorderService {
     const filePath = path.join(this.recordingsDir, filename);
     const output = createWriteStream(filePath);
     output.write(createWavHeader(0));
-    return { filename, filePath, output, pcmBytesWritten: 0, startedAt: new Date(), index, speakerLogs: [] };
+    return {
+      filename,
+      filePath,
+      output,
+      pcmBytesWritten: 0,
+      startedAt: new Date(),
+      index,
+      speakerLogs: []
+    };
   }
 
   private async rotateChunk(recording: ActiveRecording, isLast = false): Promise<void> {
@@ -240,7 +300,9 @@ export class VoiceRecorderService {
     const logFilePath = oldChunk.filePath.replace(".wav", ".speakers.json");
     await fs.writeFile(logFilePath, JSON.stringify(oldChunk.speakerLogs, null, 2), "utf8");
 
-    console.log(`[RECORDER] Chunk ${oldChunk.index} ready: ${oldChunk.filename} (${oldChunk.pcmBytesWritten} PCM bytes, ${oldChunk.speakerLogs.length} speech segments)`);
+    console.log(
+      `[RECORDER] Chunk ${oldChunk.index} ready: ${oldChunk.filename} (${oldChunk.pcmBytesWritten} PCM bytes, ${oldChunk.speakerLogs.length} speech segments)`
+    );
     await recording.onChunkReady(oldChunk, isLast);
   }
 
@@ -253,8 +315,12 @@ export class VoiceRecorderService {
     clearInterval(recording.chunkTimer);
     clearTimeout(recording.maxTimer);
     if (recording.silenceTimer) clearTimeout(recording.silenceTimer);
+    recording.client.off("voiceStateUpdate", recording.voiceStateHandler);
+    recording.connection.receiver.speaking.removeAllListeners();
 
-    console.log(`[RECORDER] Stopping recording for guild ${guildId} — ${recording.chunks.length} chunk(s) total`);
+    console.log(
+      `[RECORDER] Stopping recording for guild ${guildId} — ${recording.chunks.length} chunk(s) total`
+    );
 
     for (const participant of recording.participants.values()) {
       participant.stop();
@@ -262,13 +328,41 @@ export class VoiceRecorderService {
 
     recording.connection.destroy();
 
+    await recording.rotation;
+
     // Letzten Chunk finalisieren
     await this.rotateChunk(recording, true);
 
     return {
-      chunks: recording.chunks.map(c => ({ filename: c.filename, filePath: c.filePath, index: c.index })),
+      chunks: recording.chunks.map((c) => ({
+        filename: c.filename,
+        filePath: c.filePath,
+        index: c.index
+      })),
       participantIds: [...recording.participants.keys()]
     };
+  }
+
+  public async cancel(guildId: string): Promise<void> {
+    const recording = this.recordings.get(guildId);
+    if (!recording) return;
+    this.recordings.delete(guildId);
+    clearInterval(recording.mixer);
+    clearInterval(recording.chunkTimer);
+    clearTimeout(recording.maxTimer);
+    if (recording.silenceTimer) clearTimeout(recording.silenceTimer);
+    recording.client.off("voiceStateUpdate", recording.voiceStateHandler);
+    recording.connection.receiver.speaking.removeAllListeners();
+    for (const participant of recording.participants.values()) participant.stop();
+    recording.connection.destroy();
+    await recording.rotation;
+    await new Promise<void>((resolve) => recording.currentChunk.output.end(resolve));
+    await Promise.all(
+      recording.chunks.flatMap((chunk) => [
+        fs.unlink(chunk.filePath).catch(() => undefined),
+        fs.unlink(chunk.filePath.replace(".wav", ".speakers.json")).catch(() => undefined)
+      ])
+    );
   }
 
   public isRecording(guildId: string): boolean {
@@ -310,7 +404,8 @@ export class VoiceRecorderService {
   }
 
   private writeMixedFrame(recording: ActiveRecording): void {
-    const currentMs = (recording.currentChunk.pcmBytesWritten / (SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE)) * 1000;
+    const currentMs =
+      (recording.currentChunk.pcmBytesWritten / (SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE)) * 1000;
     const activeUsers = new Set<string>();
 
     const frames = [...recording.participants.entries()]
@@ -375,11 +470,18 @@ function mixFrames(frames: Buffer[]): Buffer {
 function createWavHeader(pcmBytes: number): Buffer {
   const h = Buffer.alloc(WAV_HEADER_BYTES);
   const byteRate = SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE;
-  h.write("RIFF", 0); h.writeUInt32LE(36 + pcmBytes, 4); h.write("WAVE", 8);
-  h.write("fmt ", 12); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20);
-  h.writeUInt16LE(CHANNELS, 22); h.writeUInt32LE(SAMPLE_RATE, 24);
-  h.writeUInt32LE(byteRate, 28); h.writeUInt16LE(CHANNELS * BYTES_PER_SAMPLE, 32);
-  h.writeUInt16LE(BYTES_PER_SAMPLE * 8, 34); h.write("data", 36);
+  h.write("RIFF", 0);
+  h.writeUInt32LE(36 + pcmBytes, 4);
+  h.write("WAVE", 8);
+  h.write("fmt ", 12);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20);
+  h.writeUInt16LE(CHANNELS, 22);
+  h.writeUInt32LE(SAMPLE_RATE, 24);
+  h.writeUInt32LE(byteRate, 28);
+  h.writeUInt16LE(CHANNELS * BYTES_PER_SAMPLE, 32);
+  h.writeUInt16LE(BYTES_PER_SAMPLE * 8, 34);
+  h.write("data", 36);
   h.writeUInt32LE(pcmBytes, 40);
   return h;
 }

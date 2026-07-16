@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { sessionCookie } from "../plugins/auth.js";
 
 const RegisterSchema = z.object({
   email: z.string().email(),
@@ -29,7 +30,10 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     const token = app.jwt.sign({ sub: user.id, email: user.email }, { expiresIn: "7d" });
-    return reply.status(201).send({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    reply.header("Set-Cookie", sessionCookie(token));
+    return reply
+      .status(201)
+      .send({ user: { id: user.id, email: user.email, displayName: user.displayName } });
   });
 
   // POST /auth/login
@@ -42,18 +46,29 @@ export async function authRoutes(app: FastifyInstance) {
 
     const valid = await bcrypt.compare(body.data.password, user.passwordHash);
     if (!valid) return reply.status(401).send({ error: "Invalid credentials" });
+    if (!user.isActive) return reply.status(403).send({ error: "Account is inactive" });
 
     const token = app.jwt.sign({ sub: user.id, email: user.email }, { expiresIn: "7d" });
-    return reply.send({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    reply.header("Set-Cookie", sessionCookie(token));
+    return reply.send({ user: { id: user.id, email: user.email, displayName: user.displayName } });
+  });
+
+  app.post("/auth/logout", async (_req, reply) => {
+    reply.header("Set-Cookie", sessionCookie("", true));
+    return reply.status(204).send();
   });
 
   // GET /auth/me  (protected)
-  app.get("/auth/me", { preHandler: [async (req, reply) => { await req.jwtVerify(); }] }, async (req, reply) => {
+  app.get("/auth/me", { preHandler: [app.authenticate] }, async (req, reply) => {
     const payload = req.user as { sub: string };
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
-        id: true, email: true, displayName: true, role: true, isActive: true,
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isActive: true,
         createdAt: true,
         memberships: {
           include: { group: { select: { id: true, name: true } } }

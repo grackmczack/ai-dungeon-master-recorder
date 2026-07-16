@@ -2,7 +2,7 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
-  role?: 'SUPER_ADMIN' | 'DM';
+  role?: "SUPER_ADMIN" | "DM";
   isActive?: boolean;
   hasAdminKeys?: boolean;
   adminKeyProvider?: string | null;
@@ -13,7 +13,7 @@ export interface GroupMembership {
   id: string;
   userId?: string | null;
   groupId: string;
-  role: 'GM' | 'PLAYER' | 'OBSERVER';
+  role: "GM" | "PLAYER" | "OBSERVER";
   discordName?: string;
   characterName?: string;
   partyRole?: string;
@@ -34,7 +34,7 @@ export interface Group {
   name: string;
   description?: string;
   discordGuildId?: string;
-  role?: 'GM' | 'PLAYER' | 'OBSERVER';
+  role?: "GM" | "PLAYER" | "OBSERVER";
   _count?: { campaigns: number; memberships: number };
   memberships?: GroupMembership[];
 }
@@ -58,7 +58,7 @@ export interface Session {
   title?: string;
   sessionNumber?: number;
   sessionImageUrl?: string;
-  status: 'RECORDING' | 'PROCESSING' | 'TRANSCRIBING' | 'SUMMARIZING' | 'DONE' | 'FAILED';
+  status: "RECORDING" | "PROCESSING" | "TRANSCRIBING" | "SUMMARIZING" | "DONE" | "FAILED";
   startedAt: string;
   stoppedAt?: string;
   updatedAt?: string;
@@ -82,7 +82,7 @@ export interface Transcript {
   // rawJson kann direkt { segments } sein oder { chunks: [{ segments, chunkIndex, durationSeconds }] }
   rawJson: {
     segments?: TranscriptSegment[];
-    chunks?: Array<{ segments: TranscriptSegment[]; chunkIndex: number; durationSeconds: number }>
+    chunks?: Array<{ segments: TranscriptSegment[]; chunkIndex: number; durationSeconds: number }>;
     language?: string;
     provider?: string;
   };
@@ -100,11 +100,11 @@ export interface TranscriptSegment {
 export interface Summary {
   id: string;
   narrative: string;
-  npcs: Array<{ name: string; description: string; firstMention: string }>
-  quests: Array<{ title: string; status: string; notes: string }>
-  loot: Array<{ item: string; foundBy: string }>
-  locations: Array<{ name: string; description: string }>
-  openThreads: string[]
+  npcs: Array<{ name: string; description: string; firstMention: string }>;
+  quests: Array<{ title: string; status: string; notes: string }>;
+  loot: Array<{ item: string; foundBy: string }>;
+  locations: Array<{ name: string; description: string }>;
+  openThreads: string[];
   model: string;
   provider: string;
 }

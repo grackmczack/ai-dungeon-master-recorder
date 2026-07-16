@@ -10,7 +10,7 @@ const CreateGroupSchema = z.object({
 
 export async function groupsRoutes(app: FastifyInstance) {
   // All routes require auth
-  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
+  app.addHook("preHandler", app.authenticate);
 
   // GET /groups — list groups for current user
   app.get("/groups", async (req, reply) => {
@@ -25,7 +25,7 @@ export async function groupsRoutes(app: FastifyInstance) {
         }
       }
     });
-    return reply.send(memberships.map(m => ({ ...m.group, role: m.role })));
+    return reply.send(memberships.map((m) => ({ ...m.group, role: m.role })));
   });
 
   // POST /groups — create group
@@ -48,7 +48,9 @@ export async function groupsRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const { sub } = req.user as { sub: string };
 
-    const membership = await prisma.groupMembership.findFirst({ where: { groupId: id, userId: sub, leftAt: null } });
+    const membership = await prisma.groupMembership.findFirst({
+      where: { groupId: id, userId: sub, leftAt: null }
+    });
     if (!membership) return reply.status(403).send({ error: "Not a member" });
 
     const group = await prisma.group.findUnique({
@@ -95,8 +97,7 @@ export async function groupsRoutes(app: FastifyInstance) {
               }
             }
           }
-        },
-        settings: true
+        }
       }
     });
     return reply.send(group);

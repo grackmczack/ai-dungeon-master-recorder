@@ -14,7 +14,7 @@ import { prisma } from "../db.js";
  * Summary-JSONs der Sessions liest.
  */
 
- /** Session-Summary Types */
+/** Session-Summary Types */
 interface SummaryNPC {
   name: string;
   description: string;
@@ -91,7 +91,7 @@ interface AggregatedWiki {
 }
 
 export async function wikiRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
+  app.addHook("preHandler", app.authenticate);
 
   /**
    * GET /wiki/:campaignId — Aggregiert alle Wiki-Daten aus Session-Summaries
@@ -123,7 +123,8 @@ export async function wikiRoutes(app: FastifyInstance) {
     });
 
     if (!campaign) return reply.status(404).send({ error: "Campaign not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!campaign.group.memberships.length)
+      return reply.status(403).send({ error: "Not a member" });
 
     // Lookup für Session-Nummern (auch Sessions ohne Summary), damit manuelle
     // Einträge korrekt mit first/lastSeenSessionNumber angereichert werden können.
@@ -135,13 +136,14 @@ export async function wikiRoutes(app: FastifyInstance) {
     for (const s of allSessions) sessionNumberMap.set(s.id, s.sessionNumber ?? null);
 
     // Manuelle Wiki-Einträge (source='manual') aus den DB-Tabellen laden
-    const [manualNpcs, manualQuests, manualLocations, manualThreads, manualLoots] = await Promise.all([
-      prisma.campaignNPC.findMany({ where: { campaignId, source: "manual" } }),
-      prisma.campaignQuest.findMany({ where: { campaignId, source: "manual" } }),
-      prisma.campaignLocation.findMany({ where: { campaignId, source: "manual" } }),
-      prisma.campaignThread.findMany({ where: { campaignId, source: "manual" } }),
-      prisma.campaignLoot.findMany({ where: { campaignId, source: "manual" } })
-    ]);
+    const [manualNpcs, manualQuests, manualLocations, manualThreads, manualLoots] =
+      await Promise.all([
+        prisma.campaignNPC.findMany({ where: { campaignId, source: "manual" } }),
+        prisma.campaignQuest.findMany({ where: { campaignId, source: "manual" } }),
+        prisma.campaignLocation.findMany({ where: { campaignId, source: "manual" } }),
+        prisma.campaignThread.findMany({ where: { campaignId, source: "manual" } }),
+        prisma.campaignLoot.findMany({ where: { campaignId, source: "manual" } })
+      ]);
 
     const wiki: AggregatedWiki = {
       npcs: [],
@@ -152,43 +154,52 @@ export async function wikiRoutes(app: FastifyInstance) {
     };
 
     // NPC-Aggregation mit Deduplizierung nach Name
-    const npcMap = new Map<string, {
-      id?: string;
-      name: string;
-      description: string;
-      status?: string;
-      firstSeenSessionId: string | null;
-      lastSeenSessionId: string | null;
-      firstSeenSessionNumber: number | null;
-      lastSeenSessionNumber: number | null;
-      sessionCount: number;
-      sessionIds?: string[];
-      source?: string;
-    }>();
+    const npcMap = new Map<
+      string,
+      {
+        id?: string;
+        name: string;
+        description: string;
+        status?: string;
+        firstSeenSessionId: string | null;
+        lastSeenSessionId: string | null;
+        firstSeenSessionNumber: number | null;
+        lastSeenSessionNumber: number | null;
+        sessionCount: number;
+        sessionIds?: string[];
+        source?: string;
+      }
+    >();
 
     // Quest-Aggregation
-    const questMap = new Map<string, {
-      id?: string;
-      title: string;
-      status: string;
-      description?: string;
-      notes: string;
-      firstSeenSessionId: string | null;
-      lastSeenSessionId: string | null;
-      allNotes: string[];
-      sessionIds?: string[];
-      source?: string;
-    }>();
+    const questMap = new Map<
+      string,
+      {
+        id?: string;
+        title: string;
+        status: string;
+        description?: string;
+        notes: string;
+        firstSeenSessionId: string | null;
+        lastSeenSessionId: string | null;
+        allNotes: string[];
+        sessionIds?: string[];
+        source?: string;
+      }
+    >();
 
     // Location-Aggregation
-    const locationMap = new Map<string, {
-      id?: string;
-      name: string;
-      description: string;
-      sessionCount: number;
-      sessionIds?: string[];
-      source?: string;
-    }>();
+    const locationMap = new Map<
+      string,
+      {
+        id?: string;
+        name: string;
+        description: string;
+        sessionCount: number;
+        sessionIds?: string[];
+        source?: string;
+      }
+    >();
 
     for (const session of campaign.sessions) {
       const summary = session.summary;
@@ -236,8 +247,16 @@ export async function wikiRoutes(app: FastifyInstance) {
         if (existing) {
           existing.lastSeenSessionId = session.id;
           // Status: späterer Status gewinnt (completed > active > discovered)
-          const statusPriority: Record<string, number> = { discovered: 1, active: 2, completed: 3, failed: 3 };
-          if ((statusPriority[quest.status?.toLowerCase()] ?? 0) > (statusPriority[existing.status?.toLowerCase()] ?? 0)) {
+          const statusPriority: Record<string, number> = {
+            discovered: 1,
+            active: 2,
+            completed: 3,
+            failed: 3
+          };
+          if (
+            (statusPriority[quest.status?.toLowerCase()] ?? 0) >
+            (statusPriority[existing.status?.toLowerCase()] ?? 0)
+          ) {
             existing.status = quest.status;
           }
           if (quest.notes && !existing.allNotes.includes(quest.notes)) {
@@ -336,8 +355,8 @@ export async function wikiRoutes(app: FastifyInstance) {
           status: m.status,
           firstSeenSessionId: firstId,
           lastSeenSessionId: lastId,
-          firstSeenSessionNumber: firstId ? sessionNumberMap.get(firstId) ?? null : null,
-          lastSeenSessionNumber: lastId ? sessionNumberMap.get(lastId) ?? null : null,
+          firstSeenSessionNumber: firstId ? (sessionNumberMap.get(firstId) ?? null) : null,
+          lastSeenSessionNumber: lastId ? (sessionNumberMap.get(lastId) ?? null) : null,
           sessionCount: m.sessionIds.length,
           sessionIds: m.sessionIds,
           source: "manual"
@@ -358,7 +377,9 @@ export async function wikiRoutes(app: FastifyInstance) {
         existing.sessionIds = m.sessionIds;
         existing.source = "manual";
       } else {
-        const sortedIds = [...m.sessionIds].sort((a, b) => (sessionNumberMap.get(a) ?? -1) - (sessionNumberMap.get(b) ?? -1));
+        const sortedIds = [...m.sessionIds].sort(
+          (a, b) => (sessionNumberMap.get(a) ?? -1) - (sessionNumberMap.get(b) ?? -1)
+        );
         const firstId = sortedIds[0] ?? null;
         const lastId = sortedIds[sortedIds.length - 1] ?? null;
         questMap.set(key, {
@@ -399,7 +420,9 @@ export async function wikiRoutes(app: FastifyInstance) {
     }
     // Threads
     for (const m of manualThreads) {
-      const sortedIds = [...m.sessionIds].sort((a, b) => (sessionNumberMap.get(a) ?? -1) - (sessionNumberMap.get(b) ?? -1));
+      const sortedIds = [...m.sessionIds].sort(
+        (a, b) => (sessionNumberMap.get(a) ?? -1) - (sessionNumberMap.get(b) ?? -1)
+      );
       const firstId = sortedIds[0] ?? null;
       wiki.threads.push({
         id: m.id,
@@ -407,14 +430,16 @@ export async function wikiRoutes(app: FastifyInstance) {
         description: m.description ?? undefined,
         status: m.status,
         sessionId: firstId,
-        sessionNumber: firstId ? sessionNumberMap.get(firstId) ?? null : null,
+        sessionNumber: firstId ? (sessionNumberMap.get(firstId) ?? null) : null,
         sessionIds: m.sessionIds,
         source: "manual"
       });
     }
     // Loot
     for (const m of manualLoots) {
-      const sortedIds = [...m.sessionIds].sort((a, b) => (sessionNumberMap.get(a) ?? -1) - (sessionNumberMap.get(b) ?? -1));
+      const sortedIds = [...m.sessionIds].sort(
+        (a, b) => (sessionNumberMap.get(a) ?? -1) - (sessionNumberMap.get(b) ?? -1)
+      );
       const firstId = sortedIds[0] ?? null;
       wiki.loot.push({
         id: m.id,
@@ -422,7 +447,7 @@ export async function wikiRoutes(app: FastifyInstance) {
         description: m.description ?? undefined,
         foundBy: "",
         sessionId: firstId,
-        sessionNumber: firstId ? sessionNumberMap.get(firstId) ?? null : null,
+        sessionNumber: firstId ? (sessionNumberMap.get(firstId) ?? null) : null,
         sessionIds: m.sessionIds,
         source: "manual"
       });
@@ -460,7 +485,8 @@ export async function wikiRoutes(app: FastifyInstance) {
     });
 
     if (!campaign) return reply.status(404).send({ error: "Campaign not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!campaign.group.memberships.length)
+      return reply.status(403).send({ error: "Not a member" });
 
     const sessionNumberMap = new Map<string, number | null>();
     const allSessions = await prisma.session.findMany({
@@ -500,7 +526,9 @@ export async function wikiRoutes(app: FastifyInstance) {
     }
 
     // Manuelle NSCs mergen (source='manual')
-    const manualNpcs = await prisma.campaignNPC.findMany({ where: { campaignId, source: "manual" } });
+    const manualNpcs = await prisma.campaignNPC.findMany({
+      where: { campaignId, source: "manual" }
+    });
     for (const m of manualNpcs) {
       const key = m.name.toLowerCase().trim();
       const existing = npcMap.get(key);
@@ -510,7 +538,9 @@ export async function wikiRoutes(app: FastifyInstance) {
           : (m.description ?? "");
         existing.source = "manual";
       } else {
-        const sortedIds = [...m.sessionIds].sort((a, b) => (sessionNumberMap.get(a) ?? -1) - (sessionNumberMap.get(b) ?? -1));
+        const sortedIds = [...m.sessionIds].sort(
+          (a, b) => (sessionNumberMap.get(a) ?? -1) - (sessionNumberMap.get(b) ?? -1)
+        );
         const firstId = sortedIds[0] ?? null;
         const lastId = sortedIds[sortedIds.length - 1] ?? null;
         npcMap.set(key, {
@@ -518,8 +548,8 @@ export async function wikiRoutes(app: FastifyInstance) {
           description: m.description ?? "",
           firstSeenSessionId: firstId,
           lastSeenSessionId: lastId,
-          firstSeenSessionNumber: firstId ? sessionNumberMap.get(firstId) ?? null : null,
-          lastSeenSessionNumber: lastId ? sessionNumberMap.get(lastId) ?? null : null,
+          firstSeenSessionNumber: firstId ? (sessionNumberMap.get(firstId) ?? null) : null,
+          lastSeenSessionNumber: lastId ? (sessionNumberMap.get(lastId) ?? null) : null,
           sessionCount: m.sessionIds.length,
           source: "manual"
         });

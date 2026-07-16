@@ -2,8 +2,10 @@ import type { FastifyInstance } from "fastify";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { safeStorageFilename, verifyImage } from "../lib/uploads.js";
 
 interface RawTranscriptSegment {
   speaker?: string;
@@ -27,16 +29,24 @@ function extractTranscriptSegments(rawJson: unknown): { speaker: string; text: s
 }
 
 const SESSION_IMAGE_DIR = path.resolve(process.cwd(), "..", "..", "storage", "session-images");
+const RECORDING_DIR = path.resolve(process.cwd(), "..", "..", "storage", "recordings");
 const ALLOWED_IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-const DEFAULT_IMAGE_MODEL = "black-forest-labs/flux-schnell";
 const DEFAULT_SESSION_IMAGE_MODEL = "qwen/qwen-image-edit-plus";
 
-function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function extractOutputUrl(output: unknown): string | null {
   if (typeof output === "string") return output.startsWith("http") ? output : null;
-  if (Array.isArray(output)) { for (const item of output) { const u = extractOutputUrl(item); if (u) return u; } return null; }
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      const u = extractOutputUrl(item);
+      if (u) return u;
+    }
+    return null;
+  }
   if (output && typeof output === "object") {
     const r = output as Record<string, unknown>;
     if (typeof r.url === "string") return r.url;
@@ -49,20 +59,26 @@ function extractOutputUrl(output: unknown): string | null {
 async function readErrorBody(res: Response) {
   const text = await res.text();
   if (!text) return "";
-  try { return JSON.stringify(JSON.parse(text)); } catch { return text; }
+  try {
+    return JSON.stringify(JSON.parse(text));
+  } catch {
+    return text;
+  }
 }
 
 /** Prüft ob User GM in der Kampagnen-Gruppe ist */
 async function isGm(campaignId: string, userId: string): Promise<boolean> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    include: { group: { include: { memberships: { where: { userId, role: "GM", leftAt: null } } } } }
+    include: {
+      group: { include: { memberships: { where: { userId, role: "GM", leftAt: null } } } }
+    }
   });
-  return !!(campaign?.group.memberships.length);
+  return !!campaign?.group.memberships.length;
 }
 
 export async function sessionsRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
+  app.addHook("preHandler", app.authenticate);
 
   // GET /sessions/:id — full session detail + campaign background for consistency
   app.get("/sessions/:id", async (req, reply) => {
@@ -85,13 +101,48 @@ export async function sessionsRoutes(app: FastifyInstance) {
     });
 
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!session.campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!session.campaign.group.memberships.length)
+      return reply.status(403).send({ error: "Not a member" });
 
     // Campaign-Hintergrundbild für seitenweiten Parallax mitgeben
     return reply.send({
       ...session,
       campaignBackgroundImageUrl: session.campaign.backgroundImageUrl
     });
+  });
+
+  // GET /sessions/:id/recordings/:recordingId — authenticated audio stream/download
+  app.get("/sessions/:id/recordings/:recordingId", async (req, reply) => {
+    const { id, recordingId } = req.params as { id: string; recordingId: string };
+    const { sub } = req.user as { sub: string };
+
+    const recording = await prisma.recording.findFirst({
+      where: { id: recordingId, sessionId: id },
+      include: {
+        session: {
+          include: {
+            campaign: {
+              include: {
+                group: { include: { memberships: { where: { userId: sub, leftAt: null } } } }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!recording) return reply.status(404).send({ error: "Recording not found" });
+    if (!recording.session.campaign.group.memberships.length) {
+      return reply.status(403).send({ error: "Not a member" });
+    }
+
+    const filename = safeStorageFilename(path.basename(recording.filename));
+    if (!filename) return reply.status(404).send({ error: "Recording not found" });
+
+    reply.header("Content-Type", recording.format === "wav" ? "audio/wav" : "audio/mpeg");
+    reply.header("Content-Disposition", `inline; filename="${filename}"`);
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(createReadStream(path.join(RECORDING_DIR, filename)));
   });
 
   // PATCH /sessions/:id — Titel manuell ändern
@@ -102,11 +153,16 @@ export async function sessionsRoutes(app: FastifyInstance) {
 
     const session = await prisma.session.findUnique({
       where: { id },
-      include: { campaign: { include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } } } }
+      include: {
+        campaign: {
+          include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+        }
+      }
     });
 
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!session.campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!session.campaign.group.memberships.length)
+      return reply.status(403).send({ error: "Not a member" });
 
     const updated = await prisma.session.update({ where: { id }, data: { title } });
     return reply.send({ id: updated.id, title: updated.title });
@@ -128,24 +184,31 @@ export async function sessionsRoutes(app: FastifyInstance) {
 
     const session = await prisma.session.findUnique({
       where: { id },
-      include: { campaign: { include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } } } }
+      include: {
+        campaign: {
+          include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+        }
+      }
     });
 
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!session.campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!session.campaign.group.memberships.length)
+      return reply.status(403).send({ error: "Not a member" });
 
-    await Promise.all(speakers.map(s =>
-      prisma.speakerMap.upsert({
-        where: { sessionId_discordUserId: { sessionId: id, discordUserId: s.discordUserId } },
-        update: {
-          characterName: s.characterName,
-          playerName: s.playerName,
-          discordName: s.discordName,
-          diarizationLabel: s.diarizationLabel
-        },
-        create: { sessionId: id, ...s }
-      })
-    ));
+    await Promise.all(
+      speakers.map((s) =>
+        prisma.speakerMap.upsert({
+          where: { sessionId_discordUserId: { sessionId: id, discordUserId: s.discordUserId } },
+          update: {
+            characterName: s.characterName,
+            playerName: s.playerName,
+            discordName: s.discordName,
+            diarizationLabel: s.diarizationLabel
+          },
+          create: { sessionId: id, ...s }
+        })
+      )
+    );
 
     return reply.send({ updated: speakers.length });
   });
@@ -158,13 +221,16 @@ export async function sessionsRoutes(app: FastifyInstance) {
     const session = await prisma.session.findUnique({
       where: { id },
       include: {
-        campaign: { include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } } },
+        campaign: {
+          include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+        },
         transcript: true
       }
     });
 
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!session.campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!session.campaign.group.memberships.length)
+      return reply.status(403).send({ error: "Not a member" });
 
     const allSegments = extractTranscriptSegments(session.transcript?.rawJson);
 
@@ -172,7 +238,11 @@ export async function sessionsRoutes(app: FastifyInstance) {
     for (const seg of allSegments) {
       const label = seg.speaker || "UNKNOWN";
       const entry = labels.get(label);
-      if (entry) { entry.count++; } else { labels.set(label, { count: 1, sample: seg.text.slice(0, 120) }); }
+      if (entry) {
+        entry.count++;
+      } else {
+        labels.set(label, { count: 1, sample: seg.text.slice(0, 120) });
+      }
     }
 
     return reply.send(Array.from(labels.entries()).map(([label, info]) => ({ label, ...info })));
@@ -185,15 +255,15 @@ export async function sessionsRoutes(app: FastifyInstance) {
 
     const session = await prisma.session.findUnique({ where: { id }, include: { campaign: true } });
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!(await isGm(session.campaignId, sub))) return reply.status(403).send({ error: "Only GMs can upload session images" });
+    if (!(await isGm(session.campaignId, sub)))
+      return reply.status(403).send({ error: "Only GMs can upload session images" });
 
     const data = await req.file({ limits: { fileSize: MAX_IMAGE_BYTES } });
     if (!data) return reply.status(400).send({ error: "No file uploaded" });
-    if (!ALLOWED_IMAGE_MIME.has(data.mimetype)) return reply.status(400).send({ error: "Only png/jpeg/webp allowed" });
-
     const buffer = await data.toBuffer();
-    const ext = path.extname(data.filename) || ".png";
-    const fileName = `${id}-${randomUUID()}${ext}`;
+    const image = verifyImage(buffer, ALLOWED_IMAGE_MIME);
+    if (!image) return reply.status(400).send({ error: "Only valid png/jpeg/webp images allowed" });
+    const fileName = `${id}-${randomUUID()}${image.extension}`;
 
     await mkdir(SESSION_IMAGE_DIR, { recursive: true });
     await writeFile(path.join(SESSION_IMAGE_DIR, fileName), buffer);
@@ -225,35 +295,37 @@ export async function sessionsRoutes(app: FastifyInstance) {
       }
     });
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!(await isGm(session.campaignId, sub))) return reply.status(403).send({ error: "Only GMs can generate session images" });
+    if (!(await isGm(session.campaignId, sub)))
+      return reply.status(403).send({ error: "Only GMs can generate session images" });
 
     const replicateApiKey = session.campaign.group.settings?.replicateApiKey?.trim();
-    if (!replicateApiKey) return reply.status(400).send({ error: "No Replicate API key configured" });
+    if (!replicateApiKey)
+      return reply.status(400).send({ error: "No Replicate API key configured" });
 
-    const imageGenModel = session.campaign.group.settings?.imageGenModel?.trim() || DEFAULT_IMAGE_MODEL;
-    const sessionImageProvider = session.campaign.group.settings?.sessionImageProvider?.trim() || "replicate";
-    const sessionImageModel = session.campaign.group.settings?.sessionImageModel?.trim() || DEFAULT_SESSION_IMAGE_MODEL;
+    const sessionImageModel =
+      session.campaign.group.settings?.sessionImageModel?.trim() || DEFAULT_SESSION_IMAGE_MODEL;
 
     // Prompt: Vom User explizit angegeben, oder den vorausgefüllten aus der Summary, oder Fallback
-    let prompt = body.data.prompt?.trim()
-      || session.summary?.sessionImagePrompt?.trim()
-      || "";
+    let prompt = body.data.prompt?.trim() || session.summary?.sessionImagePrompt?.trim() || "";
 
     if (!prompt) {
       // Fallback: Baue Prompt aus Session-Daten
-      const chars = session.speakerMaps.map(sm => sm.characterName || sm.discordName).filter(Boolean);
+      const chars = session.speakerMaps
+        .map((sm) => sm.characterName || sm.discordName)
+        .filter(Boolean);
       const charList = chars.length > 0 ? chars.slice(0, 5).join(", ") : "unknown adventurers";
-      prompt = `Epic fantasy illustration for D&D session "${session.title || `Session #${session.sessionNumber || '?'}`}". Characters: ${charList}. Cinematic scene, dramatic lighting, richly detailed tabletop RPG artwork.`;
+      prompt = `Epic fantasy illustration for D&D session "${session.title || `Session #${session.sessionNumber || "?"}`}". Characters: ${charList}. Cinematic scene, dramatic lighting, richly detailed tabletop RPG artwork.`;
     }
 
     // Für qwen-image-edit-plus: Charakter-Avatare als Referenzbilder übergeben
-    const isImageEditModel = sessionImageModel.includes("image-edit") || sessionImageModel.includes("qwen-image");
+    const isImageEditModel =
+      sessionImageModel.includes("image-edit") || sessionImageModel.includes("qwen-image");
     let inputPayload: Record<string, unknown> = { prompt };
 
     if (isImageEditModel && session.speakerMaps.length > 0) {
       // Hole GroupMemberships für die Charaktere in dieser Session
       const characterNames = session.speakerMaps
-        .map(sm => sm.characterName)
+        .map((sm) => sm.characterName)
         .filter(Boolean) as string[];
 
       const membersWithAvatars = await prisma.groupMembership.findMany({
@@ -267,8 +339,8 @@ export async function sessionsRoutes(app: FastifyInstance) {
       });
 
       const avatarUrls = membersWithAvatars
-        .filter(m => m.avatarUrl)
-        .map(m => {
+        .filter((m) => m.avatarUrl)
+        .map((m) => {
           // avatarUrl ist relativ (z.B. "/uploads/avatars/xxx.png")
           // Replicate braucht öffentlich erreichbare URLs
           const baseUrl = process.env.PUBLIC_BASE_URL ?? "https://dndbot.haffelpaff.de";
@@ -283,7 +355,9 @@ export async function sessionsRoutes(app: FastifyInstance) {
           output_format: "webp",
           go_fast: true
         };
-        console.log(`[generate-image] Using image-edit model with ${avatarUrls.length} avatar reference(s): ${avatarUrls.join(", ")}`);
+        console.log(
+          `[generate-image] Using image-edit model with ${avatarUrls.length} avatar reference(s): ${avatarUrls.join(", ")}`
+        );
       } else {
         // Keine Avatare gefunden — falle zurück auf reinen Text-Prompt
         console.log(`[generate-image] No avatar URLs found for characters, using text-only prompt`);
@@ -303,15 +377,28 @@ export async function sessionsRoutes(app: FastifyInstance) {
 
     if (!createRes.ok) {
       const details = await readErrorBody(createRes);
-      return reply.status(502).send({ error: `Replicate request failed: ${details || createRes.statusText}` });
+      return reply
+        .status(502)
+        .send({ error: `Replicate request failed: ${details || createRes.statusText}` });
     }
 
-    let prediction = (await createRes.json()) as { id: string; status: string; output?: unknown; error?: string | null; urls?: { get?: string } };
+    let prediction = (await createRes.json()) as {
+      id: string;
+      status: string;
+      output?: unknown;
+      error?: string | null;
+      urls?: { get?: string };
+    };
     let attempts = 0;
     const maxAttempts = 150;
 
-    while (prediction.status === "starting" || prediction.status === "processing" || prediction.status === "queued") {
-      if (attempts++ >= maxAttempts) return reply.status(504).send({ error: "Replicate prediction timed out" });
+    while (
+      prediction.status === "starting" ||
+      prediction.status === "processing" ||
+      prediction.status === "queued"
+    ) {
+      if (attempts++ >= maxAttempts)
+        return reply.status(504).send({ error: "Replicate prediction timed out" });
       await sleep(2000);
       const pollRes = await fetch(
         prediction.urls?.get ?? `https://api.replicate.com/v1/predictions/${prediction.id}`,
@@ -319,13 +406,19 @@ export async function sessionsRoutes(app: FastifyInstance) {
       );
       if (!pollRes.ok) {
         const details = await readErrorBody(pollRes);
-        return reply.status(502).send({ error: `Replicate polling failed: ${details || pollRes.statusText}` });
+        return reply
+          .status(502)
+          .send({ error: `Replicate polling failed: ${details || pollRes.statusText}` });
       }
       prediction = (await pollRes.json()) as typeof prediction;
     }
 
     if (prediction.status !== "succeeded") {
-      return reply.status(502).send({ error: prediction.error ? `Replicate failed: ${prediction.error}` : `Replicate status: ${prediction.status}` });
+      return reply.status(502).send({
+        error: prediction.error
+          ? `Replicate failed: ${prediction.error}`
+          : `Replicate status: ${prediction.status}`
+      });
     }
 
     const outputUrl = extractOutputUrl(prediction.output);
@@ -334,18 +427,23 @@ export async function sessionsRoutes(app: FastifyInstance) {
     const imageRes = await fetch(outputUrl);
     if (!imageRes.ok) {
       const details = await readErrorBody(imageRes);
-      return reply.status(502).send({ error: `Could not download image: ${details || imageRes.statusText}` });
+      return reply
+        .status(502)
+        .send({ error: `Could not download image: ${details || imageRes.statusText}` });
     }
 
     const buffer = Buffer.from(await imageRes.arrayBuffer());
-    const fileName = `${id}.webp`;
+    const image = verifyImage(buffer, ALLOWED_IMAGE_MIME);
+    if (!image) return reply.status(502).send({ error: "Replicate returned an invalid image" });
+    const fileName = `${id}${image.extension}`;
 
     await mkdir(SESSION_IMAGE_DIR, { recursive: true });
     await writeFile(path.join(SESSION_IMAGE_DIR, fileName), buffer);
 
     if (session.sessionImageUrl) {
       const oldFile = path.basename(session.sessionImageUrl);
-      if (oldFile !== fileName) await unlink(path.join(SESSION_IMAGE_DIR, oldFile)).catch(() => undefined);
+      if (oldFile !== fileName)
+        await unlink(path.join(SESSION_IMAGE_DIR, oldFile)).catch(() => undefined);
     }
 
     const sessionImageUrl = `/uploads/session-images/${fileName}`;
@@ -361,7 +459,8 @@ export async function sessionsRoutes(app: FastifyInstance) {
 
     const session = await prisma.session.findUnique({ where: { id }, include: { campaign: true } });
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!(await isGm(session.campaignId, sub))) return reply.status(403).send({ error: "Only GMs can remove session images" });
+    if (!(await isGm(session.campaignId, sub)))
+      return reply.status(403).send({ error: "Only GMs can remove session images" });
 
     if (session.sessionImageUrl) {
       const oldFile = path.basename(session.sessionImageUrl);

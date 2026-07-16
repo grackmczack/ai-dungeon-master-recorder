@@ -2,13 +2,23 @@
  * Interne API-Endpunkte — nur für Bot + Transcriber (nicht öffentlich).
  * Geschützt durch x-internal-token Header.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { prisma } from "../db.js";
 
-const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? "internal";
+const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN;
+if (process.env.NODE_ENV === "production" && !INTERNAL_TOKEN) {
+  throw new Error("INTERNAL_TOKEN is required in production");
+}
 
-function checkToken(req: any, reply: any) {
-  if (req.headers["x-internal-token"] !== INTERNAL_TOKEN) {
+function checkToken(req: FastifyRequest, reply: FastifyReply) {
+  const supplied = req.headers["x-internal-token"];
+  const expected = INTERNAL_TOKEN ?? "development-only-internal-token";
+  const valid =
+    typeof supplied === "string" &&
+    supplied.length === expected.length &&
+    timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+  if (!valid) {
     reply.status(401).send({ error: "Unauthorized" });
     return false;
   }
@@ -26,7 +36,11 @@ export async function internalRoutes(app: FastifyInstance) {
       filename: string;
       filePath: string;
       durationSeconds: number;
-      participants: Array<{ discordUserId: string; discordName: string; discordDisplayName?: string }>;
+      participants: Array<{
+        discordUserId: string;
+        discordName: string;
+        discordDisplayName?: string;
+      }>;
     };
 
     // Group finden oder anlegen
@@ -97,19 +111,22 @@ export async function internalRoutes(app: FastifyInstance) {
 
       const findMembership = (p: { discordName: string; discordDisplayName?: string }) => {
         // 1. exakt über discordName (Username, z.B. "veganrevlady")
-        let m = memberships.find(mm => mm.discordName && norm(mm.discordName) === norm(p.discordName));
+        let m = memberships.find(
+          (mm) => mm.discordName && norm(mm.discordName) === norm(p.discordName)
+        );
         // 2. Fallback: über discordDisplayName gegen membership.discordName ODER discordDisplayName
         if (!m && p.discordDisplayName) {
-          m = memberships.find(mm =>
-            (mm.discordName && norm(mm.discordName) === norm(p.discordDisplayName)) ||
-            (mm.discordDisplayName && norm(mm.discordDisplayName) === norm(p.discordDisplayName))
+          m = memberships.find(
+            (mm) =>
+              (mm.discordName && norm(mm.discordName) === norm(p.discordDisplayName)) ||
+              (mm.discordDisplayName && norm(mm.discordDisplayName) === norm(p.discordDisplayName))
           );
         }
         return m ?? null;
       };
 
       await prisma.speakerMap.createMany({
-        data: participants.map(p => {
+        data: participants.map((p) => {
           const m = findMembership(p);
           return {
             sessionId: session.id,
@@ -123,7 +140,9 @@ export async function internalRoutes(app: FastifyInstance) {
       });
     }
 
-    console.log(`[INTERNAL] Session ${session.id} (#${sessionNumber}) + Recording ${recording.id} angelegt`);
+    console.log(
+      `[INTERNAL] Session ${session.id} (#${sessionNumber}) + Recording ${recording.id} angelegt`
+    );
     return reply.status(201).send({ sessionId: session.id, recordingId: recording.id });
   });
 

@@ -13,8 +13,8 @@
     loading = true;
     error = '';
     try {
-      const { token, user } = await api.login(email, password);
-      auth.setAuth(token, user);
+      const { user } = await api.login(email, password);
+      auth.setAuth(user);
       goto('/dashboard');
     } catch (e: any) {
       error = e.error ?? 'Login fehlgeschlagen';
