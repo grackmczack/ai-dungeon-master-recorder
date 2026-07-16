@@ -69,7 +69,9 @@ await app.register(fastifyStatic, {
   decorateReply: false
 });
 
-await app.register(authPlugin);
+// Decorate the root instance so every subsequently registered route plugin
+// inherits the authentication hook through Fastify's encapsulation boundary.
+await authPlugin(app);
 
 // Routes
 await app.register(authRoutes);
