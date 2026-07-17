@@ -15,7 +15,7 @@ const SettingsSchema = z.object({
   llmEndpoint: z.string().optional().nullable(),
   llmSystemPrompt: z.string().optional().nullable(),
   llmCampaignContext: z.string().optional().nullable(),
-  summaryLanguage: z.enum(["de", "en"]).optional(),
+  summaryLanguage: z.literal("de").optional(),
   postSummaryChannelId: z.string().optional().nullable(),
   sessionImageProvider: z.enum(["replicate"]).optional().nullable(),
   sessionImageModel: z.string().optional().nullable()
@@ -55,6 +55,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
       return reply.send({
         ...masked,
+        summaryLanguage: "de",
         usingAdminKeys: !!adminGrant,
         adminKeyProviderId: adminGrant?.superAdminId ?? null
       });
@@ -82,6 +83,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     // Wenn der Key aus dem Frontend immer noch maskiert ankommt (z.B. "sk-ant-***"), speichern wir ihn nicht ab!
     // Dadurch wird der alte Key in der DB behalten, falls das Frontend nur andere Felder updated.
     const dataToUpdate = { ...body.data };
+    dataToUpdate.summaryLanguage = "de";
     if (dataToUpdate.whisperApiKey?.includes("***")) delete dataToUpdate.whisperApiKey;
     if (dataToUpdate.replicateApiKey?.includes("***")) delete dataToUpdate.replicateApiKey;
     if (dataToUpdate.huggingfaceToken?.includes("***")) delete dataToUpdate.huggingfaceToken;

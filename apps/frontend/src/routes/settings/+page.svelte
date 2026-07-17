@@ -98,7 +98,7 @@
     try {
       settings = await api.getSettings(selectedGroupId);
       usingAdminKeys = settings?.usingAdminKeys ?? false;
-      form = settings ? { ...settings } : {
+      form = settings ? { ...settings, summaryLanguage: 'de' } : {
         whisperProvider: 'openai',
         whisperApiKey: '',
         whisperEndpoint: '',
@@ -428,11 +428,9 @@
 
         <div class="space-y-2">
           <label for="summary-language" class="text-sm text-gray-400">Zusammenfassungssprache</label>
-          <select id="summary-language" bind:value={form.summaryLanguage}
-            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
-            <option value="de">Deutsch</option>
-            <option value="en">Englisch</option>
-          </select>
+          <input id="summary-language" value="Deutsch" readonly
+            class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-gray-300 cursor-not-allowed" />
+          <p class="text-xs text-gray-600">Zusammenfassungen werden immer auf Deutsch erstellt. Nur der getrennte Sessionbild-Prompt bleibt für die Bildgenerierung auf Englisch.</p>
         </div>
 
         <div class="space-y-2">

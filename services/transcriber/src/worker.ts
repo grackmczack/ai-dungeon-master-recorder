@@ -805,7 +805,9 @@ async function handleSummarization(
     apiKey: settings?.llmApiKey ?? process.env.ANTHROPIC_API_KEY,
     model: settings?.llmModel ?? "claude-opus-4-8",
     endpoint: settings?.llmEndpoint ?? undefined,
-    summaryLanguage: settings?.summaryLanguage === "en" ? "en" : "de"
+    // Session-Zusammenfassungen sind produktweit Deutsch. Der Bildprompt wird
+    // innerhalb des LLM-Prompts separat und ausdrücklich auf Englisch angefordert.
+    summaryLanguage: "de"
   };
 
   let campaignContext: string | undefined;

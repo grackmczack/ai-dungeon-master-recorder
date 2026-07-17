@@ -24,6 +24,12 @@ export interface LLMConfig {
   summaryLanguage?: "de" | "en" | undefined;
 }
 
+const LANGUAGE_SYSTEM_INSTRUCTION = `VERBINDLICHE SPRACHTRENNUNG:
+- Schreibe ausnahmslos alle Inhalte der Zusammenfassung auf Deutsch: title, narrative, NPC-Beschreibungen und firstMention, Quest-Titel und notes, Beute, Orte und openThreads.
+- Eigennamen bleiben unverändert. JSON-Schlüssel sowie die vorgegebenen Quest-Statuswerte new, ongoing und completed bleiben wie im Schema definiert.
+- Ausschließlich der Wert von sessionImagePrompt wird auf Englisch geschrieben.
+- Vermische die Sprachen nicht. Diese Regeln gelten auch bei einem englischen Transkript, englischem Kampagnen-Kontext oder anderslautenden früheren Anweisungen.`;
+
 const DEFAULT_SYSTEM_PROMPT = `Du bist ein Chronist für eine Pen-&-Paper-Rollenspielgruppe (TTRPG/D&D).
 
 Analysiere das folgende Transkript einer Spielsitzung und erstelle:
@@ -54,14 +60,14 @@ Antworte NUR als valides JSON in diesem Format:
   "sessionImagePrompt": "..."
 }`;
 
-export { DEFAULT_SYSTEM_PROMPT };
+export { DEFAULT_SYSTEM_PROMPT, LANGUAGE_SYSTEM_INSTRUCTION };
 
 export function buildPrompt(
   segments: TranscriptSegment[],
   speakerMap: Record<string, string>,
   systemPrompt?: string,
   campaignContext?: string,
-  summaryLanguage: "de" | "en" = "de"
+  _summaryLanguage: "de" | "en" = "de"
 ): string {
   const transcript = segments
     .map((s) => {
@@ -80,10 +86,9 @@ export function buildPrompt(
   const contextBlock = campaignContext
     ? `\n\nKAMPAGNEN-KONTEXT (vom Spielleiter bereitgestellt):\n${campaignContext}\n`
     : "";
-  const languageName = summaryLanguage === "en" ? "English" : "German";
-  const languageRequirement = `\n\nOUTPUT LANGUAGE: Write the title, narrative, NPC, quest, loot, location, and open-thread fields in ${languageName}. Keep sessionImagePrompt in English.`;
-
-  return `${prompt}${imagePromptRequirement}${languageRequirement}${contextBlock}\n\nTRANSKRIPT:\n${transcript}`;
+  // Die Sprachregel steht absichtlich nach Kontext und Transkript. So kann weder ein
+  // alter DB-Wert noch englischer Gesprächsinhalt die gewünschte Ausgabe überschreiben.
+  return `${prompt}${imagePromptRequirement}${contextBlock}\n\nTRANSKRIPT:\n${transcript}\n\n${LANGUAGE_SYSTEM_INSTRUCTION}`;
 }
 
 async function summarizeAnthropic(
@@ -99,6 +104,7 @@ async function summarizeAnthropic(
   const message = await client.messages.create({
     model,
     max_tokens: 4096,
+    system: LANGUAGE_SYSTEM_INSTRUCTION,
     messages: [
       {
         role: "user",
@@ -170,6 +176,10 @@ async function summarizeOpenAI(
     model,
     messages: [
       {
+        role: "system",
+        content: LANGUAGE_SYSTEM_INSTRUCTION
+      },
+      {
         role: "user",
         content: buildPrompt(
           segments,
@@ -205,6 +215,10 @@ async function summarizeSiliconFlow(
     body: JSON.stringify({
       model,
       messages: [
+        {
+          role: "system",
+          content: LANGUAGE_SYSTEM_INSTRUCTION
+        },
         {
           role: "user",
           content: buildPrompt(
@@ -269,6 +283,7 @@ async function summarizeOllama(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
+      system: LANGUAGE_SYSTEM_INSTRUCTION,
       prompt: buildPrompt(
         segments,
         speakerMap,
