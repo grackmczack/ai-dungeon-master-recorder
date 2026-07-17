@@ -24,7 +24,29 @@ export async function groupsRoutes(app: FastifyInstance) {
         }
       }
     });
-    return reply.send(memberships.map((m) => ({ ...m.group, role: m.role })));
+    const guildIds = memberships.flatMap((membership) =>
+      membership.group.discordGuildId ? [membership.group.discordGuildId] : []
+    );
+    const installations = await prisma.discordInstallation.findMany({
+      where: { discordGuildId: { in: guildIds } },
+      select: { discordGuildId: true, guildName: true, isActive: true }
+    });
+    const installationsByGuild = new Map(
+      installations.map((installation) => [installation.discordGuildId, installation])
+    );
+    return reply.send(
+      memberships.map((membership) => {
+        const installation = membership.group.discordGuildId
+          ? installationsByGuild.get(membership.group.discordGuildId)
+          : null;
+        return {
+          ...membership.group,
+          role: membership.role,
+          discordGuildName: installation?.guildName ?? null,
+          discordBotActive: installation?.isActive ?? false
+        };
+      })
+    );
   });
 
   // POST /groups — create group
@@ -99,7 +121,17 @@ export async function groupsRoutes(app: FastifyInstance) {
         }
       }
     });
-    return reply.send(group);
+    const installation = group?.discordGuildId
+      ? await prisma.discordInstallation.findUnique({
+          where: { discordGuildId: group.discordGuildId },
+          select: { guildName: true, isActive: true }
+        })
+      : null;
+    return reply.send({
+      ...group,
+      discordGuildName: installation?.guildName ?? null,
+      discordBotActive: installation?.isActive ?? false
+    });
   });
 
   // POST /groups/:id/members — handled by members.routes.ts

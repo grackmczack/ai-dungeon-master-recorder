@@ -328,15 +328,18 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | GET | `/admin/users` | Alle DMs auflisten |
 | POST | `/admin/users` | Neuen DM anlegen |
 | PATCH | `/admin/users/:id` | DM bearbeiten (Name, Email, aktiv/deaktiv) |
+| GET | `/admin/users/:id/deletion-impact` | Auswirkungen einer vollständigen Account-Löschung |
+| DELETE | `/admin/users/:id` | DM löschen; allein verwaltete Gruppen/Daten mitlöschen |
 | GET | `/admin/grants` | Alle aktiven Key-Grants |
 | POST | `/admin/users/:id/grant-keys` | Admin-API-Keys für DM freigeben |
 | DELETE | `/admin/users/:id/grant-keys` | Key-Grant entziehen |
 | GET | `/admin/overview` | DM-Übersicht mit Gruppen & Kampagnen |
 
 ### Multi-User & Admin-System
-- **SUPER_ADMIN** verwaltet alle DMs, kann Accounts anlegen/deaktivieren
-- **Key-Grant-System:** Super-Admin kann seine API-Keys an DMs verleihen (Checkbox im Admin-Panel). DM sieht in Settings: "🔑 Du nutzt die Admin-API-Keys". Transcriber löst automatisch die Admin-Settings auf.
-- Bei Revoke fällt der DM auf eigene Keys zurück
+- **SUPER_ADMIN** verwaltet alle DMs, kann Accounts anlegen, sperren, reaktivieren und endgültig löschen. Eine Sperre widerruft sofort alle Sessions, lässt die Daten aber bestehen.
+- **Vollständige Löschung:** Account, Grants und Memberships werden entfernt. Allein verwaltete Gruppen werden inklusive Kampagnen, Sessions, Aufnahmen und Uploads gelöscht; gemeinsame Gruppen bleiben erhalten.
+- **Key-Grant-System:** Der Superadmin kann vorhandene API-Key-Profile an DMs verleihen. Key, Provider, Modell und Endpoint werden atomar übernommen; Settings zeigen die verfügbaren Key-Typen sowie sechs Präfix-Zeichen zur Kontrolle.
+- Transcriber, Kampagnenbilder und Sessionbilder lösen Grants bei jeder neuen Operation auf. Nach einem Revoke fällt der DM sofort auf seine zuvor gespeicherten eigenen Keys zurück.
 - Datenmodell: `User.role` (SUPER_ADMIN|DM), `User.isActive`, `AdminApiKeyGrant`-Tabelle
 
 ---

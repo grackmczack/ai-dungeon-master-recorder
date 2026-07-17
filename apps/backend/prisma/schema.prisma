@@ -40,8 +40,8 @@ model AdminApiKeyGrant {
   grantedAt    DateTime  @default(now())
   revokedAt    DateTime?
 
-  superAdmin User @relation("GrantedBy", fields: [superAdminId], references: [id])
-  dm         User @relation("GrantedTo", fields: [dmId], references: [id])
+  superAdmin User @relation("GrantedBy", fields: [superAdminId], references: [id], onDelete: Cascade)
+  dm         User @relation("GrantedTo", fields: [dmId], references: [id], onDelete: Cascade)
 
   @@unique([superAdminId, dmId])
 }
@@ -109,8 +109,8 @@ model GroupMembership {
   pauseNote          String?
   notes              String?
 
-  user  User? @relation(fields: [userId], references: [id])
-  group Group @relation(fields: [groupId], references: [id])
+  user  User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 }
 
 enum Role {
@@ -132,7 +132,7 @@ model Campaign {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  group     Group              @relation(fields: [groupId], references: [id])
+  group     Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
   sessions  Session[]
   npcs      CampaignNPC[]
   quests    CampaignQuest[]
@@ -155,7 +155,7 @@ model Session {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  campaign        Campaign         @relation(fields: [campaignId], references: [id])
+  campaign        Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   recordings      Recording[]
   transcript      Transcript?
   summary         Summary?
@@ -187,7 +187,7 @@ model Recording {
   format          String   @default("mp3")
   createdAt       DateTime @default(now())
 
-  session Session @relation(fields: [sessionId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Transcript {
@@ -199,7 +199,7 @@ model Transcript {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  session Session @relation(fields: [sessionId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Summary {
@@ -217,7 +217,7 @@ model Summary {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  session Session @relation(fields: [sessionId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model SpeakerMap {
@@ -232,7 +232,7 @@ model SpeakerMap {
   // der DM ordnet hier manuell zu, welches Label zu welchem echten Teilnehmer gehört.
   diarizationLabel String?
 
-  session Session @relation(fields: [sessionId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, discordUserId])
   @@unique([sessionId, diarizationLabel])
@@ -258,7 +258,7 @@ model GroupSettings {
   llmSystemPrompt      String?
   llmCampaignContext   String?
 
-  group Group @relation(fields: [groupId], references: [id])
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 }
 
 // ─── Quest-Wiki ─────────────────────────────────────────────
@@ -271,14 +271,14 @@ model GroupSettings {
 model CampaignThread {
   id                  String       @id @default(cuid())
   campaignId          String
-  campaign            Campaign     @relation(fields: [campaignId], references: [id])
+  campaign            Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   title               String
   description         String?
   status              ThreadStatus @default(OPEN)
   openedInSessionId   String?
-  openedInSession     Session?     @relation("ThreadOpenedIn", fields: [openedInSessionId], references: [id])
+  openedInSession     Session?     @relation("ThreadOpenedIn", fields: [openedInSessionId], references: [id], onDelete: SetNull)
   resolvedInSessionId String?
-  resolvedInSession   Session?     @relation("ThreadResolvedIn", fields: [resolvedInSessionId], references: [id])
+  resolvedInSession   Session?     @relation("ThreadResolvedIn", fields: [resolvedInSessionId], references: [id], onDelete: SetNull)
   // Verknüpfte Fäden (z.B. ein Faden baut auf einem anderen auf)
   linkedThreadIds     String[]     @default([])
   // Sessions, in denen dieser Faden vorkommt
@@ -294,13 +294,13 @@ model CampaignThread {
 model CampaignNPC {
   id                 String    @id @default(cuid())
   campaignId         String
-  campaign           Campaign  @relation(fields: [campaignId], references: [id])
+  campaign           Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   name               String
   description        String?
   firstSeenSessionId String?
-  firstSeenSession   Session?  @relation("NPCFirstSeen", fields: [firstSeenSessionId], references: [id])
+  firstSeenSession   Session?  @relation("NPCFirstSeen", fields: [firstSeenSessionId], references: [id], onDelete: SetNull)
   lastSeenSessionId  String?
-  lastSeenSession    Session?  @relation("NPCLastSeen", fields: [lastSeenSessionId], references: [id])
+  lastSeenSession    Session?  @relation("NPCLastSeen", fields: [lastSeenSessionId], references: [id], onDelete: SetNull)
   status             NPCStatus @default(ACTIVE)
   // Sessions, in denen dieser NSC auftauchte
   sessionIds         String[]  @default([])
@@ -315,7 +315,7 @@ model CampaignNPC {
 model CampaignLocation {
   id          String   @id @default(cuid())
   campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   name        String
   description String?
   sessionIds  String[] @default([])
@@ -330,14 +330,14 @@ model CampaignLocation {
 model CampaignQuest {
   id                  String      @id @default(cuid())
   campaignId          String
-  campaign            Campaign    @relation(fields: [campaignId], references: [id])
+  campaign            Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   title               String
   description         String?
   status              QuestStatus @default(DISCOVERED)
   openedInSessionId   String?
-  openedInSession     Session?    @relation("QuestOpenedIn", fields: [openedInSessionId], references: [id])
+  openedInSession     Session?    @relation("QuestOpenedIn", fields: [openedInSessionId], references: [id], onDelete: SetNull)
   resolvedInSessionId String?
-  resolvedInSession   Session?    @relation("QuestResolvedIn", fields: [resolvedInSessionId], references: [id])
+  resolvedInSession   Session?    @relation("QuestResolvedIn", fields: [resolvedInSessionId], references: [id], onDelete: SetNull)
   rewardItems         String[]    @default([])
   sessionIds          String[]    @default([])
   source              String      @default("aggregated")
@@ -350,7 +350,7 @@ model CampaignQuest {
 model CampaignLoot {
   id          String   @id @default(cuid())
   campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   name        String
   description String?
   // Sessions, in denen diese Beute gefunden wurde

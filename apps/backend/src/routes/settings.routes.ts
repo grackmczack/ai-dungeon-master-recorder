@@ -1,6 +1,30 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import {
+  applyAdminKeyProfile,
+  getGrantedAdminKeyProfile,
+  stripGrantedFields
+} from "../lib/admin-api-keys.js";
+
+const DEFAULT_SETTINGS = {
+  whisperProvider: "openai",
+  whisperApiKey: null,
+  whisperEndpoint: null,
+  huggingfaceToken: null,
+  replicateApiKey: null,
+  imageGenModel: "black-forest-labs/flux-schnell",
+  sessionImageProvider: "replicate",
+  sessionImageModel: "qwen/qwen-image-edit-plus",
+  llmProvider: "anthropic",
+  llmApiKey: null,
+  llmModel: "claude-opus-4-8",
+  llmEndpoint: null,
+  llmSystemPrompt: null,
+  llmCampaignContext: null,
+  summaryLanguage: "de",
+  postSummaryChannelId: null
+};
 
 const SettingsSchema = z.object({
   whisperProvider: z.enum(["openai", "replicate", "selfhosted"]).optional(),
@@ -22,7 +46,9 @@ const SettingsSchema = z.object({
     .optional()
     .nullable(),
   sessionImageProvider: z.enum(["replicate"]).optional().nullable(),
-  sessionImageModel: z.string().optional().nullable()
+  sessionImageModel: z.string().optional().nullable(),
+  usingAdminKeys: z.boolean().optional(),
+  adminKeyProviderId: z.string().optional().nullable()
 });
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -40,34 +66,29 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     const settings = await prisma.groupSettings.findUnique({ where: { groupId } });
 
-    // Check if this DM has admin keys granted (by a SUPER_ADMIN)
-    const adminGrant = await prisma.adminApiKeyGrant.findFirst({
-      where: { dmId: sub, revokedAt: null },
-      select: { superAdminId: true }
-    });
+    const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
 
     const maskKey = (key: string | null) =>
       key ? (key.length > 6 ? `${key.substring(0, 6)}***` : "***") : null;
 
-    if (settings) {
-      // Build response based on whether we're using admin keys or own keys
-      const masked = { ...settings };
-      if (masked.whisperApiKey) masked.whisperApiKey = maskKey(masked.whisperApiKey);
-      if (masked.replicateApiKey) masked.replicateApiKey = maskKey(masked.replicateApiKey);
-      if (masked.huggingfaceToken) masked.huggingfaceToken = maskKey(masked.huggingfaceToken);
-      if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
-
-      return reply.send({
-        ...masked,
-        summaryLanguage: "de",
-        usingAdminKeys: !!adminGrant,
-        adminKeyProviderId: adminGrant?.superAdminId ?? null
-      });
-    }
-
+    const effective = applyAdminKeyProfile(settings ?? DEFAULT_SETTINGS, adminProfile);
+    const masked = { ...effective };
+    if (masked.whisperApiKey) masked.whisperApiKey = maskKey(masked.whisperApiKey);
+    if (masked.replicateApiKey) masked.replicateApiKey = maskKey(masked.replicateApiKey);
+    if (masked.huggingfaceToken) masked.huggingfaceToken = maskKey(masked.huggingfaceToken);
+    if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
     return reply.send({
-      usingAdminKeys: !!adminGrant,
-      adminKeyProviderId: adminGrant?.superAdminId ?? null
+      ...masked,
+      summaryLanguage: "de",
+      usingAdminKeys: !!adminProfile,
+      adminKeyProviderId: adminProfile?.superAdminId ?? null,
+      adminKeyProviderName: adminProfile?.superAdminName ?? null,
+      adminKeyAvailability: adminProfile?.availability ?? {
+        whisper: false,
+        replicate: false,
+        huggingface: false,
+        llm: false
+      }
     });
   });
 
@@ -86,12 +107,43 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     // Wenn der Key aus dem Frontend immer noch maskiert ankommt (z.B. "sk-ant-***"), speichern wir ihn nicht ab!
     // Dadurch wird der alte Key in der DB behalten, falls das Frontend nur andere Felder updated.
-    const dataToUpdate = { ...body.data };
+    const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
+    if (
+      body.data.usingAdminKeys &&
+      (!adminProfile || body.data.adminKeyProviderId !== adminProfile.superAdminId)
+    ) {
+      return reply.status(409).send({ error: "ADMIN_KEY_GRANT_CHANGED" });
+    }
+
+    const {
+      usingAdminKeys: _usingAdminKeys,
+      adminKeyProviderId: _adminKeyProviderId,
+      ...settingsData
+    } = body.data;
+    let dataToUpdate: Record<string, unknown> = { ...settingsData };
     dataToUpdate.summaryLanguage = "de";
-    if (dataToUpdate.whisperApiKey?.includes("***")) delete dataToUpdate.whisperApiKey;
-    if (dataToUpdate.replicateApiKey?.includes("***")) delete dataToUpdate.replicateApiKey;
-    if (dataToUpdate.huggingfaceToken?.includes("***")) delete dataToUpdate.huggingfaceToken;
-    if (dataToUpdate.llmApiKey?.includes("***")) delete dataToUpdate.llmApiKey;
+    if (
+      typeof dataToUpdate.whisperApiKey === "string" &&
+      dataToUpdate.whisperApiKey.includes("***")
+    )
+      delete dataToUpdate.whisperApiKey;
+    if (
+      typeof dataToUpdate.replicateApiKey === "string" &&
+      dataToUpdate.replicateApiKey.includes("***")
+    )
+      delete dataToUpdate.replicateApiKey;
+    if (
+      typeof dataToUpdate.huggingfaceToken === "string" &&
+      dataToUpdate.huggingfaceToken.includes("***")
+    )
+      delete dataToUpdate.huggingfaceToken;
+    if (typeof dataToUpdate.llmApiKey === "string" && dataToUpdate.llmApiKey.includes("***"))
+      delete dataToUpdate.llmApiKey;
+
+    // Freigegebene Credential-/Provider-Felder gehören dem Superadmin. Eigene
+    // bereits gespeicherte Werte des DMs bleiben unangetastet und greifen nach
+    // einem Entzug automatisch wieder.
+    dataToUpdate = stripGrantedFields(dataToUpdate, adminProfile);
 
     const settings = await prisma.groupSettings.upsert({
       where: { groupId },

@@ -12,6 +12,12 @@ import { postSummaryToDiscord } from "./discord-notify.js";
 import type { TranscriptionJobData, TranscriptSegment, BatchChunkMeta } from "./types.js";
 import { createChunkJobs } from "./batch.js";
 import { resolveSummaryChannelId } from "./summary-channel.js";
+import {
+  applyGrantedKeyProfile,
+  buildGrantedKeyProfile,
+  resolveLlmApiKey,
+  resolveWhisperApiKey
+} from "./api-key-resolution.js";
 
 const prisma = new PrismaClient();
 const connection = new IORedis({
@@ -31,56 +37,57 @@ async function getSettings(guildId: string) {
     include: {
       settings: true,
       memberships: {
-        where: { role: "GM", leftAt: null },
+        where: { role: "GM", leftAt: null, userId: { not: null } },
         select: { userId: true },
-        orderBy: { joinedAt: "asc" },
-        take: 1
+        orderBy: { joinedAt: "asc" }
       }
     }
   });
 
   const settings = group?.settings ?? null;
-  const dmUserId = group?.memberships[0]?.userId;
+  const dmUserIds = group?.memberships.flatMap((membership) =>
+    membership.userId ? [membership.userId] : []
+  );
 
-  if (dmUserId) {
-    const adminGrant = await prisma.adminApiKeyGrant.findFirst({
-      where: { dmId: dmUserId, revokedAt: null },
-      orderBy: { grantedAt: "desc" },
-      select: { superAdminId: true, superAdmin: { select: { role: true } } }
-    });
+  if (!dmUserIds?.length) return settings;
 
-    if (adminGrant && adminGrant.superAdmin.role === "SUPER_ADMIN") {
-      const adminSettings = await prisma.groupSettings.findFirst({
-        where: {
-          group: {
-            memberships: {
-              some: { userId: adminGrant.superAdminId, role: "GM", leftAt: null }
-            }
+  const grants = await prisma.adminApiKeyGrant.findMany({
+    where: {
+      dmId: { in: dmUserIds },
+      revokedAt: null,
+      dm: { isActive: true },
+      superAdmin: { role: "SUPER_ADMIN", isActive: true }
+    },
+    orderBy: { grantedAt: "desc" },
+    select: { dmId: true, superAdminId: true }
+  });
+
+  for (const grant of grants) {
+    const adminSettings = await prisma.groupSettings.findMany({
+      where: {
+        group: {
+          memberships: {
+            some: { userId: grant.superAdminId, role: "GM", leftAt: null }
           }
-        },
-        orderBy: { group: { createdAt: "asc" } },
-        select: {
-          whisperApiKey: true,
-          huggingfaceToken: true,
-          replicateApiKey: true,
-          llmApiKey: true
         }
-      });
-
-      if (adminSettings) {
-        console.log(
-          `[WORKER] 🔑 Using super-admin API keys for DM ${dmUserId} (granted by ${adminGrant.superAdminId})`
-        );
-        const sharedKeys = Object.fromEntries(
-          Object.entries(adminSettings).filter(
-            ([, value]) => typeof value === "string" && value.trim().length > 0
-          )
-        );
-        return { ...(settings ?? {}), ...sharedKeys };
+      },
+      orderBy: { group: { createdAt: "asc" } },
+      select: {
+        whisperProvider: true,
+        whisperApiKey: true,
+        whisperEndpoint: true,
+        huggingfaceToken: true,
+        replicateApiKey: true,
+        llmProvider: true,
+        llmApiKey: true,
+        llmModel: true,
+        llmEndpoint: true
       }
-      console.log(
-        `[WORKER] ⚠️ Admin key grant active but no super-admin settings found — using DM's own settings`
-      );
+    });
+    const profile = buildGrantedKeyProfile(adminSettings);
+    if (profile) {
+      console.log(`[WORKER] 🔑 Using complete super-admin credential profile for DM ${grant.dmId}`);
+      return applyGrantedKeyProfile(settings, profile);
     }
   }
 
@@ -493,7 +500,7 @@ async function handleBatchTranscription(
   // Transcribe concatenated MP3
   const whisperConfig: WhisperConfig = {
     provider: provider as WhisperConfig["provider"],
-    apiKey: settings?.whisperApiKey ?? process.env.REPLICATE_API_KEY,
+    apiKey: resolveWhisperApiKey(provider, settings),
     endpoint: settings?.whisperEndpoint ?? undefined,
     huggingfaceToken: settings?.huggingfaceToken ?? undefined
   };
@@ -574,7 +581,7 @@ async function handleSingleTranscription(
   // Transcribe
   const whisperConfig: WhisperConfig = {
     provider: (settings?.whisperProvider as WhisperConfig["provider"]) ?? "replicate",
-    apiKey: settings?.whisperApiKey ?? process.env.REPLICATE_API_KEY,
+    apiKey: resolveWhisperApiKey(settings?.whisperProvider ?? "replicate", settings),
     endpoint: settings?.whisperEndpoint ?? undefined,
     huggingfaceToken: settings?.huggingfaceToken ?? undefined
   };
@@ -816,7 +823,7 @@ async function handleSummarization(
 
   const llmConfig: LLMConfig = {
     provider: (settings?.llmProvider as LLMConfig["provider"]) ?? "anthropic",
-    apiKey: settings?.llmApiKey ?? process.env.ANTHROPIC_API_KEY,
+    apiKey: resolveLlmApiKey(settings?.llmProvider ?? "anthropic", settings),
     model: settings?.llmModel ?? "claude-opus-4-8",
     endpoint: settings?.llmEndpoint ?? undefined,
     // Session-Zusammenfassungen sind produktweit Deutsch. Der Bildprompt wird

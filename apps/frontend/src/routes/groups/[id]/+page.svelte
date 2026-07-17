@@ -363,9 +363,13 @@
         <h1 class="text-3xl font-bold text-white">{group.name}</h1>
         {#if group.description}<p class="text-gray-500 mt-1">{group.description}</p>{/if}
         {#if group.discordGuildId}
-          <p class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-400">
-            <span aria-hidden="true">●</span> Discord-Server verbunden
-          </p>
+          <div role="status" class="mt-3 inline-flex items-center gap-3 rounded-xl border px-3 py-2 {group.discordBotActive ? 'border-green-500/30 bg-green-500/10' : 'border-amber-500/30 bg-amber-500/10'}">
+            <span class="h-3 w-3 rounded-full {group.discordBotActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]' : 'bg-amber-500'}" aria-hidden="true"></span>
+            <span>
+              <span class="block text-xs {group.discordBotActive ? 'text-green-300' : 'text-amber-300'}">{group.discordBotActive ? 'Bot verbunden' : 'Bot derzeit nicht installiert'}</span>
+              <span class="block text-sm font-medium text-white">{group.discordGuildName ?? group.name}</span>
+            </span>
+          </div>
         {/if}
       </div>
       <div class="flex flex-col sm:flex-row gap-2">
@@ -392,12 +396,13 @@
               <li><span class="mr-2 text-brand-400">3.</span>Den privaten Link anklicken und diese Web-Gruppe auswählen.</li>
             </ol>
           </div>
-          <div class="flex shrink-0 flex-wrap gap-2">
+          <div class="flex shrink-0 flex-col items-start gap-1">
             {#if discordInviteUrl}
               <a href={discordInviteUrl} target="_blank" rel="noreferrer"
                 class="inline-flex min-h-11 items-center rounded-lg border border-brand-500/40 px-4 py-2 text-sm font-medium text-brand-300 hover:bg-brand-500/10 transition">
                 Bot einladen
               </a>
+              <p class="max-w-52 text-xs leading-relaxed text-gray-600">Danach als Server-Admin <code>/status</code> ausführen und den privaten Link öffnen.</p>
             {/if}
           </div>
         </div>

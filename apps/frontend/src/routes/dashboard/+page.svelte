@@ -7,6 +7,10 @@
   let loading = $state(true);
   let error = $state('');
   let discordInviteUrl = $state('');
+  let connectedGroups = $derived(groups.filter((group) => group.discordGuildId));
+  let discordConnectionHealthy = $derived(
+    connectedGroups.length > 0 && connectedGroups.every((group) => group.discordBotActive)
+  );
 
   onMount(async () => {
     api.getDiscordConfig()
@@ -31,11 +35,27 @@
       <p class="text-gray-500 mt-1">Wähle eine Spielgruppe oder erstelle eine neue</p>
     </div>
     <div class="flex flex-wrap gap-2">
-      {#if discordInviteUrl}
-        <a href={discordInviteUrl} target="_blank" rel="noreferrer"
-          class="border border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
-          <span aria-hidden="true">🤖</span> Bot einladen
-        </a>
+      {#if connectedGroups.length > 0}
+        <div role="status" class="flex min-h-12 items-center gap-3 rounded-xl border px-4 py-2 {discordConnectionHealthy ? 'border-green-500/30 bg-green-500/10' : 'border-amber-500/30 bg-amber-500/10'}">
+          <span class="relative flex h-3 w-3" aria-hidden="true">
+            {#if discordConnectionHealthy}<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-50"></span>{/if}
+            <span class="relative inline-flex h-3 w-3 rounded-full {discordConnectionHealthy ? 'bg-green-500' : 'bg-amber-500'}"></span>
+          </span>
+          <span>
+            <span class="block text-xs {discordConnectionHealthy ? 'text-green-300' : 'text-amber-300'}">{discordConnectionHealthy ? 'Discord verbunden' : 'Bot nicht aktiv'}</span>
+            <span class="block max-w-52 truncate text-sm font-medium text-white">
+              {connectedGroups.length === 1 ? (connectedGroups[0].discordGuildName ?? connectedGroups[0].name) : `${connectedGroups.length} Server`}
+            </span>
+          </span>
+        </div>
+      {:else if discordInviteUrl}
+        <div class="flex flex-col items-start">
+          <a href={discordInviteUrl} target="_blank" rel="noreferrer"
+            class="border border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
+            <span aria-hidden="true">🤖</span> Bot einladen
+          </a>
+          <span class="mt-1 px-1 text-xs text-gray-600">Danach in Discord <code>/status</code> ausführen</span>
+        </div>
       {/if}
       <a href="/groups/new"
         class="bg-brand-600 hover:bg-brand-500 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2">

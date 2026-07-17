@@ -6,6 +6,7 @@
   import { api } from '$lib/api.js';
   import { keyboardTabs } from '$lib/actions/tabs.js';
   import { toast } from '$lib/toast.js';
+  import { confirmAction } from '$lib/confirm.js';
   import type { User } from '$lib/types.js';
 
   let users: any[] = $state([]);
@@ -28,6 +29,7 @@
   // Request state per user
   let togglingKeys: Record<string, boolean> = $state({});
   let togglingStatus: Record<string, boolean> = $state({});
+  let deletingUsers: Record<string, boolean> = $state({});
 
   onMount(async () => {
     try {
@@ -87,7 +89,7 @@
       await loadAll();
       toast.success(hasKeys ? 'Admin-Keys wurden entzogen' : 'Admin-Keys wurden freigegeben');
     } catch (e: any) {
-      error = e.error ?? 'Fehler beim Ändern';
+      toast.error(e.error ?? 'Fehler beim Ändern');
     } finally {
       togglingKeys[userId] = false;
     }
@@ -100,9 +102,51 @@
       await loadAll();
       toast.success(isActive ? 'DM wurde deaktiviert' : 'DM wurde aktiviert');
     } catch (e: any) {
-      error = e.error ?? 'Fehler beim Ändern';
+      toast.error(e.error ?? 'Fehler beim Ändern');
     } finally {
       togglingStatus[userId] = false;
+    }
+  }
+
+  function availableKeyLabels(user: any): string {
+    const available = user.availableAdminKeys ?? {};
+    return [
+      available.whisper && 'Transkription',
+      available.replicate && 'Bilder',
+      available.llm && 'Zusammenfassung',
+      available.huggingface && 'HuggingFace'
+    ].filter(Boolean).join(', ');
+  }
+
+  async function deleteUser(user: any) {
+    deletingUsers[user.id] = true;
+    try {
+      const impact = await api.getAdminUserDeletionImpact(user.id);
+      if (impact.activeSessions > 0) {
+        toast.error(`Der Account hat noch ${impact.activeSessions} laufende oder zu verarbeitende Session(s). Warte bis zum Abschluss oder prüfe den Fehlerstatus.`);
+        return;
+      }
+      const groupText = impact.exclusiveGroups.length > 0
+        ? `${impact.exclusiveGroups.length} allein verwaltete Gruppe(n), ${impact.campaigns} Kampagne(n), ${impact.sessions} Session(s) und ${impact.recordings} Aufnahme(n) werden vollständig gelöscht.`
+        : 'Es werden keine gemeinsam genutzten Gruppen oder Sessions gelöscht.';
+      const sharedText = impact.sharedGroups.length > 0
+        ? ` Aus ${impact.sharedGroups.length} gemeinsam genutzten Gruppe(n) wird nur die Mitgliedschaft entfernt.`
+        : '';
+      const confirmed = await confirmAction({
+        title: `${user.displayName} endgültig löschen?`,
+        message: `Der Account, alle Grants und Login-Zuordnungen werden unwiderruflich gelöscht. ${groupText}${sharedText}`,
+        confirmLabel: 'Account endgültig löschen',
+        danger: true
+      });
+      if (!confirmed) return;
+
+      await api.deleteAdminUser(user.id);
+      await loadAll();
+      toast.success(`${user.displayName} und alle zugehörigen Daten wurden gelöscht`);
+    } catch (e: any) {
+      toast.error(e.error ?? 'Account konnte nicht gelöscht werden');
+    } finally {
+      deletingUsers[user.id] = false;
     }
   }
 
@@ -214,7 +258,7 @@
 
         <!-- DM List -->
         <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-x-auto">
-          <table class="w-full min-w-[760px] text-sm">
+          <table class="w-full min-w-[1050px] text-sm">
             <thead>
               <tr class="border-b border-surface-700">
                 <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">DM</th>
@@ -244,13 +288,14 @@
                     </span>
                   </td>
                   <td class="px-5 py-3 text-gray-400">
-                    {user.campaignCount ?? 0}
+                    {user.groupCount ?? 0} Gruppen · {user.campaignCount ?? 0} Kampagnen
                   </td>
                   <td class="px-5 py-3">
                     {#if user.hasAdminKeys}
                       <span class="text-xs px-2 py-1 rounded-full bg-brand-500/10 text-brand-400">
                         🔑 Admin-Keys aktiv (seit {formatDate(user.keyGrantedAt)})
                       </span>
+                      <p class="mt-1 text-xs text-gray-600">{availableKeyLabels(user) || 'Keine Admin-Keys konfiguriert'}</p>
                     {:else}
                       <span class="text-xs text-gray-600">Eigene Keys</span>
                     {/if}
@@ -258,8 +303,8 @@
                   <td class="px-5 py-3">
                     <div class="flex items-center justify-end gap-2">
                       <!-- Key-Grant Toggle -->
-                      <label class="flex min-h-11 items-center gap-2 cursor-pointer rounded-lg px-2" title="Admin-API-Keys für diesen DM freigeben">
-                        <span class="text-xs text-gray-500 select-none">🔑</span>
+                      <label class="flex min-h-11 items-center gap-2 cursor-pointer rounded-lg px-2 text-xs text-gray-400" title="Admin-API-Keys für diesen DM freigeben">
+                        <span class="select-none">🔑 Keys</span>
                         <div class="relative">
                           <input type="checkbox"
                             aria-label={`Admin-API-Keys für ${user.displayName} freigeben`}
@@ -273,19 +318,17 @@
                       </label>
 
                       <!-- Active Toggle -->
-                      <label class="flex min-h-11 items-center gap-2 cursor-pointer rounded-lg px-2" title="DM aktivieren/deaktivieren">
-                        <span class="text-xs text-gray-500 select-none">{user.isActive ? '🟢' : '🔴'}</span>
-                        <div class="relative">
-                          <input type="checkbox"
-                            aria-label={`${user.displayName} ${user.isActive ? 'deaktivieren' : 'aktivieren'}`}
-                            checked={user.isActive}
-                            onchange={() => toggleActive(user.id, user.isActive)}
-                            disabled={togglingStatus[user.id]}
-                            class="sr-only peer" />
-                          <div class="w-9 h-5 bg-red-500/30 peer-checked:bg-green-600 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-400 rounded-full transition-colors"></div>
-                          <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
-                        </div>
-                      </label>
+                      <button type="button" onclick={() => toggleActive(user.id, user.isActive)}
+                        disabled={togglingStatus[user.id]}
+                        class="min-h-11 rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-50 {user.isActive ? 'border-amber-500/30 text-amber-300 hover:bg-amber-500/10' : 'border-green-500/30 text-green-300 hover:bg-green-500/10'}">
+                        {user.isActive ? 'Account sperren' : 'Account aktivieren'}
+                      </button>
+
+                      <button type="button" onclick={() => deleteUser(user)}
+                        disabled={deletingUsers[user.id]}
+                        class="min-h-11 rounded-lg border border-red-500/30 px-3 py-2 text-xs font-medium text-red-300 hover:bg-red-500/10 transition disabled:opacity-50">
+                        Endgültig löschen
+                      </button>
                     </div>
                   </td>
                 </tr>

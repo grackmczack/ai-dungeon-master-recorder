@@ -8,6 +8,13 @@
   let selectedGroupId = $state('');
   let settings: any = $state(null);
   let usingAdminKeys = $state(false);
+  let adminKeyProviderName = $state('');
+  let adminKeyAvailability = $state({
+    whisper: false,
+    replicate: false,
+    huggingface: false,
+    llm: false
+  });
   let form: any = $state({});
   let loading = $state(true);
   let saving = $state(false);
@@ -98,6 +105,10 @@
     try {
       settings = await api.getSettings(selectedGroupId);
       usingAdminKeys = settings?.usingAdminKeys ?? false;
+      adminKeyProviderName = settings?.adminKeyProviderName ?? '';
+      adminKeyAvailability = settings?.adminKeyAvailability ?? {
+        whisper: false, replicate: false, huggingface: false, llm: false
+      };
       form = settings ? { ...settings, summaryLanguage: 'de' } : {
         whisperProvider: 'openai',
         whisperApiKey: '',
@@ -199,7 +210,16 @@
         <span class="text-2xl shrink-0">🔑</span>
         <div>
           <h3 class="font-semibold text-brand-400">Admin-API-Keys aktiv</h3>
-          <p class="text-sm text-gray-400 mt-1 leading-relaxed">Du nutzt die API-Keys des Super-Admins. Alle Kosten für Transkription, Zusammenfassung und Bildgenerierung werden über den Admin-Account abgerechnet. Die Felder unten sind schreibgeschützt — du brauchst keine eigenen Keys zu hinterlegen.</p>
+          <p class="text-sm text-gray-400 mt-1 leading-relaxed">
+            Du nutzt die freigegebenen Zugangsdaten{adminKeyProviderName ? ` von ${adminKeyProviderName}` : ''}.
+            Provider, Modell und Endpoint werden passend zum jeweiligen Key übernommen. Nicht freigegebene Felder kannst du weiterhin selbst konfigurieren.
+          </p>
+          <div class="mt-3 flex flex-wrap gap-2 text-xs">
+            <span class={adminKeyAvailability.whisper ? 'text-green-400' : 'text-gray-600'}>● Transkription</span>
+            <span class={adminKeyAvailability.replicate ? 'text-green-400' : 'text-gray-600'}>● Bildgenerierung</span>
+            <span class={adminKeyAvailability.llm ? 'text-green-400' : 'text-gray-600'}>● Zusammenfassung</span>
+            <span class={adminKeyAvailability.huggingface ? 'text-green-400' : 'text-gray-600'}>● HuggingFace</span>
+          </div>
         </div>
       </div>
     </div>
@@ -236,7 +256,7 @@
           <!-- Whisper/Transcription key — label changes with whisper provider -->
           <div class="space-y-2">
             <label for="whisper-api-key" class="text-sm text-gray-400">{whisperKeyLabel}</label>
-            <input id="whisper-api-key" bind:value={form.whisperApiKey} readonly={usingAdminKeys} type={isMaskedKey(form.whisperApiKey) ? 'text' : 'password'} autocomplete="new-password"
+            <input id="whisper-api-key" bind:value={form.whisperApiKey} readonly={adminKeyAvailability.whisper} type={isMaskedKey(form.whisperApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder={whisperKeyPlaceholder} />
             {#if form.whisperProvider === 'openai'}
@@ -251,7 +271,7 @@
           <!-- LLM key — label changes with LLM provider -->
           <div class="space-y-2">
             <label for="llm-api-key" class="text-sm text-gray-400">{llmKeyLabel}</label>
-            <input id="llm-api-key" bind:value={form.llmApiKey} readonly={usingAdminKeys} type={isMaskedKey(form.llmApiKey) ? 'text' : 'password'} autocomplete="new-password"
+            <input id="llm-api-key" bind:value={form.llmApiKey} readonly={adminKeyAvailability.llm} type={isMaskedKey(form.llmApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder={llmKeyPlaceholder} />
             <p class="text-xs text-gray-600">
@@ -263,7 +283,7 @@
           <!-- Replicate key -->
           <div class="space-y-2">
             <label for="replicate-api-key" class="text-sm text-gray-400">Replicate API Key</label>
-            <input id="replicate-api-key" bind:value={form.replicateApiKey} readonly={usingAdminKeys} type={isMaskedKey(form.replicateApiKey) ? 'text' : 'password'} autocomplete="new-password"
+            <input id="replicate-api-key" bind:value={form.replicateApiKey} readonly={adminKeyAvailability.replicate} type={isMaskedKey(form.replicateApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder="r8_..." />
             <p class="text-xs text-gray-600">Genutzt für Bildgenerierung (Hintergründe, Session-Bilder, NPC-Portraits). Wird auch für Replicate WhisperX verwendet falls als Whisper-Provider gewählt.</p>
@@ -272,7 +292,7 @@
           <!-- HuggingFace token -->
           <div class="space-y-2">
             <label for="huggingface-token" class="text-sm text-gray-400">HuggingFace Token</label>
-            <input id="huggingface-token" bind:value={form.huggingfaceToken} readonly={usingAdminKeys} type={isMaskedKey(form.huggingfaceToken) ? 'text' : 'password'} autocomplete="new-password"
+            <input id="huggingface-token" bind:value={form.huggingfaceToken} readonly={adminKeyAvailability.huggingface} type={isMaskedKey(form.huggingfaceToken) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder="hf_..." />
             <p class="text-xs text-gray-600">Genutzt für Speaker-Diarization via pyannote. Auf huggingface.co/settings/tokens erstellen.</p>
@@ -287,7 +307,7 @@
 
         <div class="space-y-2">
           <label for="whisper-provider" class="text-sm text-gray-400">Provider</label>
-          <select id="whisper-provider" bind:value={form.whisperProvider}
+          <select id="whisper-provider" bind:value={form.whisperProvider} disabled={adminKeyAvailability.whisper}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
             {#each WHISPER_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
           </select>
@@ -296,7 +316,7 @@
         {#if form.whisperProvider === 'selfhosted'}
           <div class="space-y-2">
             <label for="whisper-endpoint" class="text-sm text-gray-400">Endpoint URL</label>
-            <input id="whisper-endpoint" bind:value={form.whisperEndpoint}
+            <input id="whisper-endpoint" bind:value={form.whisperEndpoint} readonly={adminKeyAvailability.whisper}
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
               placeholder="http://your-server:9000/v1/audio/transcriptions" />
           </div>
@@ -397,7 +417,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="space-y-2">
             <label for="llm-provider" class="text-sm text-gray-400">Provider</label>
-            <select id="llm-provider" bind:value={form.llmProvider}
+            <select id="llm-provider" bind:value={form.llmProvider} disabled={adminKeyAvailability.llm}
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
               {#each LLM_PROVIDERS as p}<option value={p.value}>{p.label}</option>{/each}
             </select>
@@ -405,12 +425,12 @@
           <div class="space-y-2">
             <label for="llm-model" class="text-sm text-gray-400">Modell</label>
             {#if LLM_MODELS[form.llmProvider]?.length}
-              <select id="llm-model" bind:value={form.llmModel}
+              <select id="llm-model" bind:value={form.llmModel} disabled={adminKeyAvailability.llm}
                 class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500">
                 {#each LLM_MODELS[form.llmProvider] as m}<option value={m.value}>{m.label}</option>{/each}
               </select>
             {:else}
-              <input id="llm-model" bind:value={form.llmModel}
+              <input id="llm-model" bind:value={form.llmModel} readonly={adminKeyAvailability.llm}
                 class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-brand-500"
                 placeholder="Modellname" />
             {/if}
@@ -420,7 +440,7 @@
         {#if form.llmProvider === 'ollama' || form.llmProvider === 'siliconflow'}
           <div class="space-y-2">
             <label for="llm-endpoint" class="text-sm text-gray-400">Endpoint URL</label>
-            <input id="llm-endpoint" bind:value={form.llmEndpoint}
+            <input id="llm-endpoint" bind:value={form.llmEndpoint} readonly={adminKeyAvailability.llm}
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
               placeholder={form.llmProvider === 'ollama' ? 'http://localhost:11434/api/generate' : 'https://api.siliconflow.com/v1/chat/completions'} />
           </div>

@@ -22,10 +22,13 @@
   <div class="flex flex-wrap items-center gap-4 mb-10">
     <p class="text-sm text-gray-600">Wähle ein Thema aus der Sidebar oder dem Dropdown-Menü (mobil). Bei Fragen hilft dir der FAQ-Bereich weiter.</p>
     {#if discordInviteUrl}
-      <a href={discordInviteUrl} target="_blank" rel="noreferrer"
-        class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 transition">
-        🤖 Bot zu Discord hinzufügen
-      </a>
+      <div class="flex flex-col items-start">
+        <a href={discordInviteUrl} target="_blank" rel="noreferrer"
+          class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 transition">
+          🤖 Bot zu Discord hinzufügen
+        </a>
+        <span class="mt-1 text-xs text-gray-600">Danach als Server-Admin <code>/status</code> ausführen</span>
+      </div>
     {/if}
   </div>
 
@@ -102,6 +105,7 @@
   <li>✅ Nachrichten senden</li>
   <li>✅ Slash-Commands nutzen</li>
 </ul>
+<p>Nach dem Einladen als Server-Admin <code>/status</code> ausführen. Ist der Server noch nicht zugeordnet, erscheint ausschließlich für den Admin ein 15 Minuten gültiger Einmal-Link. Nach der Zuordnung zeigt das Web-Panel ein grünes Statuslicht und den erkannten Discord-Servernamen.</p>
 
 <h3>Bot-Befehle</h3>
 <div class="overflow-x-auto">
@@ -248,7 +252,37 @@
   <li><strong>Replicate WhisperX:</strong> Standard. API-Key von replicate.com. Erkennt verschiedene Sprecher (Diarization).</li>
   <li><strong>HuggingFace Token:</strong> Für Speaker-Diarization (pyannote-Modelle müssen auf hf.co akzeptiert sein).</li>
   <li><strong>OpenAI Whisper:</strong> Alternative, braucht OpenAI API-Key.</li>
-</ul>`
+</ul>
+
+<h3>Vom Superadmin freigegebene Keys</h3>
+<p>Ein aktiver Grant übernimmt den Key immer zusammen mit dem passenden Provider, Modell und Endpoint. In den Feldern bleiben die ersten sechs Zeichen sichtbar. Die Anzeige nennt getrennt, ob Transkription, Bildgenerierung, Zusammenfassung und HuggingFace tatsächlich freigegeben sind.</p>
+<p>Wird der Grant entzogen, gelten ab der nächsten Verarbeitung oder Bildanfrage wieder die zuvor gespeicherten eigenen Gruppen-Keys. Nicht freigegebene Key-Typen können DMs weiterhin selbst pflegen.</p>`
+    },
+    {
+      id: 'admin',
+      emoji: '🛡️',
+      title: 'Administration & Accounts',
+      content: `
+<h3>API-Keys freigeben und entziehen</h3>
+<p>Im Adminbereich unter „DMs“ schaltet „🔑 Keys“ die Freigabe für einen Account ein oder aus. Freigegeben werden nur Key-Typen, die beim Superadmin tatsächlich in den Einstellungen einer seiner Gruppen hinterlegt sind. Die Liste am DM zeigt den verfügbaren Umfang.</p>
+<ul>
+  <li><strong>Freigeben:</strong> Transcriber, Zusammenfassungen und beide Bildgeneratoren nutzen das vollständige Admin-Profil.</li>
+  <li><strong>Entziehen:</strong> Neue Vorgänge nutzen sofort wieder die eigenen Gruppen-Keys; laufende externe API-Aufrufe werden nicht nachträglich abgebrochen.</li>
+  <li><strong>Erneut freigeben:</strong> Ein zuvor entzogener Grant kann ohne neuen Account wieder aktiviert werden.</li>
+</ul>
+
+<h3>Account sperren oder aktivieren</h3>
+<p>„Account sperren“ beendet alle bestehenden Web-Sitzungen und verhindert sofort neue Logins sowie API-Zugriffe. Daten, Gruppen und Sessions bleiben vollständig erhalten. Über „Account aktivieren“ kann der Zugang später wieder freigeschaltet werden.</p>
+
+<h3>Account endgültig löschen</h3>
+<p>Vor dem Löschen zeigt ein Sicherheitsdialog die betroffenen Gruppen, Kampagnen, Sessions und Aufnahmen:</p>
+<ul>
+  <li>Account, Passwortdaten, Grants und alle Mitgliedschaften werden gelöscht.</li>
+  <li>Allein von diesem DM verwaltete Gruppen werden samt Kampagnen, Sessions, Aufnahmen und Uploads gelöscht.</li>
+  <li>Gemeinsam genutzte Gruppen bleiben bestehen; dort wird nur die Mitgliedschaft des gelöschten Accounts entfernt.</li>
+  <li>Solange eine Session noch aufgenommen oder verarbeitet wird, ist die Löschung zum Schutz laufender Jobs gesperrt.</li>
+</ul>
+<p><strong>Achtung:</strong> Die endgültige Löschung kann nicht rückgängig gemacht werden.</p>`
     },
     {
       id: 'faq',

@@ -5,6 +5,7 @@ import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { getGrantedAdminKeyProfile } from "../lib/admin-api-keys.js";
 import { safeStorageFilename, verifyImage } from "../lib/uploads.js";
 
 interface RawTranscriptSegment {
@@ -298,7 +299,10 @@ export async function sessionsRoutes(app: FastifyInstance) {
     if (!(await isGm(session.campaignId, sub)))
       return reply.status(403).send({ error: "Only GMs can generate session images" });
 
-    const replicateApiKey = session.campaign.group.settings?.replicateApiKey?.trim();
+    const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
+    const replicateApiKey =
+      adminProfile?.replicateApiKey?.trim() ??
+      session.campaign.group.settings?.replicateApiKey?.trim();
     if (!replicateApiKey)
       return reply.status(400).send({ error: "No Replicate API key configured" });
 

@@ -40,6 +40,12 @@ const ERROR_TRANSLATIONS: Record<string, string> = {
     "Der Verbindungslink ist ungültig oder abgelaufen. Fordere in Discord mit /status einen neuen an",
   DISCORD_SERVER_ALREADY_LINKED: "Dieser Discord-Server wurde bereits verbunden",
   TARGET_GROUP_NOT_AVAILABLE: "Die ausgewählte Gruppe kann nicht verbunden werden",
+  ADMIN_KEYS_NOT_CONFIGURED:
+    "Beim Superadmin sind noch keine verwendbaren API-Keys in den Gruppeneinstellungen hinterlegt",
+  ADMIN_KEY_GRANT_CHANGED:
+    "Die Admin-Key-Freigabe wurde zwischenzeitlich geändert. Lade die Einstellungen neu",
+  USER_HAS_ACTIVE_SESSIONS:
+    "Der Account hat noch laufende oder zu verarbeitende Sessions und kann derzeit nicht gelöscht werden",
   "Campaign not found": "Kampagne wurde nicht gefunden",
   "Session not found": "Session wurde nicht gefunden",
   "Member not found": "Mitglied wurde nicht gefunden",
@@ -419,6 +425,20 @@ export const api = {
     id: string,
     data: { displayName?: string; email?: string; isActive?: boolean }
   ) => request<any>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  getAdminUserDeletionImpact: (id: string) =>
+    request<{
+      userId: string;
+      displayName: string;
+      email: string;
+      exclusiveGroups: Array<{ id: string; name: string }>;
+      sharedGroups: Array<{ id: string; name: string }>;
+      campaigns: number;
+      sessions: number;
+      activeSessions: number;
+      recordings: number;
+      memberships: number;
+    }>(`/admin/users/${id}/deletion-impact`),
+  deleteAdminUser: (id: string) => request<any>(`/admin/users/${id}`, { method: "DELETE" }),
   grantAdminKeys: (userId: string) =>
     request<any>(`/admin/users/${userId}/grant-keys`, { method: "POST" }),
   revokeAdminKeys: (userId: string) =>

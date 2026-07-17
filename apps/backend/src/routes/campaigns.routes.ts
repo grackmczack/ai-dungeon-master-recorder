@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { getGrantedAdminKeyProfile } from "../lib/admin-api-keys.js";
 import { verifyImage } from "../lib/uploads.js";
 
 const BACKGROUND_DIR = path.resolve(process.cwd(), "..", "..", "storage", "campaign-backgrounds");
@@ -207,7 +208,9 @@ export async function campaignsRoutes(app: FastifyInstance) {
     const body = GenerateBackgroundSchema.safeParse(req.body ?? {});
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
 
-    const replicateApiKey = campaign.group.settings?.replicateApiKey?.trim();
+    const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
+    const replicateApiKey =
+      adminProfile?.replicateApiKey?.trim() ?? campaign.group.settings?.replicateApiKey?.trim();
     if (!replicateApiKey) {
       return reply.status(400).send({ error: "No Replicate API key configured for this group" });
     }

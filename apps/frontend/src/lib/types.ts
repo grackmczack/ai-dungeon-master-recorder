@@ -34,6 +34,8 @@ export interface Group {
   name: string;
   description?: string;
   discordGuildId?: string | null;
+  discordGuildName?: string | null;
+  discordBotActive?: boolean;
   role?: "GM" | "PLAYER" | "OBSERVER";
   _count?: { campaigns: number; memberships: number };
   memberships?: GroupMembership[];

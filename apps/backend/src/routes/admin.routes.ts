@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { getAdminKeyProfileForSuperAdmin } from "../lib/admin-api-keys.js";
+import { buildUserDeletionPlan, removeUserFiles } from "../lib/user-deletion.js";
 
 const CreateDMInput = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -42,6 +44,8 @@ export async function adminRoutes(app: FastifyInstance) {
 
   /** GET /admin/users — Alle DMs auflisten */
   app.get("/admin/users", async (req, reply) => {
+    const { sub: superAdminId } = req.user as { sub: string };
+    const adminProfile = await getAdminKeyProfileForSuperAdmin(prisma, superAdminId);
     const users = await prisma.user.findMany({
       where: { role: "DM" },
       select: {
@@ -51,7 +55,12 @@ export async function adminRoutes(app: FastifyInstance) {
         role: true,
         isActive: true,
         createdAt: true,
-        _count: { select: { memberships: true } },
+        memberships: {
+          where: { leftAt: null },
+          select: {
+            group: { select: { id: true, _count: { select: { campaigns: true } } } }
+          }
+        },
         // Aktive Key-Grants (nicht revoked)
         receivedKeys: {
           where: { revokedAt: null },
@@ -62,17 +71,32 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return reply.send(
-      users.map((u) => ({
-        id: u.id,
-        email: u.email,
-        displayName: u.displayName,
-        role: u.role,
-        isActive: u.isActive,
-        createdAt: u.createdAt,
-        campaignCount: u._count.memberships,
-        hasAdminKeys: u.receivedKeys.length > 0,
-        keyGrantedAt: u.receivedKeys[0]?.grantedAt ?? null
-      }))
+      users.map((u) => {
+        const groups = new Map(
+          u.memberships.map((membership) => [membership.group.id, membership.group])
+        );
+        return {
+          id: u.id,
+          email: u.email,
+          displayName: u.displayName,
+          role: u.role,
+          isActive: u.isActive,
+          createdAt: u.createdAt,
+          groupCount: groups.size,
+          campaignCount: Array.from(groups.values()).reduce(
+            (sum, group) => sum + group._count.campaigns,
+            0
+          ),
+          hasAdminKeys: u.receivedKeys.length > 0,
+          keyGrantedAt: u.receivedKeys[0]?.grantedAt ?? null,
+          availableAdminKeys: adminProfile?.availability ?? {
+            whisper: false,
+            replicate: false,
+            huggingface: false,
+            llm: false
+          }
+        };
+      })
     );
   });
 
@@ -132,6 +156,47 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
+  /** GET /admin/users/:id/deletion-impact — Auswirkungen vor dem Löschen */
+  app.get("/admin/users/:id/deletion-impact", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const plan = await prisma.$transaction((tx) => buildUserDeletionPlan(tx, id));
+    if (!plan) return reply.status(404).send({ error: "User not found" });
+    const { files: _files, ...impact } = plan;
+    return reply.send(impact);
+  });
+
+  /** DELETE /admin/users/:id — DM-Konto und allein verwaltete Daten löschen */
+  app.delete("/admin/users/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const plan = await prisma.$transaction(
+      async (tx) => {
+        const deletionPlan = await buildUserDeletionPlan(tx, id);
+        if (!deletionPlan) return null;
+        if (deletionPlan.activeSessions > 0) {
+          return { deleted: false as const, plan: deletionPlan };
+        }
+
+        if (deletionPlan.exclusiveGroups.length > 0) {
+          await tx.group.deleteMany({
+            where: { id: { in: deletionPlan.exclusiveGroups.map((group) => group.id) } }
+          });
+        }
+        // FK-Cascades entfernen Grants und sämtliche verbleibenden Memberships.
+        await tx.user.delete({ where: { id } });
+        return { deleted: true as const, plan: deletionPlan };
+      },
+      { isolationLevel: "Serializable" }
+    );
+    if (!plan) return reply.status(404).send({ error: "User not found" });
+    if (!plan.deleted) {
+      return reply.status(409).send({ error: "USER_HAS_ACTIVE_SESSIONS" });
+    }
+
+    const removedFiles = await removeUserFiles(plan.plan.files);
+    const { files: _files, ...impact } = plan.plan;
+    return reply.send({ deleted: true, removedFiles, ...impact });
+  });
+
   // ─── API-Key-Grants ─────────────────────────────────────────
 
   /** GET /admin/grants — Alle aktiven Grants anzeigen */
@@ -164,15 +229,17 @@ export async function adminRoutes(app: FastifyInstance) {
     const dm = await prisma.user.findUnique({ where: { id: dmId } });
     if (!dm || dm.role !== "DM") return reply.status(404).send({ error: "DM not found" });
 
-    // Prüfen ob bereits ein aktiver Grant existiert
-    const existing = await prisma.adminApiKeyGrant.findFirst({
-      where: { superAdminId, dmId, revokedAt: null }
-    });
-    if (existing) return reply.send({ message: "Keys already granted", grant: existing });
+    const adminProfile = await getAdminKeyProfileForSuperAdmin(prisma, superAdminId);
+    if (!adminProfile) {
+      return reply.status(400).send({ error: "ADMIN_KEYS_NOT_CONFIGURED" });
+    }
 
-    // Neuen Grant anlegen
-    const grant = await prisma.adminApiKeyGrant.create({
-      data: { superAdminId, dmId },
+    // Ein entzogener Grant wird über den eindeutigen Schlüssel reaktiviert,
+    // statt beim erneuten Freigeben an der Unique-Constraint zu scheitern.
+    const grant = await prisma.adminApiKeyGrant.upsert({
+      where: { superAdminId_dmId: { superAdminId, dmId } },
+      update: { revokedAt: null, grantedAt: new Date() },
+      create: { superAdminId, dmId },
       include: {
         dm: { select: { id: true, email: true, displayName: true } }
       }
@@ -183,7 +250,8 @@ export async function adminRoutes(app: FastifyInstance) {
       dmId: grant.dm.id,
       dmEmail: grant.dm.email,
       dmDisplayName: grant.dm.displayName,
-      grantedAt: grant.grantedAt
+      grantedAt: grant.grantedAt,
+      availableAdminKeys: adminProfile.availability
     });
   });
 
