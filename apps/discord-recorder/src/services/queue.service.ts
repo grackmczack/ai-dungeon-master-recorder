@@ -15,6 +15,9 @@ export interface TranscriptionJobData {
   filename: string;
   durationSeconds?: number;
   discordChannelId?: string;
+  // Interne Optionen für eine manuelle Summary-Neugenerierung.
+  summaryOnly?: boolean;
+  skipNotification?: boolean;
   // Per-chunk recording (legacy/OpenAI fallback)
   chunkIndex?: number;
   isLastChunk?: boolean;

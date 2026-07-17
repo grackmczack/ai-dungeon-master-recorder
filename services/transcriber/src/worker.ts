@@ -348,6 +348,19 @@ const worker = new Worker<TranscriptionJobData>(
     // Replicate: 100 MB file upload limit, plus whisperx handles "a couple 100 MB" files
 
     const session = await findSession(job.data);
+    if (job.data.summaryOnly) {
+      if (!session) throw new Error(`Session ${job.data.sessionId} not found for summarization`);
+      console.log(`[WORKER] Regenerating summary only for session ${session.id}`);
+      return await handleSummarization(
+        job,
+        session.id,
+        session,
+        settings,
+        guildId,
+        discordChannelId
+      );
+    }
+
     if (session) {
       await prisma.session.update({ where: { id: session.id }, data: { status: "TRANSCRIBING" } });
     }
@@ -868,7 +881,8 @@ async function handleSummarization(
   // Discord Notification
   const notifyChannelId = discordChannelId ?? settings?.postSummaryChannelId ?? null;
   const discordToken = process.env.DISCORD_TOKEN;
-  if (notifyChannelId && discordToken) {
+  const skipNotification = (job.data as TranscriptionJobData).skipNotification === true;
+  if (!skipNotification && notifyChannelId && discordToken) {
     await postSummaryToDiscord({
       channelId: notifyChannelId,
       token: discordToken,
@@ -876,6 +890,8 @@ async function handleSummarization(
       sessionNumber: session.sessionNumber ?? undefined,
       webPanelUrl: `https://dndbot.haffelpaff.de/sessions/${sessionId}`
     });
+  } else if (skipNotification) {
+    console.log(`[WORKER] Discord notification skipped for regenerated summary ${sessionId}`);
   }
 
   await job.updateProgress(100);
