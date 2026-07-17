@@ -6,13 +6,13 @@ export function createStopCommand(voiceRecorderService: VoiceRecorderService): D
   return {
     data: new SlashCommandBuilder()
       .setName("stop")
-      .setDescription("Stop the current recording session."),
+      .setDescription("Stoppt die aktuell laufende Session-Aufnahme."),
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       const guildId = interaction.guildId;
       if (!guildId) {
         await interaction.reply({
-          content: "This command can only be used in a Discord server.",
+          content: "Dieser Befehl kann nur auf einem Discord-Server verwendet werden.",
           ephemeral: true
         });
         return;

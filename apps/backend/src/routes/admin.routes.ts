@@ -252,4 +252,46 @@ export async function adminRoutes(app: FastifyInstance) {
       }))
     );
   });
+
+  /** GET /admin/installations — Discord-Server mit aktuellem Bot-Status */
+  app.get("/admin/installations", async (_req, reply) => {
+    const installations = await prisma.discordInstallation.findMany({
+      orderBy: [{ isActive: "desc" }, { lastSeenAt: "desc" }]
+    });
+    const groups = await prisma.group.findMany({
+      where: { discordGuildId: { in: installations.map((item) => item.discordGuildId) } },
+      select: {
+        id: true,
+        name: true,
+        discordGuildId: true,
+        settings: { select: { postSummaryChannelId: true } },
+        _count: { select: { campaigns: true, memberships: true } }
+      }
+    });
+    const groupsByGuild = new Map(groups.map((group) => [group.discordGuildId, group]));
+
+    return reply.send(
+      installations.map((installation) => {
+        const group = groupsByGuild.get(installation.discordGuildId);
+        return {
+          id: installation.id,
+          discordGuildId: installation.discordGuildId,
+          guildName: installation.guildName,
+          isActive: installation.isActive,
+          installedAt: installation.installedAt,
+          removedAt: installation.removedAt,
+          lastSeenAt: installation.lastSeenAt,
+          group: group
+            ? {
+                id: group.id,
+                name: group.name,
+                campaignCount: group._count.campaigns,
+                memberCount: group._count.memberships,
+                postSummaryChannelId: group.settings?.postSummaryChannelId ?? null
+              }
+            : null
+        };
+      })
+    );
+  });
 }

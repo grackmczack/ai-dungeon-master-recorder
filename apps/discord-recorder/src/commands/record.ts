@@ -8,12 +8,14 @@ export function createRecordCommand(
   chunkProcessor: ChunkProcessorService
 ): DiscordCommand {
   return {
-    data: new SlashCommandBuilder().setName("record").setDescription("Start a recording session."),
+    data: new SlashCommandBuilder()
+      .setName("record")
+      .setDescription("Startet die Aufnahme einer Session."),
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       if (!interaction.inCachedGuild() || !(interaction.member instanceof GuildMember)) {
         await interaction.reply({
-          content: "This command can only be used in a Discord server.",
+          content: "Dieser Befehl kann nur auf einem Discord-Server verwendet werden.",
           ephemeral: true
         });
         return;

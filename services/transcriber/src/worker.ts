@@ -11,6 +11,7 @@ import { generateSummary, type LLMConfig } from "./providers/llm.js";
 import { postSummaryToDiscord } from "./discord-notify.js";
 import type { TranscriptionJobData, TranscriptSegment, BatchChunkMeta } from "./types.js";
 import { createChunkJobs } from "./batch.js";
+import { resolveSummaryChannelId } from "./summary-channel.js";
 
 const prisma = new PrismaClient();
 const connection = new IORedis({
@@ -879,7 +880,7 @@ async function handleSummarization(
   }
 
   // Discord Notification
-  const notifyChannelId = discordChannelId ?? settings?.postSummaryChannelId ?? null;
+  const notifyChannelId = resolveSummaryChannelId(settings?.postSummaryChannelId, discordChannelId);
   const discordToken = process.env.DISCORD_TOKEN;
   const skipNotification = (job.data as TranscriptionJobData).skipNotification === true;
   if (!skipNotification && notifyChannelId && discordToken) {

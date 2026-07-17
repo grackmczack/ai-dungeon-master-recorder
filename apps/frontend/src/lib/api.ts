@@ -35,6 +35,7 @@ const ERROR_TRANSLATIONS: Record<string, string> = {
   "Account is inactive": "Konto ist deaktiviert",
   "Admin access required": "Für diese Seite werden Administratorrechte benötigt",
   "Email already registered": "E-Mail ist bereits registriert",
+  "Discord server already linked": "Dieser Discord-Server ist bereits mit einer Gruppe verknüpft",
   "Campaign not found": "Kampagne wurde nicht gefunden",
   "Session not found": "Session wurde nicht gefunden",
   "Member not found": "Mitglied wurde nicht gefunden",
@@ -109,6 +110,9 @@ async function download(path: string): Promise<Blob> {
 }
 
 export const api = {
+  getDiscordConfig: () =>
+    request<{ configured: boolean; inviteUrl: string | null }>("/public/discord"),
+
   // Auth
   login: (email: string, password: string) =>
     request<{ user: User }>("/auth/login", {
@@ -401,5 +405,6 @@ export const api = {
   revokeAdminKeys: (userId: string) =>
     request<any>(`/admin/users/${userId}/grant-keys`, { method: "DELETE" }),
   getAdminGrants: () => request<any[]>("/admin/grants"),
-  getAdminOverview: () => request<any[]>("/admin/overview")
+  getAdminOverview: () => request<any[]>("/admin/overview"),
+  getAdminInstallations: () => request<any[]>("/admin/installations")
 };

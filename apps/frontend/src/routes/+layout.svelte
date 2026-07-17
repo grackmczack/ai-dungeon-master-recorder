@@ -11,6 +11,7 @@
   let { children } = $props();
 
   const { user, loading } = auth;
+  let discordInviteUrl = $state('');
 
   const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/docs'];
 
@@ -19,6 +20,9 @@
   }
 
   onMount(async () => {
+    api.getDiscordConfig()
+      .then((config) => { discordInviteUrl = config.inviteUrl ?? ''; })
+      .catch(() => { discordInviteUrl = ''; });
     try {
       auth.setAuth(await api.me());
     } catch {
@@ -61,6 +65,13 @@
       {/if}
       <a href="/docs" aria-current={$page.url.pathname.startsWith('/docs') ? 'page' : undefined}
         class="text-sm text-gray-400 hover:text-white transition">Dokumentation</a>
+      {#if discordInviteUrl}
+        <a href={discordInviteUrl} target="_blank" rel="noreferrer"
+          aria-label="Discord-Bot zu einem Server hinzufügen"
+          class="text-sm text-brand-400 hover:text-brand-300 transition">
+          <span class="sm:hidden" aria-hidden="true">🤖+</span><span class="hidden sm:inline">Bot einladen</span>
+        </a>
+      {/if}
       {#if $user?.role === 'SUPER_ADMIN'}
         <a href="/admin" aria-current={$page.url.pathname.startsWith('/admin') ? 'page' : undefined}
           aria-label="Administration" class="text-sm text-brand-400 hover:text-brand-300 transition">

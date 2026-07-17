@@ -4,6 +4,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 import { prisma } from "../db.js";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN;
@@ -25,7 +26,123 @@ function checkToken(req: FastifyRequest, reply: FastifyReply) {
   return true;
 }
 
+const DiscordGuildIdSchema = z.string().regex(/^\d{17,20}$/);
+const GuildInstallationSchema = z.object({ guildName: z.string().trim().min(1).max(100) });
+const GuildInstallationsSchema = z.object({
+  guilds: z
+    .array(
+      z.object({
+        guildId: DiscordGuildIdSchema,
+        guildName: z.string().trim().min(1).max(100)
+      })
+    )
+    .max(10_000)
+});
+const PostChannelSchema = z.object({
+  guildName: z.string().trim().min(1).max(100),
+  channelId: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .nullable()
+});
+
+async function syncInstallation(guildId: string, guildName: string) {
+  return prisma.discordInstallation.upsert({
+    where: { discordGuildId: guildId },
+    update: {
+      guildName,
+      isActive: true,
+      removedAt: null,
+      lastSeenAt: new Date()
+    },
+    create: {
+      discordGuildId: guildId,
+      guildName,
+      isActive: true
+    }
+  });
+}
+
+async function findOrCreateGuildGroup(guildId: string, guildName: string) {
+  const group = await prisma.group.upsert({
+    where: { discordGuildId: guildId },
+    update: {},
+    create: {
+      name: guildName,
+      discordGuildId: guildId,
+      description: "Automatisch vom Discord-Bot angelegt"
+    }
+  });
+  return group;
+}
+
 export async function internalRoutes(app: FastifyInstance) {
+  // Guild-Lifecycle wird vom Bot bei Ready/Join/Leave synchronisiert.
+  app.put("/internal/discord/installations", async (req, reply) => {
+    if (!checkToken(req, reply)) return;
+    const body = GuildInstallationsSchema.safeParse(req.body);
+    if (!body.success) return reply.status(400).send({ error: "Invalid Discord guild list" });
+
+    const now = new Date();
+    const guildIds = body.data.guilds.map((guild) => guild.guildId);
+    await prisma.$transaction([
+      ...body.data.guilds.map((guild) =>
+        prisma.discordInstallation.upsert({
+          where: { discordGuildId: guild.guildId },
+          update: {
+            guildName: guild.guildName,
+            isActive: true,
+            removedAt: null,
+            lastSeenAt: now
+          },
+          create: {
+            discordGuildId: guild.guildId,
+            guildName: guild.guildName,
+            isActive: true,
+            lastSeenAt: now
+          }
+        })
+      ),
+      prisma.discordInstallation.updateMany({
+        where: {
+          isActive: true,
+          ...(guildIds.length > 0 ? { discordGuildId: { notIn: guildIds } } : {})
+        },
+        data: { isActive: false, removedAt: now, lastSeenAt: now }
+      })
+    ]);
+
+    return reply.send({ activeInstallations: guildIds.length });
+  });
+
+  app.put("/internal/discord/installations/:guildId", async (req, reply) => {
+    if (!checkToken(req, reply)) return;
+    const params = z.object({ guildId: DiscordGuildIdSchema }).safeParse(req.params);
+    const body = GuildInstallationSchema.safeParse(req.body);
+    if (!params.success || !body.success) {
+      return reply.status(400).send({ error: "Invalid Discord guild installation" });
+    }
+
+    const installation = await syncInstallation(params.data.guildId, body.data.guildName);
+    return reply.send({
+      discordGuildId: installation.discordGuildId,
+      guildName: installation.guildName,
+      isActive: installation.isActive
+    });
+  });
+
+  app.delete("/internal/discord/installations/:guildId", async (req, reply) => {
+    if (!checkToken(req, reply)) return;
+    const params = z.object({ guildId: DiscordGuildIdSchema }).safeParse(req.params);
+    if (!params.success) return reply.status(400).send({ error: "Invalid Discord guild id" });
+
+    await prisma.discordInstallation.updateMany({
+      where: { discordGuildId: params.data.guildId },
+      data: { isActive: false, removedAt: new Date(), lastSeenAt: new Date() }
+    });
+    return reply.status(204).send();
+  });
+
   // POST /internal/sessions — Bot legt Session + Recording an
   app.post("/internal/sessions", async (req, reply) => {
     if (!checkToken(req, reply)) return;
@@ -43,18 +160,9 @@ export async function internalRoutes(app: FastifyInstance) {
       }>;
     };
 
-    // Group finden oder anlegen
-    let group = await prisma.group.findFirst({ where: { discordGuildId: guildId } });
-    if (!group) {
-      group = await prisma.group.create({
-        data: {
-          name: guildName ?? `Discord Server ${guildId}`,
-          discordGuildId: guildId,
-          description: "Auto-created from Discord bot"
-        }
-      });
-      console.log(`[INTERNAL] Gruppe ${group.id} für Guild ${guildId} angelegt`);
-    }
+    const resolvedGuildName = guildName ?? `Discord Server ${guildId}`;
+    await syncInstallation(guildId, resolvedGuildName);
+    const group = await findOrCreateGuildGroup(guildId, resolvedGuildName);
 
     // Aktive Campaign finden oder anlegen
     let campaign = await prisma.campaign.findFirst({
@@ -155,5 +263,24 @@ export async function internalRoutes(app: FastifyInstance) {
       include: { settings: true }
     });
     return reply.send({ channelId: group?.settings?.postSummaryChannelId ?? null });
+  });
+
+  app.put("/internal/guild/:guildId/post-channel", async (req, reply) => {
+    if (!checkToken(req, reply)) return;
+    const params = z.object({ guildId: DiscordGuildIdSchema }).safeParse(req.params);
+    const body = PostChannelSchema.safeParse(req.body);
+    if (!params.success || !body.success) {
+      return reply.status(400).send({ error: "Invalid Discord summary channel" });
+    }
+
+    await syncInstallation(params.data.guildId, body.data.guildName);
+    const group = await findOrCreateGuildGroup(params.data.guildId, body.data.guildName);
+    const settings = await prisma.groupSettings.upsert({
+      where: { groupId: group.id },
+      update: { postSummaryChannelId: body.data.channelId },
+      create: { groupId: group.id, postSummaryChannelId: body.data.channelId }
+    });
+
+    return reply.send({ groupId: group.id, channelId: settings.postSummaryChannelId });
   });
 }

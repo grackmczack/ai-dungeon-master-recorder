@@ -6,8 +6,12 @@
   let groups: Group[] = $state([]);
   let loading = $state(true);
   let error = $state('');
+  let discordInviteUrl = $state('');
 
   onMount(async () => {
+    api.getDiscordConfig()
+      .then((config) => { discordInviteUrl = config.inviteUrl ?? ''; })
+      .catch(() => { discordInviteUrl = ''; });
     try {
       groups = await api.getGroups();
     } catch (e: any) {
@@ -26,10 +30,18 @@
       <h1 class="text-3xl font-bold text-white">Deine Gruppen</h1>
       <p class="text-gray-500 mt-1">Wähle eine Spielgruppe oder erstelle eine neue</p>
     </div>
-    <a href="/groups/new"
-      class="bg-brand-600 hover:bg-brand-500 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
-      <span>+</span> Neue Gruppe
-    </a>
+    <div class="flex flex-wrap gap-2">
+      {#if discordInviteUrl}
+        <a href={discordInviteUrl} target="_blank" rel="noreferrer"
+          class="border border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
+          <span aria-hidden="true">🤖</span> Bot einladen
+        </a>
+      {/if}
+      <a href="/groups/new"
+        class="bg-brand-600 hover:bg-brand-500 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
+        <span>+</span> Neue Gruppe
+      </a>
+    </div>
   </div>
 
   {#if loading}

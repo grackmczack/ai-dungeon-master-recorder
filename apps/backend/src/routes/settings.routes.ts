@@ -16,7 +16,11 @@ const SettingsSchema = z.object({
   llmSystemPrompt: z.string().optional().nullable(),
   llmCampaignContext: z.string().optional().nullable(),
   summaryLanguage: z.literal("de").optional(),
-  postSummaryChannelId: z.string().optional().nullable(),
+  postSummaryChannelId: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional()
+    .nullable(),
   sessionImageProvider: z.enum(["replicate"]).optional().nullable(),
   sessionImageModel: z.string().optional().nullable()
 });

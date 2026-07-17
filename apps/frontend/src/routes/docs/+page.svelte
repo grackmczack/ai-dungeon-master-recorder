@@ -1,5 +1,15 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { api } from '$lib/api.js';
+
   let activeSection = $state('basics');
+  let discordInviteUrl = $state('');
+
+  onMount(() => {
+    api.getDiscordConfig()
+      .then((config) => { discordInviteUrl = config.inviteUrl ?? ''; })
+      .catch(() => { discordInviteUrl = ''; });
+  });
 </script>
 
 <svelte:head>
@@ -9,7 +19,15 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <h1 class="text-3xl font-bold text-white mb-4">📖 Dokumentation</h1>
   <p class="text-gray-400 mb-2">Alles was du über den D&D Bot wissen musst — vom Start bis zur epischen Zusammenfassung</p>
-  <p class="text-sm text-gray-600 mb-10">Wähle ein Thema aus der Sidebar oder dem Dropdown-Menü (mobil). Bei Fragen hilft dir der FAQ-Bereich weiter.</p>
+  <div class="flex flex-wrap items-center gap-4 mb-10">
+    <p class="text-sm text-gray-600">Wähle ein Thema aus der Sidebar oder dem Dropdown-Menü (mobil). Bei Fragen hilft dir der FAQ-Bereich weiter.</p>
+    {#if discordInviteUrl}
+      <a href={discordInviteUrl} target="_blank" rel="noreferrer"
+        class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 transition">
+        🤖 Bot zu Discord hinzufügen
+      </a>
+    {/if}
+  </div>
 
   <div class="flex flex-col lg:flex-row gap-6 lg:gap-12 lg:border-l border-surface-600">
     <!-- Sidebar -->
@@ -65,7 +83,7 @@
 <ol>
   <li><strong>Bot einladen:</strong> Lade den Bot über den Einladungslink in deinen Discord-Server ein.</li>
   <li><strong>Account erstellen:</strong> Registriere dich im Web-Panel unter <code>/register</code> mit deiner E-Mail.</li>
-  <li><strong> Gruppe anlegen:</strong> Erstelle eine neue Gruppe für deine Spielrunde.</li>
+  <li><strong>Gruppe verknüpfen:</strong> Erstelle eine Gruppe und hinterlege die Discord-Server-ID, damit Sessions dem richtigen Mandanten zugeordnet werden.</li>
   <li><strong>Kampagne starten:</strong> Lege eine Kampagne innerhalb der Gruppe an.</li>
   <li><strong>Einstellungen konfigurieren:</strong> Trage deine API-Keys für Transkription (Replicate) und Zusammenfassung (Anthropic/Gemini/OpenAI/SiliconFlow/Ollama) ein.</li>
   <li><strong>Los geht's:</strong> Nutze <code>/record</code> in deinem Discord-Voice-Channel und der Bot startet die Aufnahme!</li>
@@ -92,6 +110,9 @@
     <tr><td><code>/record</code></td><td>Startet die Aufnahme im aktuellen Voice-Channel. Der Bot joint und beginnt die Aufnahme automatisch.</td></tr>
     <tr><td><code>/stop</code></td><td>Stoppt die Aufnahme, konvertiert das Audio zu MP3 und startet die Transkription.</td></tr>
     <tr><td><code>/status</code></td><td>Zeigt den aktuellen Status: ob gerade aufgenommen/transkribiert/summarized wird.</td></tr>
+    <tr><td><code>/summary-channel set</code></td><td>Legt den aktuellen oder ausgewählten Textkanal dauerhaft für fertige Zusammenfassungen fest.</td></tr>
+    <tr><td><code>/summary-channel status</code></td><td>Zeigt den aktuell festgelegten Summary-Kanal.</td></tr>
+    <tr><td><code>/summary-channel clear</code></td><td>Entfernt die feste Auswahl; danach wird wieder der Kanal von <code>/record</code> verwendet.</td></tr>
   </tbody>
 </table>
 </div>

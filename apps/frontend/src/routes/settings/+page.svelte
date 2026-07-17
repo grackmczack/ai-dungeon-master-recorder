@@ -434,10 +434,12 @@
         </div>
 
         <div class="space-y-2">
-          <label for="summary-channel" class="text-sm text-gray-400">Discord Channel ID für Summary-Posts</label>
+          <label for="summary-channel" class="text-sm text-gray-400">Fester Discord-Kanal für Zusammenfassungen</label>
           <input id="summary-channel" bind:value={form.postSummaryChannelId}
+            inputmode="numeric" pattern={'[0-9]{17,20}'}
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-500"
-            placeholder="Discord Channel ID" />
+            placeholder="Discord Channel ID, z. B. 1394755474263375902" />
+          <p class="text-xs text-gray-600">Dieser Kanal hat Vorrang vor dem Kanal, in dem <code>/record</code> gestartet wurde. Einfacher geht es direkt in Discord mit <code>/summary-channel set</code>.</p>
         </div>
 
         <div class="space-y-2">

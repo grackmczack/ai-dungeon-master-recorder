@@ -16,6 +16,7 @@ import { membersRoutes } from "./routes/members.routes.js";
 import { wikiRoutes } from "./routes/wiki.routes.js";
 import { wikiCrudRoutes } from "./routes/wiki-crud.routes.js";
 import { adminRoutes } from "./routes/admin.routes.js";
+import { publicRoutes } from "./routes/public.routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -75,6 +76,7 @@ await app.register(fastifyStatic, {
 await authPlugin(app);
 
 // Routes
+await app.register(publicRoutes);
 await app.register(authRoutes);
 await app.register(groupsRoutes);
 await app.register(sessionsRoutes);

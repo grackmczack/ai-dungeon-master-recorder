@@ -20,15 +20,27 @@ interface SessionRecord {
 }
 
 async function backendPost(path: string, body: unknown): Promise<unknown> {
+  return backendRequest(path, "POST", body);
+}
+
+async function backendRequest(
+  path: string,
+  method: "POST" | "PUT" | "DELETE",
+  body?: unknown
+): Promise<unknown> {
   const res = await fetch(`${BACKEND_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...internalHeaders() },
-    body: JSON.stringify(body)
+    method,
+    headers: {
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...internalHeaders()
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {})
   });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Backend ${path} failed: ${res.status} ${text}`);
   }
+  if (res.status === 204) return undefined;
   return res.json();
 }
 
@@ -71,14 +83,38 @@ export async function createSessionRecord(params: {
 }
 
 export async function getPostChannel(guildId: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/internal/guild/${guildId}/post-channel`, {
-      headers: internalHeaders()
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { channelId: string | null };
-    return data.channelId;
-  } catch {
-    return null;
+  const res = await fetch(`${BACKEND_URL}/internal/guild/${guildId}/post-channel`, {
+    headers: internalHeaders()
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Backend post-channel failed: ${res.status} ${text}`);
   }
+  const data = (await res.json()) as { channelId: string | null };
+  return data.channelId;
+}
+
+export async function setPostChannel(
+  guildId: string,
+  guildName: string,
+  channelId: string | null
+): Promise<void> {
+  await backendRequest(`/internal/guild/${guildId}/post-channel`, "PUT", {
+    guildName,
+    channelId
+  });
+}
+
+export async function syncDiscordInstallation(guildId: string, guildName: string): Promise<void> {
+  await backendRequest(`/internal/discord/installations/${guildId}`, "PUT", { guildName });
+}
+
+export async function syncDiscordInstallations(
+  guilds: Array<{ guildId: string; guildName: string }>
+): Promise<void> {
+  await backendRequest("/internal/discord/installations", "PUT", { guilds });
+}
+
+export async function markDiscordInstallationRemoved(guildId: string): Promise<void> {
+  await backendRequest(`/internal/discord/installations/${guildId}`, "DELETE");
 }

@@ -150,9 +150,17 @@ pnpm --filter @ai-dungeon-master-recorder/frontend dev
 
 1. [Discord Developer Portal](https://discord.com/developers/applications) → App öffnen
 2. **Bot** → Token kopieren (Reset Token)
-3. Privileged Gateway Intents aktivieren: **Presence**, **Server Members**, **Message Content**
-4. **OAuth2 → URL Generator**: Scopes `bot + applications.commands`, Permissions: Connect, Speak, Use Voice Activity, Send Messages
-5. Bot zum Server einladen
+3. **Installation** → Guild Install aktivieren und den Bot als **Public Bot** freigeben
+4. Default Install Scopes: `bot + applications.commands`
+5. Berechtigungen: View Channels, Send Messages, Embed Links, Connect, Speak, Use Voice Activity
+6. `DISCORD_CLIENT_ID` im Bot **und** Backend eintragen; das Web-Panel erzeugt daraus den Einladungslink
+
+Die Slash-Commands werden global registriert und funktionieren damit auf allen Servern, auf denen
+der Bot installiert ist. Optional kann `DISCORD_DEV_GUILD_ID` gesetzt werden, um Commands in einer
+Test-Guild sofort bereitzustellen, während Discord die globalen Commands verteilt.
+
+Ein fester Kanal für fertige Zusammenfassungen kann im Web-Panel oder direkt in Discord verwaltet
+werden: `/summary-channel set`, `/summary-channel status`, `/summary-channel clear`.
 
 ### Produktions-Deployment (Strato)
 
@@ -214,7 +222,7 @@ lassen (passiert automatisch beim nächsten Container-Neustart, oder manuell via
 ```env
 DISCORD_TOKEN=
 DISCORD_CLIENT_ID=
-DISCORD_GUILD_ID=
+DISCORD_DEV_GUILD_ID=     # optional: sofortige Command-Registrierung in einer Test-Guild
 REDIS_HOST=redis
 REDIS_PORT=6379
 DATABASE_URL=postgresql://...
@@ -238,6 +246,7 @@ SMTP_SECURE=false       # true für implizites TLS, meist Port 465
 SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM=DM Recorder <noreply@example.com>
+DISCORD_CLIENT_ID=        # identisch zur Discord-App; erzeugt den öffentlichen Invite-Link
 ```
 
 ### services/transcriber/.env

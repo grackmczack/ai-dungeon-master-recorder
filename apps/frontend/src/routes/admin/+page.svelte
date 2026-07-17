@@ -11,9 +11,10 @@
   let users: any[] = $state([]);
   let grants: any[] = $state([]);
   let overview: any[] = $state([]);
+  let installations: any[] = $state([]);
   let loading = $state(true);
   let error = $state('');
-  let activeTab: 'users' | 'grants' | 'overview' = $state('users');
+  let activeTab: 'users' | 'grants' | 'installations' | 'overview' = $state('users');
   let currentUser: User | null = $state(null);
 
   // Create DM form
@@ -45,14 +46,16 @@
   });
 
   async function loadAll() {
-    const [userList, grantList, overviewList] = await Promise.all([
+    const [userList, grantList, overviewList, installationList] = await Promise.all([
       api.getAdminUsers(),
       api.getAdminGrants(),
-      api.getAdminOverview()
+      api.getAdminOverview(),
+      api.getAdminInstallations()
     ]);
     users = userList;
     grants = grantList;
     overview = overviewList;
+    installations = installationList;
   }
 
   async function createDM() {
@@ -107,6 +110,10 @@
     return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
+  function formatDateTime(d: string | null) {
+    return d ? new Date(d).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  }
+
   function formatApiError(value: unknown, fallback: string): string {
     if (typeof value === 'string') return value;
     if (value && typeof value === 'object' && 'fieldErrors' in value) {
@@ -126,7 +133,7 @@
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-3xl font-bold text-white">Admin</h1>
-      <p class="text-gray-500 mt-1">DM-Verwaltung & API-Key-Grants</p>
+      <p class="text-gray-500 mt-1">DMs, API-Key-Grants und Discord-Server verwalten</p>
     </div>
     <a href="/dashboard" class="text-gray-500 hover:text-white text-sm transition">← Dashboard</a>
   </div>
@@ -152,6 +159,10 @@
       <button id="admin-tab-grants" role="tab" aria-selected={activeTab === 'grants'} aria-controls="admin-panel-grants" tabindex={activeTab === 'grants' ? 0 : -1} onclick={() => activeTab = 'grants'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === 'grants' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         🔑 Key-Grants ({grants.length})
+      </button>
+      <button id="admin-tab-installations" role="tab" aria-selected={activeTab === 'installations'} aria-controls="admin-panel-installations" tabindex={activeTab === 'installations' ? 0 : -1} onclick={() => activeTab = 'installations'}
+        class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {activeTab === 'installations' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
+        🤖 Server ({installations.filter((item) => item.isActive).length}/{installations.length})
       </button>
       <button id="admin-tab-overview" role="tab" aria-selected={activeTab === 'overview'} aria-controls="admin-panel-overview" tabindex={activeTab === 'overview' ? 0 : -1} onclick={() => activeTab = 'overview'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === 'overview' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
@@ -318,6 +329,51 @@
                   Keine aktiven Key-Grants
                 </td>
               </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+
+    {:else if activeTab === 'installations'}
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-x-auto">
+        <table class="w-full min-w-[920px] text-sm">
+          <thead>
+            <tr class="border-b border-surface-700">
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Discord-Server</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Bot-Status</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Verknüpfte Gruppe</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Summary-Kanal</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Zuletzt gesehen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each installations as installation (installation.id)}
+              <tr class="border-b border-surface-700 last:border-0 align-top">
+                <td class="px-5 py-4">
+                  <p class="font-medium text-white">{installation.guildName}</p>
+                  <p class="text-xs text-gray-500 font-mono mt-1">{installation.discordGuildId}</p>
+                </td>
+                <td class="px-5 py-4">
+                  <span class="text-xs px-2 py-1 rounded-full {installation.isActive ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}">
+                    {installation.isActive ? '● Installiert' : '○ Entfernt'}
+                  </span>
+                  <p class="text-xs text-gray-600 mt-2">Seit {formatDateTime(installation.installedAt)}</p>
+                </td>
+                <td class="px-5 py-4">
+                  {#if installation.group}
+                    <a href="/groups/{installation.group.id}" class="text-brand-400 hover:text-brand-300">{installation.group.name}</a>
+                    <p class="text-xs text-gray-600 mt-1">{installation.group.campaignCount} Kampagnen · {installation.group.memberCount} Mitglieder</p>
+                  {:else}
+                    <span class="text-gray-600 italic">Noch nicht verknüpft</span>
+                  {/if}
+                </td>
+                <td class="px-5 py-4 font-mono text-xs text-gray-400">
+                  {installation.group?.postSummaryChannelId ?? 'Nicht gesetzt'}
+                </td>
+                <td class="px-5 py-4 text-gray-400">{formatDateTime(installation.lastSeenAt)}</td>
+              </tr>
+            {:else}
+              <tr><td colspan="5" class="px-5 py-12 text-center text-gray-600">Noch keine Discord-Installationen erfasst</td></tr>
             {/each}
           </tbody>
         </table>

@@ -1,13 +1,14 @@
 import "dotenv/config";
 
 import { createRecordCommand } from "./commands/record.js";
-import { statusCommand } from "./commands/status.js";
+import { createStatusCommand } from "./commands/status.js";
+import { summaryChannelCommand } from "./commands/summary-channel.js";
 import { createStopCommand } from "./commands/stop.js";
 import { DiscordService } from "./services/discord.service.js";
 import { VoiceRecorderService } from "./services/voice-recorder.service.js";
 import { ChunkProcessorService } from "./services/chunk-processor.service.js";
 
-const requiredEnv = ["DISCORD_TOKEN", "DISCORD_CLIENT_ID", "DISCORD_GUILD_ID"] as const;
+const requiredEnv = ["DISCORD_TOKEN", "DISCORD_CLIENT_ID"] as const;
 type Env = Record<(typeof requiredEnv)[number], string>;
 
 function loadEnv(): Env {
@@ -15,8 +16,7 @@ function loadEnv(): Env {
   if (missing.length > 0) throw new Error(`Missing env vars: ${missing.join(", ")}`);
   return {
     DISCORD_TOKEN: process.env.DISCORD_TOKEN!,
-    DISCORD_CLIENT_ID: process.env.DISCORD_CLIENT_ID!,
-    DISCORD_GUILD_ID: process.env.DISCORD_GUILD_ID!
+    DISCORD_CLIENT_ID: process.env.DISCORD_CLIENT_ID!
   };
 }
 
@@ -27,11 +27,12 @@ const chunkProcessor = new ChunkProcessorService();
 const discordService = new DiscordService({
   token: env.DISCORD_TOKEN,
   clientId: env.DISCORD_CLIENT_ID,
-  guildId: env.DISCORD_GUILD_ID,
+  commandGuildId: process.env.DISCORD_GUILD_ID || process.env.DISCORD_DEV_GUILD_ID,
   commands: [
     createRecordCommand(voiceRecorderService, chunkProcessor),
     createStopCommand(voiceRecorderService),
-    statusCommand
+    createStatusCommand(voiceRecorderService),
+    summaryChannelCommand
   ]
 });
 
