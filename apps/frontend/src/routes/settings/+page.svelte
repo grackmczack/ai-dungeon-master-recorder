@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { beforeNavigate } from '$app/navigation';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
 
@@ -12,6 +13,9 @@
   let saving = $state(false);
   let saved = $state(false);
   let error = $state('');
+  let loadedGroupId = $state('');
+  let savedSnapshot = $state('');
+  let dirty = $derived(!!savedSnapshot && JSON.stringify(form) !== savedSnapshot);
 
   const WHISPER_PROVIDERS = [
     { value: 'openai', label: 'OpenAI Whisper' },
@@ -112,6 +116,8 @@
         summaryLanguage: 'de',
         postSummaryChannelId: ''
       };
+      savedSnapshot = JSON.stringify(form);
+      loadedGroupId = selectedGroupId;
     } catch {
       form = {
         whisperProvider: 'openai', whisperApiKey: '', whisperEndpoint: '',
@@ -122,6 +128,8 @@
         sessionImageProvider: 'replicate', sessionImageModel: 'qwen/qwen-image-edit-plus',
         summaryLanguage: 'de', postSummaryChannelId: ''
       };
+      savedSnapshot = JSON.stringify(form);
+      loadedGroupId = selectedGroupId;
     }
   }
 
@@ -147,6 +155,7 @@
       if (!payload.whisperEndpoint?.trim()) { payload.whisperEndpoint = null; }
       if (!payload.postSummaryChannelId?.trim()) { payload.postSummaryChannelId = null; }
       await api.updateSettings(selectedGroupId, payload);
+      savedSnapshot = JSON.stringify(form);
       saved = true;
       setTimeout(() => saved = false, 3000);
     } catch (e: any) {
@@ -157,11 +166,29 @@
   }
 
   function onGroupChange() {
+    if (dirty && !confirm('Ungespeicherte Änderungen verwerfen?')) {
+      selectedGroupId = loadedGroupId;
+      return;
+    }
     loadSettings();
+  }
+
+  beforeNavigate(({ cancel }) => {
+    if (dirty && !confirm('Ungespeicherte Änderungen verwerfen?')) cancel();
+  });
+
+  function warnBeforeUnload(event: BeforeUnloadEvent) {
+    if (!dirty) return;
+    event.preventDefault();
+    event.returnValue = '';
   }
 </script>
 
-<div class="max-w-3xl mx-auto px-6 py-10">
+<svelte:window onbeforeunload={warnBeforeUnload} />
+
+<svelte:head><title>Einstellungen — DM Recorder</title></svelte:head>
+
+<div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <a href="/dashboard" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-8 transition">← Dashboard</a>
   <h1 class="text-2xl font-bold text-white mb-2">Einstellungen</h1>
   <p class="text-gray-500 text-sm mb-8">API-Keys und Provider-Konfiguration pro Gruppe</p>
@@ -194,14 +221,14 @@
 
     <form onsubmit={save} class="space-y-8">
       {#if error}
-        <div class="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm">{error}</div>
+        <div role="alert" class="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       {/if}
       {#if saved}
-        <div class="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-400 text-sm">✅ Gespeichert</div>
+        <div role="status" class="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-200 text-sm">✅ Gespeichert</div>
       {/if}
 
       <!-- ─────────── API Keys ─────────── -->
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">🔑 API Keys</h2>
         <p class="text-xs text-gray-500">Zentrale Verwaltung aller API-Keys. Die Feature-Sektionen unten wählen nur noch Provider + Modell — der zugehörige Key wird automatisch aus dieser Sektion verwendet.</p>
 
@@ -209,7 +236,7 @@
           <!-- Whisper/Transcription key — label changes with whisper provider -->
           <div class="space-y-2">
             <label for="whisper-api-key" class="text-sm text-gray-400">{whisperKeyLabel}</label>
-            <input id="whisper-api-key" bind:value={form.whisperApiKey} type={isMaskedKey(form.whisperApiKey) ? 'text' : 'password'} autocomplete="new-password"
+            <input id="whisper-api-key" bind:value={form.whisperApiKey} readonly={usingAdminKeys} type={isMaskedKey(form.whisperApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder={whisperKeyPlaceholder} />
             {#if form.whisperProvider === 'openai'}
@@ -224,7 +251,7 @@
           <!-- LLM key — label changes with LLM provider -->
           <div class="space-y-2">
             <label for="llm-api-key" class="text-sm text-gray-400">{llmKeyLabel}</label>
-            <input id="llm-api-key" bind:value={form.llmApiKey} type={isMaskedKey(form.llmApiKey) ? 'text' : 'password'} autocomplete="new-password"
+            <input id="llm-api-key" bind:value={form.llmApiKey} readonly={usingAdminKeys} type={isMaskedKey(form.llmApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder={llmKeyPlaceholder} />
             <p class="text-xs text-gray-600">
@@ -236,7 +263,7 @@
           <!-- Replicate key -->
           <div class="space-y-2">
             <label for="replicate-api-key" class="text-sm text-gray-400">Replicate API Key</label>
-            <input id="replicate-api-key" bind:value={form.replicateApiKey} type={isMaskedKey(form.replicateApiKey) ? 'text' : 'password'} autocomplete="new-password"
+            <input id="replicate-api-key" bind:value={form.replicateApiKey} readonly={usingAdminKeys} type={isMaskedKey(form.replicateApiKey) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder="r8_..." />
             <p class="text-xs text-gray-600">Genutzt für Bildgenerierung (Hintergründe, Session-Bilder, NPC-Portraits). Wird auch für Replicate WhisperX verwendet falls als Whisper-Provider gewählt.</p>
@@ -245,7 +272,7 @@
           <!-- HuggingFace token -->
           <div class="space-y-2">
             <label for="huggingface-token" class="text-sm text-gray-400">HuggingFace Token</label>
-            <input id="huggingface-token" bind:value={form.huggingfaceToken} type={isMaskedKey(form.huggingfaceToken) ? 'text' : 'password'} autocomplete="new-password"
+            <input id="huggingface-token" bind:value={form.huggingfaceToken} readonly={usingAdminKeys} type={isMaskedKey(form.huggingfaceToken) ? 'text' : 'password'} autocomplete="new-password"
               class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
               placeholder="hf_..." />
             <p class="text-xs text-gray-600">Genutzt für Speaker-Diarization via pyannote. Auf huggingface.co/settings/tokens erstellen.</p>
@@ -254,7 +281,7 @@
       </div>
 
       <!-- ─────────── Transkription ─────────── -->
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">🎙️ Transkription</h2>
         <p class="text-xs text-gray-500">Provider für die Sprach-zu-Text-Transkription. Der API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
@@ -277,7 +304,7 @@
       </div>
 
       <!-- ─────────── Bildgenerierung ─────────── -->
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">🎨 Bildgenerierung</h2>
         <p class="text-xs text-gray-500">Hintergründe & NPC-Portraits für Kampagnen. Läuft immer über Replicate — der API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
@@ -299,7 +326,7 @@
       </div>
 
       <!-- ─────────── Session-Bild ─────────── -->
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">🖼️ Session-Bild</h2>
         <p class="text-xs text-gray-500">Modell für die Generierung des Session-Header-Bildes. Der Replicate API-Key wird aus der »API Keys«-Sektion oben verwendet.</p>
 
@@ -327,7 +354,7 @@
       </div>
 
       <!-- ─────────── Sprecher-Erkennung ─────────── -->
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">🔊 Sprecher-Erkennung (HuggingFace)</h2>
         <p class="text-xs text-gray-500">Der HuggingFace Token wird aus der »API Keys«-Sektion oben verwendet.</p>
 
@@ -363,7 +390,7 @@
       </div>
 
       <!-- ─────────── KI-Zusammenfassung ─────────── -->
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-7 space-y-5">
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-7 space-y-5">
         <h2 class="font-semibold text-white flex items-center gap-2">✍️ KI-Zusammenfassung</h2>
         <p class="text-xs text-gray-500">Provider & Modell für Session-Zusammenfassungen. Der API-Key wird aus der »API Keys«-Sektion oben verwendet (je nach gewähltem Provider).</p>
 

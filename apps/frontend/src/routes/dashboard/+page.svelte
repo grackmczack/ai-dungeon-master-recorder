@@ -18,8 +18,10 @@
   });
 </script>
 
-<div class="max-w-5xl mx-auto px-6 py-10">
-  <div class="flex items-center justify-between mb-8">
+<svelte:head><title>Dashboard — DM Recorder</title></svelte:head>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-3xl font-bold text-white">Deine Gruppen</h1>
       <p class="text-gray-500 mt-1">Wähle eine Spielgruppe oder erstelle eine neue</p>

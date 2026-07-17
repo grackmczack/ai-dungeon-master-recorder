@@ -30,7 +30,8 @@ if (isProduction && !jwtSecret) {
 }
 
 const app = Fastify({
-  logger: { level: process.env.NODE_ENV === "production" ? "info" : "debug" }
+  logger: { level: process.env.NODE_ENV === "production" ? "info" : "debug" },
+  trustProxy: process.env.TRUST_PROXY === "true" || isProduction
 });
 
 await app.register(cors, {

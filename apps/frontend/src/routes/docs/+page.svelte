@@ -240,13 +240,16 @@
 <p>WhisperX mit Speaker-Diarization ist rechenintensiv. Bei langen Sessions (2h+) kann die Verarbeitung 5–10 Minuten dauern. Bei Chunked Recording läuft die Transkription parallel zur Aufnahme — dann ist sie meist sofort nach /stop fertig.</p>
 
 <h3>Die Summary ist unvollständig oder wirr</h3>
-<p>Prüfe:
+<p>Prüfe folgende Punkte:</p>
 <ol>
   <li>Hast du einen guten Kampagnen-Kontext hinterlegt?</li>
   <li>Ist dein System-Prompt klar formuliert?</li>
   <li>Hast du die Sprecher korrekt zugeordnet? (Tab "Sprecher" in der Session)</li>
   <li>Welches LLM-Modell nutzt du? Claude Opus oder GPT-5.x liefern deutlich bessere Ergebnisse als kleinere Modelle.</li>
-</ol></p>
+</ol>
+
+<h3>Ich habe mein Passwort vergessen</h3>
+<p>Öffne auf der Anmeldeseite „Passwort vergessen?“. Du erhältst per E-Mail einen einmalig nutzbaren Link, der 30 Minuten gültig ist. Nach dem Zurücksetzen werden bestehende Sitzungen aus Sicherheitsgründen abgemeldet.</p>
 
 <h3>Kann ich mehrere Kampagnen gleichzeitig laufen lassen?</h3>
 <p>Ja! Eine Gruppe kann beliebig viele Kampagnen haben. Der Bot nimmt immer im aktuellen Voice-Channel auf und ordnet die Session der aktiven Kampagne zu.</p>

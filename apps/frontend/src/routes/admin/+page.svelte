@@ -4,6 +4,8 @@
   import { page } from '$app/stores';
   import { auth } from '$lib/auth.js';
   import { api } from '$lib/api.js';
+  import { keyboardTabs } from '$lib/actions/tabs.js';
+  import { toast } from '$lib/toast.js';
   import type { User } from '$lib/types.js';
 
   let users: any[] = $state([]);
@@ -63,8 +65,9 @@
       newPassword = '';
       newDisplayName = '';
       await loadAll();
+      toast.success('DM-Konto wurde angelegt');
     } catch (e: any) {
-      createError = e.error?.fieldErrors ?? e.error ?? 'Fehler beim Anlegen';
+      createError = formatApiError(e.error, 'Fehler beim Anlegen');
     } finally {
       creating = false;
     }
@@ -79,6 +82,7 @@
         await api.grantAdminKeys(userId);
       }
       await loadAll();
+      toast.success(hasKeys ? 'Admin-Keys wurden entzogen' : 'Admin-Keys wurden freigegeben');
     } catch (e: any) {
       error = e.error ?? 'Fehler beim Ändern';
     } finally {
@@ -91,6 +95,7 @@
     try {
       await api.updateAdminUser(userId, { isActive: !isActive });
       await loadAll();
+      toast.success(isActive ? 'DM wurde deaktiviert' : 'DM wurde aktiviert');
     } catch (e: any) {
       error = e.error ?? 'Fehler beim Ändern';
     } finally {
@@ -101,14 +106,24 @@
   function formatDate(d: string) {
     return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
+
+  function formatApiError(value: unknown, fallback: string): string {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object' && 'fieldErrors' in value) {
+      const fieldErrors = (value as { fieldErrors?: Record<string, string[]> }).fieldErrors;
+      const messages = Object.values(fieldErrors ?? {}).flat().filter(Boolean);
+      if (messages.length) return messages.join(' ');
+    }
+    return fallback;
+  }
 </script>
 
 <svelte:head>
   <title>Admin — D&D Recorder</title>
 </svelte:head>
 
-<div class="max-w-6xl mx-auto px-6 py-10">
-  <div class="flex items-center justify-between mb-8">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-3xl font-bold text-white">Admin</h1>
       <p class="text-gray-500 mt-1">DM-Verwaltung & API-Key-Grants</p>
@@ -128,21 +143,23 @@
     </div>
   {:else}
     <!-- Tab Switcher -->
-    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 w-fit border border-surface-600">
-      <button onclick={() => activeTab = 'users'}
+    <div role="tablist" aria-label="Adminbereiche" use:keyboardTabs
+      class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 max-w-full overflow-x-auto border border-surface-600">
+      <button id="admin-tab-users" role="tab" aria-selected={activeTab === 'users'} aria-controls="admin-panel-users" tabindex={activeTab === 'users' ? 0 : -1} onclick={() => activeTab = 'users'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === 'users' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         👥 DMs ({users.length})
       </button>
-      <button onclick={() => activeTab = 'grants'}
+      <button id="admin-tab-grants" role="tab" aria-selected={activeTab === 'grants'} aria-controls="admin-panel-grants" tabindex={activeTab === 'grants' ? 0 : -1} onclick={() => activeTab = 'grants'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === 'grants' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         🔑 Key-Grants ({grants.length})
       </button>
-      <button onclick={() => activeTab = 'overview'}
+      <button id="admin-tab-overview" role="tab" aria-selected={activeTab === 'overview'} aria-controls="admin-panel-overview" tabindex={activeTab === 'overview' ? 0 : -1} onclick={() => activeTab = 'overview'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === 'overview' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📊 Übersicht
       </button>
     </div>
 
+    <div role="tabpanel" id={`admin-panel-${activeTab}`} aria-labelledby={`admin-tab-${activeTab}`} tabindex="0">
     {#if activeTab === 'users'}
       <div class="space-y-4">
         <!-- Actions -->
@@ -158,13 +175,19 @@
           <form onsubmit={(e) => { e.preventDefault(); createDM(); }}
             class="bg-surface-800 border border-brand-500/30 rounded-xl p-4 space-y-3">
             <h3 class="text-sm font-semibold text-white">Neuen DM anlegen</h3>
-            <div class="grid grid-cols-3 gap-3">
-              <input bind:value={newDisplayName} placeholder="Anzeigename" required
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label class="space-y-1"><span class="text-xs text-gray-300">Anzeigename</span>
+              <input bind:value={newDisplayName} placeholder="Anzeigename" required autocomplete="name"
                 class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500" />
-              <input bind:value={newEmail} type="email" placeholder="E-Mail" required
+              </label>
+              <label class="space-y-1"><span class="text-xs text-gray-300">E-Mail</span>
+              <input bind:value={newEmail} type="email" placeholder="E-Mail" required autocomplete="username"
                 class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500" />
-              <input bind:value={newPassword} type="password" placeholder="Passwort (min. 8 Zeichen)" required minlength="8"
+              </label>
+              <label class="space-y-1"><span class="text-xs text-gray-300">Temporäres Passwort</span>
+              <input bind:value={newPassword} type="password" placeholder="Mindestens 12 Zeichen" required minlength="12" maxlength="128" autocomplete="new-password"
                 class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500" />
+              </label>
             </div>
             <div class="flex gap-2">
               <button type="submit" disabled={creating}
@@ -174,13 +197,13 @@
               <button type="button" onclick={() => showCreateForm = false}
                 class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Abbrechen</button>
             </div>
-            {#if createError}<p class="text-red-400 text-xs">{JSON.stringify(createError)}</p>{/if}
+            {#if createError}<p role="alert" class="text-red-300 text-sm">{createError}</p>{/if}
           </form>
         {/if}
 
         <!-- DM List -->
-        <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-hidden">
-          <table class="w-full text-sm">
+        <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-x-auto">
+          <table class="w-full min-w-[760px] text-sm">
             <thead>
               <tr class="border-b border-surface-700">
                 <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">DM</th>
@@ -224,29 +247,31 @@
                   <td class="px-5 py-3">
                     <div class="flex items-center justify-end gap-2">
                       <!-- Key-Grant Toggle -->
-                      <label class="flex items-center gap-2 cursor-pointer" title="Admin-API-Keys für diesen DM freigeben">
+                      <label class="flex min-h-11 items-center gap-2 cursor-pointer rounded-lg px-2" title="Admin-API-Keys für diesen DM freigeben">
                         <span class="text-xs text-gray-500 select-none">🔑</span>
                         <div class="relative">
                           <input type="checkbox"
+                            aria-label={`Admin-API-Keys für ${user.displayName} freigeben`}
                             checked={user.hasAdminKeys}
                             onchange={() => toggleKeys(user.id, user.hasAdminKeys)}
                             disabled={togglingKeys[user.id]}
                             class="sr-only peer" />
-                          <div class="w-9 h-5 bg-surface-700 peer-checked:bg-brand-600 rounded-full transition-colors"></div>
+                          <div class="w-9 h-5 bg-surface-700 peer-checked:bg-brand-600 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-400 rounded-full transition-colors"></div>
                           <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
                         </div>
                       </label>
 
                       <!-- Active Toggle -->
-                      <label class="flex items-center gap-2 cursor-pointer" title="DM aktivieren/deaktivieren">
+                      <label class="flex min-h-11 items-center gap-2 cursor-pointer rounded-lg px-2" title="DM aktivieren/deaktivieren">
                         <span class="text-xs text-gray-500 select-none">{user.isActive ? '🟢' : '🔴'}</span>
                         <div class="relative">
                           <input type="checkbox"
+                            aria-label={`${user.displayName} ${user.isActive ? 'deaktivieren' : 'aktivieren'}`}
                             checked={user.isActive}
                             onchange={() => toggleActive(user.id, user.isActive)}
                             disabled={togglingStatus[user.id]}
                             class="sr-only peer" />
-                          <div class="w-9 h-5 bg-red-500/30 peer-checked:bg-green-600 rounded-full transition-colors"></div>
+                          <div class="w-9 h-5 bg-red-500/30 peer-checked:bg-green-600 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-400 rounded-full transition-colors"></div>
                           <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
                         </div>
                       </label>
@@ -266,8 +291,8 @@
       </div>
 
     {:else if activeTab === 'grants'}
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-hidden">
-        <table class="w-full text-sm">
+      <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-x-auto">
+        <table class="w-full min-w-[580px] text-sm">
           <thead>
             <tr class="border-b border-surface-700">
               <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">DM</th>
@@ -342,5 +367,6 @@
         {/each}
       </div>
     {/if}
+    </div>
   {/if}
 </div>

@@ -230,6 +230,14 @@ REDIS_PORT=6379
 JWT_SECRET=
 INTERNAL_TOKEN=         # Langes Zufallsgeheimnis für Bot → Backend
 PORT=3001
+APP_URL=https://dndbot.example.com
+TRUST_PROXY=true        # Für korrekte Client-IP hinter Nginx/Cloudflare
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false       # true für implizites TLS, meist Port 465
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=DM Recorder <noreply@example.com>
 ```
 
 ### services/transcriber/.env
@@ -265,6 +273,10 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 |--------|------|--------------|
 | POST | `/auth/register` | Account erstellen |
 | POST | `/auth/login` | Login → HttpOnly-Session-Cookie |
+| POST | `/auth/forgot-password` | Passwort-Reset-Link anfordern (neutrale Antwort) |
+| POST | `/auth/reset-password` | Passwort mit einmaligem 30-Minuten-Token zurücksetzen |
+| POST | `/auth/change-password` | Eigenes Passwort ändern und andere Sitzungen widerrufen |
+| PATCH | `/auth/profile` | Eigenen Anzeigenamen ändern |
 | GET | `/auth/me` | Aktueller User |
 | GET | `/groups` | Eigene Gruppen |
 | POST | `/groups` | Gruppe erstellen |

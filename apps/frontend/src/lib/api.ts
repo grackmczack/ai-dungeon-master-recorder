@@ -28,6 +28,50 @@ import type {
 
 const BASE = "/api";
 
+const ERROR_TRANSLATIONS: Record<string, string> = {
+  "Authentication required": "Bitte melde dich an",
+  "Invalid or expired session": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an",
+  Unauthorized: "Du bist für diese Aktion nicht berechtigt",
+  "Account is inactive": "Konto ist deaktiviert",
+  "Admin access required": "Für diese Seite werden Administratorrechte benötigt",
+  "Email already registered": "E-Mail ist bereits registriert",
+  "Campaign not found": "Kampagne wurde nicht gefunden",
+  "Session not found": "Session wurde nicht gefunden",
+  "Member not found": "Mitglied wurde nicht gefunden",
+  "Recording not found": "Aufnahme wurde nicht gefunden",
+  "Character sheet not found": "Charakterbogen wurde nicht gefunden",
+  "No file uploaded": "Es wurde keine Datei ausgewählt",
+  "Only valid PDF files allowed": "Bitte wähle eine gültige PDF-Datei",
+  "Only valid png/jpeg/webp images allowed": "Bitte wähle ein gültiges PNG-, JPEG- oder WebP-Bild",
+  "Only valid png/jpeg/webp/gif images allowed":
+    "Bitte wähle ein gültiges PNG-, JPEG-, WebP- oder GIF-Bild",
+  "No Replicate API key configured": "Es ist kein Replicate-API-Key konfiguriert",
+  "No Replicate API key configured for this group":
+    "Für diese Gruppe ist kein Replicate-API-Key konfiguriert"
+};
+
+function errorMessage(data: any, status: number): string {
+  const error = data?.error;
+  if (typeof error === "string") {
+    if (ERROR_TRANSLATIONS[error]) return ERROR_TRANSLATIONS[error];
+    if (error.startsWith("Only GMs can")) return "Diese Aktion ist nur für Spielleiter verfügbar";
+    if (error.endsWith(" not found")) return "Der angeforderte Eintrag wurde nicht gefunden";
+    if (error.startsWith("Replicate ") || error.startsWith("Could not download")) {
+      return "Die Bildgenerierung konnte nicht abgeschlossen werden";
+    }
+    return error;
+  }
+  const fieldErrors = error?.fieldErrors;
+  if (fieldErrors && typeof fieldErrors === "object") {
+    const messages = Object.values(fieldErrors)
+      .flat()
+      .filter((value) => typeof value === "string");
+    if (messages.length) return messages.join(" ");
+  }
+  if (status >= 500) return "Der Server konnte die Anfrage nicht verarbeiten";
+  return "Die Eingabe konnte nicht verarbeitet werden";
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) ?? {})
@@ -44,8 +88,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (res.status === 204) return undefined as T;
-  const data = await res.json();
-  if (!res.ok) throw { ...data, statusCode: res.status };
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw { ...data, error: errorMessage(data, res.status), statusCode: res.status };
   return data as T;
 }
 
@@ -78,6 +122,26 @@ export const api = {
     }),
   me: () => request<any>("/auth/me"),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
+  forgotPassword: (email: string) =>
+    request<{ message: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email })
+    }),
+  resetPassword: (token: string, password: string) =>
+    request<{ message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password })
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword })
+    }),
+  updateProfile: (displayName: string) =>
+    request<{ user: User }>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ displayName })
+    }),
 
   // Groups
   getGroups: () => request<any[]>("/groups"),

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
+  import { keyboardTabs } from '$lib/actions/tabs.js';
+  import { toast } from '$lib/toast.js';
+  import { confirmAction } from '$lib/confirm.js';
   import type { AggregatedWiki, WikiNPC, WikiQuest, WikiLocation, WikiThread, WikiLoot } from '$lib/types.js';
 
   let { campaignId, campaignName }: { campaignId: string; campaignName: string } = $props();
@@ -334,10 +337,15 @@
 
   async function deleteEntity(category: Category, id: string | undefined, label: string) {
     if (!id) {
-      alert('Automatisch aggregierte Einträge kommen aus Session-Summaries und können hier nicht gelöscht werden. Bearbeiten legt einen manuellen Wiki-Eintrag an.');
+      toast.info('Automatisch aggregierte Einträge kommen aus Session-Summaries und können nicht gelöscht werden. Bearbeiten legt einen manuellen Eintrag an.');
       return;
     }
-    if (!confirm(`"${label}" wirklich löschen?`)) return;
+    if (!await confirmAction({
+      title: 'Wiki-Eintrag löschen?',
+      message: `„${label}“ wird dauerhaft gelöscht.`,
+      confirmLabel: 'Eintrag löschen',
+      danger: true
+    })) return;
     saving = true;
     actionError = '';
     try {
@@ -348,7 +356,7 @@
       else await api.deleteCampaignLoot(campaignId, id);
       await loadWiki();
     } catch (e: any) {
-      alert(e.error ?? 'Löschen fehlgeschlagen');
+      toast.error(e.error ?? 'Löschen fehlgeschlagen');
     } finally {
       saving = false;
     }
@@ -549,15 +557,20 @@
       <p class="text-red-400 text-sm">{error}</p>
     </div>
   {:else if wiki}
-    <div class="flex gap-1 bg-surface-800 rounded-xl p-1 border border-surface-600 overflow-x-auto">
+    <div role="tablist" aria-label="Wiki-Kategorien" use:keyboardTabs
+      class="flex gap-1 bg-surface-800 rounded-xl p-1 border border-surface-600 overflow-x-auto">
       {#each Object.entries(CATEGORY_LABELS) as [key, label]}
-        <button type="button" onclick={() => { activeCategory = key as Category; cancelForm(); }}
+        <button type="button" id={`wiki-tab-${key}`} role="tab" aria-selected={activeCategory === key}
+          aria-controls={`wiki-panel-${key}`} tabindex={activeCategory === key ? 0 : -1}
+          onclick={() => { activeCategory = key as Category; cancelForm(); }}
           class="px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {activeCategory === key ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
           {label}
           <span class="ml-1 text-xs opacity-60">{categoryCount(key as Category)}</span>
         </button>
       {/each}
     </div>
+
+    <div role="tabpanel" id={`wiki-panel-${activeCategory}`} aria-labelledby={`wiki-tab-${activeCategory}`} tabindex="0" class="space-y-4">
 
     <div class="relative">
       <input bind:value={searchQuery} placeholder="Suchen..."
@@ -767,8 +780,8 @@
         {#if filtered(wiki.loot).length === 0}
           <div class="text-center py-8 text-gray-600 text-sm">Keine Beute gefunden</div>
         {:else}
-          <div class="bg-surface-800 border border-surface-600 rounded-xl overflow-hidden">
-            <table class="w-full text-sm">
+          <div class="bg-surface-800 border border-surface-600 rounded-xl overflow-x-auto">
+            <table class="w-full min-w-[640px] text-sm">
               <tbody>
                 {#each filtered(wiki.loot) as item (entityKey('loot', item.item, item.id))}
                   {@const key = entityKey('loot', item.item, item.id)}
@@ -818,6 +831,7 @@
       <p class="text-xs text-gray-700">
         📊 Stufe 1 — Automatisch aggregiert aus Session-Summaries, ergänzt um manuelle Wiki-Einträge.
       </p>
+    </div>
     </div>
   {:else}
     <div class="text-center py-8 text-gray-600 text-sm">Keine Daten verfügbar</div>

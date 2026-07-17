@@ -4,14 +4,14 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 
 const CreateDMInput = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  displayName: z.string().min(2)
+  email: z.string().trim().toLowerCase().email(),
+  password: z.string().min(12).max(128),
+  displayName: z.string().trim().min(2).max(80)
 });
 
 const UpdateDMInput = z.object({
-  displayName: z.string().min(2).optional(),
-  email: z.string().email().optional(),
+  displayName: z.string().trim().min(2).max(80).optional(),
+  email: z.string().trim().toLowerCase().email().optional(),
   isActive: z.boolean().optional()
 });
 
@@ -81,7 +81,9 @@ export async function adminRoutes(app: FastifyInstance) {
     const body = CreateDMInput.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
 
-    const existing = await prisma.user.findUnique({ where: { email: body.data.email } });
+    const existing = await prisma.user.findFirst({
+      where: { email: { equals: body.data.email, mode: "insensitive" } }
+    });
     if (existing) return reply.status(409).send({ error: "Email already registered" });
 
     const passwordHash = await bcrypt.hash(body.data.password, 12);
@@ -114,7 +116,8 @@ export async function adminRoutes(app: FastifyInstance) {
       data: {
         ...(body.data.displayName !== undefined && { displayName: body.data.displayName }),
         ...(body.data.email !== undefined && { email: body.data.email }),
-        ...(body.data.isActive !== undefined && { isActive: body.data.isActive })
+        ...(body.data.isActive !== undefined && { isActive: body.data.isActive }),
+        ...(body.data.isActive === false && { sessionVersion: { increment: 1 } })
       },
       select: {
         id: true,

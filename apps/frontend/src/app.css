@@ -13,3 +13,54 @@
 body {
   font-family: "Inter", system-ui, sans-serif;
 }
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #a78bfa;
+  outline-offset: 3px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+  }
+}
+
+.text-gray-500,
+.text-gray-600,
+.text-gray-700 {
+  color: #a1a9b8;
+}
+
+.placeholder-gray-600::placeholder,
+.placeholder\:text-gray-400::placeholder {
+  color: #a1a9b8;
+  opacity: 1;
+}
+
+.skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 200;
+  transform: translateY(-200%);
+  border-radius: 0.5rem;
+  background: #7c3aed;
+  padding: 0.75rem 1rem;
+  color: white;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}

@@ -23,11 +23,13 @@
   }
 </script>
 
-<div class="max-w-2xl mx-auto px-6 py-10">
+<svelte:head><title>Neue Gruppe — DM Recorder</title></svelte:head>
+
+<div class="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <a href="/dashboard" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-8 transition">← Zurück</a>
   <h1 class="text-2xl font-bold text-white mb-8">Neue Gruppe erstellen</h1>
 
-  <form onsubmit={create} class="bg-surface-800 rounded-2xl p-8 border border-surface-600 space-y-6">
+  <form onsubmit={create} class="bg-surface-800 rounded-2xl p-5 sm:p-8 border border-surface-600 space-y-6">
     {#if error}
       <div class="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm">{error}</div>
     {/if}

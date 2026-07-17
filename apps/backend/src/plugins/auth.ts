@@ -33,21 +33,28 @@ export async function authPlugin(app: FastifyInstance) {
       return;
     }
 
-    let payload: { sub: string };
+    let payload: { sub: string; sv?: number };
     try {
-      payload = app.jwt.verify<{ sub: string }>(token);
+      payload = app.jwt.verify<{ sub: string; sv?: number }>(token);
       request.user = payload;
     } catch {
+      reply.header("Set-Cookie", sessionCookie("", true));
       await reply.status(401).send({ error: "Invalid or expired session" });
       return;
     }
 
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { isActive: true }
+      select: { isActive: true, sessionVersion: true }
     });
     if (!user?.isActive) {
+      reply.header("Set-Cookie", sessionCookie("", true));
       await reply.status(403).send({ error: "Account is inactive" });
+      return;
+    }
+    if (payload.sv !== user.sessionVersion) {
+      reply.header("Set-Cookie", sessionCookie("", true));
+      await reply.status(401).send({ error: "Session wurde widerrufen" });
     }
   });
 }

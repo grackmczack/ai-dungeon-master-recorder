@@ -12,3 +12,5 @@
     return unsubscribe;
   });
 </script>
+
+<svelte:head><title>DM Recorder</title></svelte:head>

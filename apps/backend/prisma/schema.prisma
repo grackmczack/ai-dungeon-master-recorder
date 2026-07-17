@@ -9,18 +9,21 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  displayName  String
-  role         UserRole @default(DM)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                     String    @id @default(cuid())
+  email                  String    @unique
+  passwordHash           String
+  displayName            String
+  role                   UserRole  @default(DM)
+  isActive               Boolean   @default(true)
+  sessionVersion         Int       @default(0)
+  passwordResetTokenHash String?   @unique
+  passwordResetExpiresAt DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  memberships GroupMembership[]
+  memberships  GroupMembership[]
   // Keys die dieser Admin an andere DMs verliehen hat
-  grantedKeys AdminApiKeyGrant[] @relation("GrantedBy")
+  grantedKeys  AdminApiKeyGrant[] @relation("GrantedBy")
   // Keys die diesem DM von einem Super-Admin verliehen wurden
   receivedKeys AdminApiKeyGrant[] @relation("GrantedTo")
 }
@@ -31,10 +34,10 @@ enum UserRole {
 }
 
 model AdminApiKeyGrant {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   superAdminId String
   dmId         String
-  grantedAt    DateTime @default(now())
+  grantedAt    DateTime  @default(now())
   revokedAt    DateTime?
 
   superAdmin User @relation("GrantedBy", fields: [superAdminId], references: [id])
@@ -57,31 +60,31 @@ model Group {
 }
 
 model GroupMembership {
-  id                String    @id @default(cuid())
+  id                 String    @id @default(cuid())
   // userId ist optional: Mitglieder sind in v1 reine Entitäten ohne eigenen Login.
   // Ein User-Account (userId gesetzt) ist nur für den DM/GM nötig, der sich einloggt.
-  userId            String?
-  groupId           String
-  role              Role      @default(PLAYER)
+  userId             String?
+  groupId            String
+  role               Role      @default(PLAYER)
   // Discord-Handle des realen Spielers (z.B. "grackmczack"). Ein discordName kann
   // in verschiedenen Kampagnen unterschiedliche Charaktere haben — daher liegt
   // die Zuordnung pro Membership, nicht global am User.
-  discordName       String?
+  discordName        String?
   // Discord-Anzeigename / Server-Nickname des realen Spielers (z.B. "Rose").
   // discordName ist der eindeutige Username (z.B. "veganrevlady"), discordDisplayName
   // der (nicht eindeutige) Anzeigename. Das Matching zur SpeakerMap läuft über discordName.
   discordDisplayName String?
-  characterName     String?
+  characterName      String?
   // Freitext-Rolle innerhalb der Gruppe (z.B. "Tank", "Healer", "Scout") — nicht zu verwechseln mit Role (GM/PLAYER/OBSERVER)
-  partyRole         String?
-  avatarUrl         String?
-  characterSheetUrl String?
-  joinedAt          DateTime  @default(now())
-  leftAt            DateTime?
-  isPaused          Boolean   @default(false)
-  pausedAt          DateTime?
-  pauseNote         String?
-  notes             String?
+  partyRole          String?
+  avatarUrl          String?
+  characterSheetUrl  String?
+  joinedAt           DateTime  @default(now())
+  leftAt             DateTime?
+  isPaused           Boolean   @default(false)
+  pausedAt           DateTime?
+  pauseNote          String?
+  notes              String?
 
   user  User? @relation(fields: [userId], references: [id])
   group Group @relation(fields: [groupId], references: [id])
@@ -106,13 +109,13 @@ model Campaign {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  group    Group     @relation(fields: [groupId], references: [id])
-  sessions Session[]
-  npcs     CampaignNPC[]
-  quests   CampaignQuest[]
+  group     Group              @relation(fields: [groupId], references: [id])
+  sessions  Session[]
+  npcs      CampaignNPC[]
+  quests    CampaignQuest[]
   locations CampaignLocation[]
-  threads  CampaignThread[]
-  loots    CampaignLoot[]
+  threads   CampaignThread[]
+  loots     CampaignLoot[]
 }
 
 model Session {
@@ -129,11 +132,11 @@ model Session {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  campaign    Campaign     @relation(fields: [campaignId], references: [id])
-  recordings  Recording[]
-  transcript  Transcript?
-  summary     Summary?
-  speakerMaps SpeakerMap[]
+  campaign        Campaign         @relation(fields: [campaignId], references: [id])
+  recordings      Recording[]
+  transcript      Transcript?
+  summary         Summary?
+  speakerMaps     SpeakerMap[]
   threadsOpened   CampaignThread[] @relation("ThreadOpenedIn")
   threadsResolved CampaignThread[] @relation("ThreadResolvedIn")
   questsOpened    CampaignQuest[]  @relation("QuestOpenedIn")

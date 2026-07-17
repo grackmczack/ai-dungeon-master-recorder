@@ -4,6 +4,9 @@
   import { api } from '$lib/api.js';
   import { parallax, parallaxFixed } from '$lib/actions/parallax.js';
   import WikiView from '$lib/components/WikiView.svelte';
+  import Dialog from '$lib/components/Dialog.svelte';
+  import { keyboardTabs } from '$lib/actions/tabs.js';
+  import { confirmAction } from '$lib/confirm.js';
   import type { Group } from '$lib/types.js';
 
   let group: any = $state(null);
@@ -169,7 +172,12 @@
   }
 
   async function removeBackground(campaignId: string) {
-    if (!confirm('Hintergrundbild wirklich entfernen?')) return;
+    if (!await confirmAction({
+      title: 'Hintergrundbild entfernen?',
+      message: 'Das aktuelle Kampagnen-Hintergrundbild wird dauerhaft entfernt.',
+      confirmLabel: 'Bild entfernen',
+      danger: true
+    })) return;
     try {
       await api.removeCampaignBackground(campaignId);
       const c = group?.campaigns.find((c: any) => c.id === campaignId);
@@ -310,13 +318,20 @@
   }
 
   async function removeMember(memberId: string, name: string) {
-    if (!confirm(`${name} wirklich aus der Gruppe entfernen? Die Session-Historie bleibt erhalten.`)) return;
+    if (!await confirmAction({
+      title: 'Mitglied entfernen?',
+      message: `${name} wird aus der Gruppe entfernt. Die Session-Historie bleibt erhalten.`,
+      confirmLabel: 'Mitglied entfernen',
+      danger: true
+    })) return;
     await api.removeMember($page.params.id!, memberId);
     group = await api.getGroup($page.params.id!);
   }
 </script>
 
-<div class="max-w-5xl mx-auto px-6 py-10 relative">
+<svelte:head><title>{group?.name ?? 'Gruppe'} — DM Recorder</title></svelte:head>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10 relative">
   <!-- Seitenweiter Hintergrund (Parallax) -->
   {#if group && backgroundImageUrl(group.campaigns?.[0])}
     <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
@@ -337,7 +352,7 @@
   {:else if error}
     <div class="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400">{error}</div>
   {:else if group}
-    <div class="flex items-start justify-between mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
       <div>
         <h1 class="text-3xl font-bold text-white">{group.name}</h1>
         {#if group.description}<p class="text-gray-500 mt-1">{group.description}</p>{/if}
@@ -358,16 +373,17 @@
     </div>
 
     <!-- Tab-Switcher für Kampagnen-Ansicht -->
-    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 max-w-full overflow-x-auto border border-surface-600">
-      <button onclick={() => activeView = 'sessions'}
+    <div role="tablist" aria-label="Gruppenbereiche" use:keyboardTabs
+      class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 max-w-full overflow-x-auto border border-surface-600">
+      <button id="group-tab-sessions" role="tab" aria-selected={activeView === 'sessions'} aria-controls="group-panel-sessions" tabindex={activeView === 'sessions' ? 0 : -1} onclick={() => activeView = 'sessions'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'sessions' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📅 Sessions
       </button>
-      <button onclick={() => { activeView = 'diary'; loadDiary(); }}
+      <button id="group-tab-diary" role="tab" aria-selected={activeView === 'diary'} aria-controls="group-panel-diary" tabindex={activeView === 'diary' ? 0 : -1} onclick={() => { activeView = 'diary'; loadDiary(); }}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'diary' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📖 Tagebuch
       </button>
-      <button onclick={() => {
+      <button id="group-tab-wiki" role="tab" aria-selected={activeView === 'wiki'} aria-controls="group-panel-wiki" tabindex={activeView === 'wiki' ? 0 : -1} onclick={() => {
           activeView = 'wiki';
           // Wähle erste Kampagne für Wiki-Ansicht
           if (!wikiCampaignId && group?.campaigns?.length) {
@@ -378,12 +394,13 @@
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'wiki' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📜 Wiki
       </button>
-      <button onclick={() => activeView = 'members'}
+      <button id="group-tab-members" role="tab" aria-selected={activeView === 'members'} aria-controls="group-panel-members" tabindex={activeView === 'members' ? 0 : -1} onclick={() => activeView = 'members'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'members' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         👥 Mitglieder
       </button>
     </div>
 
+    <div role="tabpanel" id={`group-panel-${activeView}`} aria-labelledby={`group-tab-${activeView}`} tabindex="0">
     {#if activeView === 'sessions'}
       <!-- Kampagnen & Sessions -->
       {#if group.campaigns.length === 0}
@@ -396,7 +413,7 @@
         {#each group.campaigns as campaign}
           <div class="mb-8">
             <!-- Kampagnen-Hintergrundbild mit Parallax -->
-            <div class="relative h-40 md:h-56 rounded-2xl overflow-hidden mb-4 border border-surface-600 bg-surface-800">
+            <div class="relative h-80 sm:h-64 md:h-56 rounded-2xl overflow-hidden mb-4 border border-surface-600 bg-surface-800">
               {#if campaign.backgroundImageUrl}
                 <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
                   <img src={backgroundImageUrl(campaign)!} alt="" class="w-full h-full object-cover opacity-60" />
@@ -406,12 +423,12 @@
                 <div class="absolute inset-0 flex items-center justify-center text-gray-700 text-4xl">🗺️</div>
               {/if}
 
-              <div class="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+              <div class="absolute bottom-0 left-0 right-0 p-4 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-3">
                 <div class="flex items-center gap-3">
                   <h2 class="text-xl font-semibold text-white drop-shadow">{campaign.name}</h2>
                   {#if campaign.setting}<span class="text-xs text-gray-200 bg-black/40 backdrop-blur px-2 py-1 rounded">{campaign.setting}</span>{/if}
                 </div>
-                <div class="flex flex-col items-end gap-2">
+                <div class="flex w-full sm:w-auto flex-col items-stretch sm:items-end gap-2">
                   <div class="flex items-center gap-2">
                     <label class="text-xs text-gray-200 bg-black/40 hover:bg-black/60 backdrop-blur px-3 py-1.5 rounded-lg transition cursor-pointer">
                       {uploadingBackgroundFor === campaign.id ? 'Lade hoch...' : campaign.backgroundImageUrl ? 'Bild ersetzen' : '🖼️ Hintergrundbild hinzufügen'}
@@ -424,15 +441,15 @@
                         class="text-xs text-gray-200 bg-black/40 hover:bg-red-900/60 backdrop-blur px-2 py-1.5 rounded-lg transition">✕</button>
                     {/if}
                   </div>
-                  <div class="flex items-end gap-2">
+                  <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
                     <input
                       bind:value={generatePrompt[campaign.id]}
-                      class="w-60 max-w-[55vw] text-xs bg-black/40 backdrop-blur border border-white/10 hover:border-white/20 focus:border-brand-500/60 text-white placeholder:text-gray-400 rounded-lg px-3 py-2 outline-none transition"
+                      class="w-full sm:w-60 text-xs bg-black/50 backdrop-blur border border-white/20 hover:border-white/30 focus:border-brand-500/60 text-white placeholder:text-gray-300 rounded-lg px-3 py-2 outline-none transition"
                       placeholder="Beschreibe die Stimmung der Kampagne..." />
                     <button
                       onclick={() => generateBackground(campaign)}
                       disabled={generatingBackgroundFor === campaign.id}
-                      class="text-xs text-white bg-brand-600 hover:bg-brand-500 disabled:opacity-60 backdrop-blur px-3 py-2 rounded-lg transition min-w-[9rem] flex items-center justify-center gap-2">
+                      class="min-h-10 text-xs text-white bg-brand-600 hover:bg-brand-500 disabled:opacity-60 backdrop-blur px-3 py-2 rounded-lg transition min-w-[9rem] flex items-center justify-center gap-2">
                       {#if generatingBackgroundFor === campaign.id}
                         <span class="h-3.5 w-3.5 rounded-full border-2 border-white/70 border-t-transparent animate-spin"></span>
                         Generiere...
@@ -697,22 +714,22 @@
                   </span>
                   <div class="flex gap-1">
                     <button onclick={() => openEditMember(member)}
-                      class="text-xs text-gray-500 hover:text-brand-400 border border-surface-600 hover:border-brand-500/40 px-2 py-1 rounded transition">
+                      class="min-h-10 text-xs text-gray-500 hover:text-brand-400 border border-surface-600 hover:border-brand-500/40 px-3 py-2 rounded-lg transition">
                       ✏️
                     </button>
                     {#if member.isPaused}
                       <button onclick={() => resumeMember(member.id)}
-                        class="text-xs text-gray-500 hover:text-green-400 border border-surface-600 hover:border-green-500/40 px-2 py-1 rounded transition">
+                        class="min-h-10 text-xs text-gray-500 hover:text-green-400 border border-surface-600 hover:border-green-500/40 px-3 py-2 rounded-lg transition">
                         ▶ Aktiv
                       </button>
                     {:else}
-                      <button onclick={() => { pausingMemberId = member.id; pauseNote = ''; }}
-                        class="text-xs text-gray-500 hover:text-yellow-400 border border-surface-600 hover:border-yellow-500/40 px-2 py-1 rounded transition">
+                      <button aria-label={`${member.characterName ?? member.discordName ?? 'Mitglied'} pausieren`} onclick={() => { pausingMemberId = member.id; pauseNote = ''; }}
+                        class="min-h-10 min-w-10 text-xs text-gray-500 hover:text-yellow-400 border border-surface-600 hover:border-yellow-500/40 px-3 py-2 rounded-lg transition">
                         ⏸
                       </button>
                     {/if}
-                    <button onclick={() => removeMember(member.id, member.characterName ?? member.discordName ?? member.user?.displayName ?? 'Mitglied')}
-                      class="text-xs text-gray-500 hover:text-red-400 border border-surface-600 hover:border-red-500/40 px-2 py-1 rounded transition">
+                    <button aria-label={`${member.characterName ?? member.discordName ?? 'Mitglied'} entfernen`} onclick={() => removeMember(member.id, member.characterName ?? member.discordName ?? member.user?.displayName ?? 'Mitglied')}
+                      class="min-h-10 min-w-10 text-xs text-gray-500 hover:text-red-400 border border-surface-600 hover:border-red-500/40 px-3 py-2 rounded-lg transition">
                       ✕
                     </button>
                   </div>
@@ -724,9 +741,7 @@
 
         <!-- Edit-Mitglied-Modal -->
         {#if editingMember}
-          <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto">
-              <h3 class="font-semibold text-white mb-4">Mitglied bearbeiten</h3>
+          <Dialog title="Mitglied bearbeiten" titleId="edit-member-dialog-title" onClose={() => editingMember = null}>
 
               <!-- Avatar -->
               <div class="flex items-center gap-4 mb-5">
@@ -797,15 +812,12 @@
                 <button onclick={() => editingMember = null}
                   class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Schließen</button>
               </div>
-            </div>
-          </div>
+          </Dialog>
         {/if}
 
         <!-- Pause-Modal -->
         {#if pausingMemberId}
-          <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6 w-full max-w-md">
-              <h3 class="font-semibold text-white mb-4">Mitglied pausieren</h3>
+          <Dialog title="Mitglied pausieren" titleId="pause-member-dialog-title" onClose={() => pausingMemberId = null} maxWidth="max-w-md">
               <p class="text-sm text-gray-400 mb-3">Optional: Notiz für die Story (z.B. "Schläft den Abenteuer verschlafen" oder "Erkrankt")</p>
               <textarea bind:value={pauseNote} rows="2" placeholder="Notiz für die Abwesenheit..."
                 class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white mb-4 focus:outline-none focus:border-brand-500 resize-none"></textarea>
@@ -815,8 +827,7 @@
                 <button onclick={() => pausingMemberId = null}
                   class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Abbrechen</button>
               </div>
-            </div>
-          </div>
+          </Dialog>
         {/if}
 
         <!-- Ehemalige Mitglieder -->
@@ -838,11 +849,11 @@
         {/if}
       </div>
     {/if}
+    </div>
 
     {#if showCreateCampaign}
-      <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-        <form onsubmit={createCampaign} class="bg-surface-800 rounded-2xl border border-surface-600 p-6 w-full max-w-lg space-y-4">
-          <h2 class="text-xl font-semibold text-white">Neue Kampagne</h2>
+      <Dialog title="Neue Kampagne" titleId="create-campaign-dialog-title" onClose={() => showCreateCampaign = false}>
+        <form onsubmit={createCampaign} class="space-y-4">
           {#if createCampaignError}<p class="text-sm text-red-400">{createCampaignError}</p>{/if}
           <div>
             <label for="campaign-name" class="block text-xs text-gray-500 mb-1">Name *</label>
@@ -866,7 +877,7 @@
             </button>
           </div>
         </form>
-      </div>
+      </Dialog>
     {/if}
   {/if}
 </div>
