@@ -159,6 +159,11 @@ Die Slash-Commands werden global registriert und funktionieren damit auf allen S
 der Bot installiert ist. Optional kann `DISCORD_DEV_GUILD_ID` gesetzt werden, um Commands in einer
 Test-Guild sofort bereitzustellen, während Discord die globalen Commands verteilt.
 
+Die Web-Zuordnung benötigt keine manuell kopierte Server-ID: `/status` und `/record` erkennen die
+Guild automatisch. Ist sie noch nicht verbunden, erhält ein Mitglied mit `Manage Guild` einen
+privaten, 15 Minuten gültigen Einmal-Link. Im angemeldeten Web-Panel wird damit eine vorhandene
+Gruppe ausgewählt oder eine neue angelegt; Discord-Benutzer-IDs werden nicht gespeichert.
+
 Ein fester Kanal für fertige Zusammenfassungen kann im Web-Panel oder direkt in Discord verwaltet
 werden: `/summary-channel set`, `/summary-channel status`, `/summary-channel clear`.
 

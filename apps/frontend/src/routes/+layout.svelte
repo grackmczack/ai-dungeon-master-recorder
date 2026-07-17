@@ -19,6 +19,21 @@
     return PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
   }
 
+  function loginRedirectUrl() {
+    const returnTo = `${$page.url.pathname}${$page.url.search}${$page.url.hash}`;
+    sessionStorage.setItem('postLoginReturnTo', returnTo);
+    return '/login';
+  }
+
+  function safeReturnTo(value: string | null) {
+    const candidate = value ?? sessionStorage.getItem('postLoginReturnTo');
+    if (candidate?.startsWith('/') && !candidate.startsWith('//')) {
+      sessionStorage.removeItem('postLoginReturnTo');
+      return candidate;
+    }
+    return '/dashboard';
+  }
+
   onMount(async () => {
     api.getDiscordConfig()
       .then((config) => { discordInviteUrl = config.inviteUrl ?? ''; })
@@ -29,16 +44,18 @@
       auth.logout();
     } finally {
       auth.loading.set(false);
-      if ($user && ['/login', '/register', '/forgot-password', '/reset-password'].includes($page.url.pathname)) {
+      if ($user && ['/login', '/register'].includes($page.url.pathname)) {
+        await goto(safeReturnTo($page.url.searchParams.get('returnTo')));
+      } else if ($user && ['/forgot-password', '/reset-password'].includes($page.url.pathname)) {
         await goto('/dashboard');
       } else if (!$user && !isPublic($page.url.pathname)) {
-        await goto('/login');
+        await goto(loginRedirectUrl());
       }
     }
   });
 
   afterNavigate(async () => {
-    if (!$loading && !$user && !isPublic($page.url.pathname)) await goto('/login');
+    if (!$loading && !$user && !isPublic($page.url.pathname)) await goto(loginRedirectUrl());
   });
 
   async function handleLogout() {

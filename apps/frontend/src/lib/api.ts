@@ -36,6 +36,10 @@ const ERROR_TRANSLATIONS: Record<string, string> = {
   "Admin access required": "Für diese Seite werden Administratorrechte benötigt",
   "Email already registered": "E-Mail ist bereits registriert",
   "Discord server already linked": "Dieser Discord-Server ist bereits mit einer Gruppe verknüpft",
+  INVALID_OR_EXPIRED_LINK_TOKEN:
+    "Der Verbindungslink ist ungültig oder abgelaufen. Fordere in Discord mit /status einen neuen an",
+  DISCORD_SERVER_ALREADY_LINKED: "Dieser Discord-Server wurde bereits verbunden",
+  TARGET_GROUP_NOT_AVAILABLE: "Die ausgewählte Gruppe kann nicht verbunden werden",
   "Campaign not found": "Kampagne wurde nicht gefunden",
   "Session not found": "Session wurde nicht gefunden",
   "Member not found": "Mitglied wurde nicht gefunden",
@@ -149,8 +153,23 @@ export const api = {
 
   // Groups
   getGroups: () => request<any[]>("/groups"),
-  createGroup: (data: { name: string; description?: string; discordGuildId?: string }) =>
+  createGroup: (data: { name: string; description?: string }) =>
     request<any>("/groups", { method: "POST", body: JSON.stringify(data) }),
+  previewDiscordConnection: (token: string) =>
+    request<{
+      guildName: string;
+      expiresAt: string;
+      existingSessions: number;
+      groups: Array<{ id: string; name: string; description?: string }>;
+    }>("/discord-connect/preview", { method: "POST", body: JSON.stringify({ token }) }),
+  claimDiscordConnection: (
+    token: string,
+    data: { targetGroupId?: string; newGroupName?: string }
+  ) =>
+    request<{ groupId: string; groupName: string; guildName: string; mergedSessions: number }>(
+      "/discord-connect/claim",
+      { method: "POST", body: JSON.stringify({ token, ...data }) }
+    ),
   getGroup: (id: string) => request<any>(`/groups/${id}`),
   createCampaign: (
     groupId: string,

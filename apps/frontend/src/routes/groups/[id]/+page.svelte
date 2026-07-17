@@ -12,6 +12,7 @@
   let group: any = $state(null);
   let loading = $state(true);
   let error = $state('');
+  let discordInviteUrl = $state('');
   let editingContext: string | null = $state(null);
   let contextEdits: Record<string, string> = $state({});
 
@@ -84,7 +85,12 @@
 
   onMount(async () => {
     try {
-      group = await api.getGroup($page.params.id!);
+      const [groupData, discordConfig] = await Promise.all([
+        api.getGroup($page.params.id!),
+        api.getDiscordConfig().catch(() => ({ configured: false, inviteUrl: null }))
+      ]);
+      group = groupData;
+      discordInviteUrl = discordConfig.inviteUrl ?? '';
     } catch (e: any) {
       error = e.error ?? 'Fehler beim Laden';
     } finally {
@@ -357,7 +363,9 @@
         <h1 class="text-3xl font-bold text-white">{group.name}</h1>
         {#if group.description}<p class="text-gray-500 mt-1">{group.description}</p>{/if}
         {#if group.discordGuildId}
-          <p class="text-xs text-gray-600 mt-1 font-mono">Guild: {group.discordGuildId}</p>
+          <p class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-400">
+            <span aria-hidden="true">●</span> Discord-Server verbunden
+          </p>
         {/if}
       </div>
       <div class="flex flex-col sm:flex-row gap-2">
@@ -371,6 +379,30 @@
         </a>
       </div>
     </div>
+
+    {#if !group.discordGuildId}
+      <section aria-labelledby="discord-connect-title" class="mb-8 rounded-2xl border border-brand-500/30 bg-brand-500/5 p-5 sm:p-6">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div class="max-w-2xl">
+            <h2 id="discord-connect-title" class="text-lg font-semibold text-white">🤖 Discord-Server verbinden</h2>
+            <p class="mt-1 text-sm text-gray-400">Keine Server-ID nötig: Der Bot erkennt den Server automatisch und gibt den Verbindungslink ausschließlich einem Server-Admin aus.</p>
+            <ol class="mt-4 space-y-2 text-sm text-gray-300">
+              <li><span class="mr-2 text-brand-400">1.</span>Bot zum gewünschten Server einladen.</li>
+              <li><span class="mr-2 text-brand-400">2.</span>Als Server-Admin <code>/status</code> ausführen – alternativ erscheint der Hinweis nach <code>/record</code>.</li>
+              <li><span class="mr-2 text-brand-400">3.</span>Den privaten Link anklicken und diese Web-Gruppe auswählen.</li>
+            </ol>
+          </div>
+          <div class="flex shrink-0 flex-wrap gap-2">
+            {#if discordInviteUrl}
+              <a href={discordInviteUrl} target="_blank" rel="noreferrer"
+                class="inline-flex min-h-11 items-center rounded-lg border border-brand-500/40 px-4 py-2 text-sm font-medium text-brand-300 hover:bg-brand-500/10 transition">
+                Bot einladen
+              </a>
+            {/if}
+          </div>
+        </div>
+      </section>
+    {/if}
 
     <!-- Tab-Switcher für Kampagnen-Ansicht -->
     <div role="tablist" aria-label="Gruppenbereiche" use:keyboardTabs

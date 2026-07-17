@@ -3,12 +3,8 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 
 const CreateGroupSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  discordGuildId: z
-    .string()
-    .regex(/^\d{17,20}$/)
-    .optional()
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(2_000).optional()
 });
 
 export async function groupsRoutes(app: FastifyInstance) {
@@ -36,29 +32,6 @@ export async function groupsRoutes(app: FastifyInstance) {
     const { sub } = req.user as { sub: string };
     const body = CreateGroupSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
-
-    if (body.data.discordGuildId) {
-      const existing = await prisma.group.findUnique({
-        where: { discordGuildId: body.data.discordGuildId },
-        include: { memberships: { where: { userId: { not: null }, leftAt: null } } }
-      });
-
-      if (existing) {
-        if (existing.memberships.length > 0) {
-          return reply.status(409).send({ error: "Discord server already linked" });
-        }
-
-        const claimed = await prisma.group.update({
-          where: { id: existing.id },
-          data: {
-            name: body.data.name,
-            description: body.data.description,
-            memberships: { create: { userId: sub, role: "GM" } }
-          }
-        });
-        return reply.status(201).send(claimed);
-      }
-    }
 
     const group = await prisma.group.create({
       data: {

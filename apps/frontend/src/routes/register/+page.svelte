@@ -1,5 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+  import { browser } from '$app/environment';
   import { tick } from 'svelte';
   import { auth } from '$lib/auth.js';
   import { api } from '$lib/api.js';
@@ -12,6 +14,12 @@
   let error = $state('');
   let loading = $state(false);
   let errorElement = $state<HTMLDivElement>();
+
+  function safeReturnTo() {
+    const value = $page.url.searchParams.get('returnTo')
+      ?? (browser ? sessionStorage.getItem('postLoginReturnTo') : null);
+    return value?.startsWith('/') && !value.startsWith('//') ? value : '/dashboard';
+  }
 
   async function register(e: Event) {
     e.preventDefault();
@@ -27,7 +35,9 @@
     try {
       const { user } = await api.register(email, password, displayName);
       auth.setAuth(user);
-      await goto('/dashboard');
+      const returnTo = safeReturnTo();
+      sessionStorage.removeItem('postLoginReturnTo');
+      await goto(returnTo);
     } catch (e: any) {
       error = typeof e.error === 'string' ? e.error : 'Registrierung fehlgeschlagen';
       await tick();

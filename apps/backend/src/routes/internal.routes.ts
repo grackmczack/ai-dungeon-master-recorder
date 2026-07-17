@@ -6,6 +6,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import {
+  buildDiscordConnectUrl,
+  createDiscordLinkToken,
+  discordLinkExpiresAt,
+  hashDiscordLinkToken
+} from "../lib/discord-link.js";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN;
 if (process.env.NODE_ENV === "production" && !INTERNAL_TOKEN) {
@@ -44,6 +50,10 @@ const PostChannelSchema = z.object({
     .string()
     .regex(/^\d{17,20}$/)
     .nullable()
+});
+const DiscordConnectLinkSchema = z.object({
+  guildId: DiscordGuildIdSchema,
+  guildName: z.string().trim().min(1).max(100)
 });
 
 async function syncInstallation(guildId: string, guildName: string) {
@@ -109,6 +119,14 @@ export async function internalRoutes(app: FastifyInstance) {
           ...(guildIds.length > 0 ? { discordGuildId: { notIn: guildIds } } : {})
         },
         data: { isActive: false, removedAt: now, lastSeenAt: now }
+      }),
+      prisma.discordLinkToken.deleteMany({
+        where: {
+          group:
+            guildIds.length > 0
+              ? { discordGuildId: { notIn: guildIds } }
+              : { discordGuildId: { not: null } }
+        }
       })
     ]);
 
@@ -136,11 +154,51 @@ export async function internalRoutes(app: FastifyInstance) {
     const params = z.object({ guildId: DiscordGuildIdSchema }).safeParse(req.params);
     if (!params.success) return reply.status(400).send({ error: "Invalid Discord guild id" });
 
-    await prisma.discordInstallation.updateMany({
-      where: { discordGuildId: params.data.guildId },
-      data: { isActive: false, removedAt: new Date(), lastSeenAt: new Date() }
-    });
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.discordInstallation.updateMany({
+        where: { discordGuildId: params.data.guildId },
+        data: { isActive: false, removedAt: now, lastSeenAt: now }
+      }),
+      prisma.discordLinkToken.deleteMany({
+        where: { group: { discordGuildId: params.data.guildId } }
+      })
+    ]);
     return reply.status(204).send();
+  });
+
+  // Gibt einem berechtigten Discord-Admin einen einmaligen Web-Link. Der Bot
+  // kennt die Guild bereits; Discord-Userdaten werden nicht gespeichert.
+  app.post("/internal/discord/connect-link", async (req, reply) => {
+    if (!checkToken(req, reply)) return;
+    const body = DiscordConnectLinkSchema.safeParse(req.body);
+    if (!body.success) return reply.status(400).send({ error: "INVALID_LINK_REQUEST" });
+
+    const { guildId, guildName } = body.data;
+    await syncInstallation(guildId, guildName);
+    const group = await findOrCreateGuildGroup(guildId, guildName);
+    const activeWebMemberships = await prisma.groupMembership.count({
+      where: { groupId: group.id, userId: { not: null }, leftAt: null }
+    });
+    if (activeWebMemberships > 0) {
+      await prisma.discordLinkToken.deleteMany({ where: { groupId: group.id } });
+      return reply.send({ linked: true, connectUrl: null, expiresAt: null });
+    }
+
+    const token = createDiscordLinkToken();
+    const expiresAt = discordLinkExpiresAt();
+    await prisma.discordLinkToken.upsert({
+      where: { groupId: group.id },
+      update: { codeHash: hashDiscordLinkToken(token), expiresAt },
+      create: { groupId: group.id, codeHash: hashDiscordLinkToken(token), expiresAt }
+    });
+
+    const appUrl = process.env.APP_URL ?? "http://localhost:5173";
+    return reply.send({
+      linked: false,
+      connectUrl: buildDiscordConnectUrl(appUrl, token),
+      expiresAt
+    });
   });
 
   // POST /internal/sessions — Bot legt Session + Recording an

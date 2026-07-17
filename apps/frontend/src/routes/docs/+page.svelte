@@ -81,9 +81,10 @@
 
 <h3>In 5 Minuten startklar</h3>
 <ol>
-  <li><strong>Bot einladen:</strong> Lade den Bot über den Einladungslink in deinen Discord-Server ein.</li>
   <li><strong>Account erstellen:</strong> Registriere dich im Web-Panel unter <code>/register</code> mit deiner E-Mail.</li>
-  <li><strong>Gruppe verknüpfen:</strong> Erstelle eine Gruppe und hinterlege die Discord-Server-ID, damit Sessions dem richtigen Mandanten zugeordnet werden.</li>
+  <li><strong>Gruppe erstellen:</strong> Lege deine Spielgruppe im Web-Panel an. Eine Discord-Server-ID ist nicht nötig.</li>
+  <li><strong>Bot einladen:</strong> Lade den Bot über den Einladungslink in deinen Discord-Server ein.</li>
+  <li><strong>Gruppe verbinden:</strong> Führe als Server-Admin <code>/status</code> aus, öffne den privaten Verbindungslink und wähle deine Web-Gruppe aus.</li>
   <li><strong>Kampagne starten:</strong> Lege eine Kampagne innerhalb der Gruppe an.</li>
   <li><strong>Einstellungen konfigurieren:</strong> Trage deine API-Keys für Transkription (Replicate) und Zusammenfassung (Anthropic/Gemini/OpenAI/SiliconFlow/Ollama) ein.</li>
   <li><strong>Los geht's:</strong> Nutze <code>/record</code> in deinem Discord-Voice-Channel und der Bot startet die Aufnahme!</li>
@@ -107,9 +108,9 @@
 <table>
   <thead><tr><th>Befehl</th><th>Beschreibung</th></tr></thead>
   <tbody>
-    <tr><td><code>/record</code></td><td>Startet die Aufnahme im aktuellen Voice-Channel. Der Bot joint und beginnt die Aufnahme automatisch.</td></tr>
+    <tr><td><code>/record</code></td><td>Startet die Aufnahme im aktuellen Voice-Channel. Bei einem noch nicht verbundenen Server erhält ein Server-Admin zusätzlich einen privaten Web-Link.</td></tr>
     <tr><td><code>/stop</code></td><td>Stoppt die Aufnahme, konvertiert das Audio zu MP3 und startet die Transkription.</td></tr>
-    <tr><td><code>/status</code></td><td>Zeigt den aktuellen Status: ob gerade aufgenommen/transkribiert/summarized wird.</td></tr>
+    <tr><td><code>/status</code></td><td>Zeigt den aktuellen Status und bietet Server-Admins bei Bedarf einen privaten Link zur Web-Verknüpfung an.</td></tr>
     <tr><td><code>/summary-channel set</code></td><td>Legt den aktuellen oder ausgewählten Textkanal dauerhaft für fertige Zusammenfassungen fest.</td></tr>
     <tr><td><code>/summary-channel status</code></td><td>Zeigt den aktuell festgelegten Summary-Kanal.</td></tr>
     <tr><td><code>/summary-channel clear</code></td><td>Entfernt die feste Auswahl; danach wird wieder der Kanal von <code>/record</code> verwendet.</td></tr>

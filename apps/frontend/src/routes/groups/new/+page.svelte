@@ -1,27 +1,18 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
 
   let name = $state('');
   let description = $state('');
-  let discordGuildId = $state('');
   let error = $state('');
   let loading = $state(false);
-  let discordInviteUrl = $state('');
-
-  onMount(() => {
-    api.getDiscordConfig()
-      .then((config) => { discordInviteUrl = config.inviteUrl ?? ''; })
-      .catch(() => { discordInviteUrl = ''; });
-  });
 
   async function create(e: Event) {
     e.preventDefault();
     loading = true;
     error = '';
     try {
-      const group = await api.createGroup({ name, description: description || undefined, discordGuildId: discordGuildId || undefined });
+      const group = await api.createGroup({ name, description: description || undefined });
       goto(`/groups/${group.id}`);
     } catch (e: any) {
       error = e.error ?? 'Fehler beim Erstellen';
@@ -56,19 +47,8 @@
         placeholder="Optional: kurze Beschreibung der Gruppe"></textarea>
     </div>
 
-    <div class="space-y-2">
-      <label for="discord-guild-id" class="block text-sm text-gray-400">Discord Server ID</label>
-      <input id="discord-guild-id" bind:value={discordGuildId}
-        inputmode="numeric" pattern={'[0-9]{17,20}'}
-        class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white placeholder-gray-600 font-mono text-sm focus:outline-none focus:border-brand-500 transition"
-        placeholder="z.B. 1394755474263375902" />
-      <p class="text-xs text-gray-600">Damit Bot-Aufnahmen sicher dieser Gruppe zugeordnet werden: Rechtsklick auf deinen Discord-Server → Server-ID kopieren (Entwicklermodus nötig).</p>
-      {#if discordInviteUrl}
-        <a href={discordInviteUrl} target="_blank" rel="noreferrer"
-          class="inline-flex text-xs text-brand-400 hover:text-brand-300">
-          Bot noch nicht installiert? Jetzt zum Discord-Server hinzufügen →
-        </a>
-      {/if}
+    <div class="rounded-xl border border-brand-500/20 bg-brand-500/5 px-4 py-3 text-sm text-gray-400">
+      Eine Server-ID musst du nicht eintragen. Nutze danach als Server-Admin <code>/status</code> in Discord und öffne den nur für dich sichtbaren Verbindungslink.
     </div>
 
     <button type="submit" disabled={loading}

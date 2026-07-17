@@ -54,9 +54,20 @@ model Group {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  memberships GroupMembership[]
-  campaigns   Campaign[]
-  settings    GroupSettings?
+  memberships      GroupMembership[]
+  campaigns        Campaign[]
+  settings         GroupSettings?
+  discordLinkToken DiscordLinkToken?
+}
+
+model DiscordLinkToken {
+  id        String   @id @default(cuid())
+  groupId   String   @unique
+  codeHash  String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 }
 
 model DiscordInstallation {

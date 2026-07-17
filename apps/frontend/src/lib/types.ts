@@ -33,7 +33,7 @@ export interface Group {
   id: string;
   name: string;
   description?: string;
-  discordGuildId?: string;
+  discordGuildId?: string | null;
   role?: "GM" | "PLAYER" | "OBSERVER";
   _count?: { campaigns: number; memberships: number };
   memberships?: GroupMembership[];

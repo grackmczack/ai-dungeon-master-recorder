@@ -19,6 +19,16 @@ interface SessionRecord {
   recordingId: string;
 }
 
+export class BackendRequestError extends Error {
+  public constructor(
+    public readonly statusCode: number,
+    public readonly errorCode: string,
+    details: string
+  ) {
+    super(`Backend request failed: ${statusCode} ${details}`);
+  }
+}
+
 async function backendPost(path: string, body: unknown): Promise<unknown> {
   return backendRequest(path, "POST", body);
 }
@@ -38,7 +48,14 @@ async function backendRequest(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Backend ${path} failed: ${res.status} ${text}`);
+    let errorCode = "BACKEND_REQUEST_FAILED";
+    try {
+      const parsed = JSON.parse(text) as { error?: unknown };
+      if (typeof parsed.error === "string") errorCode = parsed.error;
+    } catch {
+      // Antworttext bleibt als Diagnose im Error erhalten.
+    }
+    throw new BackendRequestError(res.status, errorCode, `${path} ${text}`);
   }
   if (res.status === 204) return undefined;
   return res.json();
@@ -117,4 +134,20 @@ export async function syncDiscordInstallations(
 
 export async function markDiscordInstallationRemoved(guildId: string): Promise<void> {
   await backendRequest(`/internal/discord/installations/${guildId}`, "DELETE");
+}
+
+export interface DiscordConnectLink {
+  linked: boolean;
+  connectUrl: string | null;
+  expiresAt: string | null;
+}
+
+export async function getDiscordConnectLink(
+  guildId: string,
+  guildName: string
+): Promise<DiscordConnectLink> {
+  return (await backendRequest("/internal/discord/connect-link", "POST", {
+    guildId,
+    guildName
+  })) as DiscordConnectLink;
 }

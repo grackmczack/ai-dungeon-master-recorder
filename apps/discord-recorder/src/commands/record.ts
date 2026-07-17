@@ -1,7 +1,14 @@
-import { GuildMember, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
+import {
+  GuildMember,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction
+} from "discord.js";
 import type { DiscordCommand } from "../services/discord.service.js";
 import type { VoiceRecorderService } from "../services/voice-recorder.service.js";
 import type { ChunkProcessorService } from "../services/chunk-processor.service.js";
+import { getDiscordConnectLink } from "../services/database.service.js";
 
 export function createRecordCommand(
   voiceRecorderService: VoiceRecorderService,
@@ -92,6 +99,22 @@ export function createRecordCommand(
             `📦 Chunks alle 30 Min · Auto-Stop wenn alle weg · Max 4h\n` +
             `Stoppe mit \`/stop\` wenn ihr fertig seid.`
         );
+
+        if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          try {
+            const link = await getDiscordConnectLink(guildId, interaction.guild.name);
+            if (link.connectUrl) {
+              await interaction.followUp({
+                content:
+                  `🔗 **Dieser Server ist noch nicht mit dem Web-Panel verbunden.**\n` +
+                  `[Jetzt verbinden](${link.connectUrl}) — der Link ist 15 Minuten gültig und nur für dich sichtbar.`,
+                flags: MessageFlags.Ephemeral
+              });
+            }
+          } catch (error) {
+            console.error(`[RECORD] Web-Verbindungslink für ${guildId} fehlgeschlagen`, error);
+          }
+        }
       } catch (error) {
         chunkProcessor.cleanup(guildId);
         if (error instanceof Error && error.message === "USER_NOT_IN_VOICE_CHANNEL") {

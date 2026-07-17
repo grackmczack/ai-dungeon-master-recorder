@@ -1,6 +1,12 @@
-import { SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
+import {
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction
+} from "discord.js";
 import type { DiscordCommand } from "../services/discord.service.js";
 import type { VoiceRecorderService } from "../services/voice-recorder.service.js";
+import { getDiscordConnectLink } from "../services/database.service.js";
 
 export function createStatusCommand(voiceRecorderService: VoiceRecorderService): DiscordCommand {
   return {
@@ -35,7 +41,21 @@ export function createStatusCommand(voiceRecorderService: VoiceRecorderService):
         `🎙️ Verarbeitung: ${waitingForGuild} wartend, ${activeForGuild} aktiv`
       ];
 
-      await interaction.reply({ content: lines.join("\n"), ephemeral: true });
+      if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        try {
+          const link = await getDiscordConnectLink(guildId, interaction.guild?.name ?? guildId);
+          if (link.connectUrl) {
+            lines.push(
+              `\n🔗 **Web-Panel noch nicht verbunden:** [Jetzt sicher verbinden](${link.connectUrl})`,
+              "Der Link ist 15 Minuten gültig und nur für dich sichtbar."
+            );
+          }
+        } catch (error) {
+          console.error(`[STATUS] Web-Verbindungslink für ${guildId} fehlgeschlagen`, error);
+        }
+      }
+
+      await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral });
     }
   };
 }
