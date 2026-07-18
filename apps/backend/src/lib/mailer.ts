@@ -27,6 +27,14 @@ function smtpConfigured(): boolean {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM);
 }
 
+function brandLogoUrl(): string {
+  try {
+    return new URL("/logo-d20.png", process.env.APP_URL ?? "http://localhost:5173").toString();
+  } catch {
+    return "http://localhost:5173/logo-d20.png";
+  }
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -47,7 +55,7 @@ export function buildBrandedEmail(input: BrandedEmailInput): BrandedEmail {
     ...(input.notice ? [input.notice, ""] : []),
     ...(input.ignoreNotice ? [input.ignoreNotice, ""] : []),
     "Möge die nächste Session eine gute Geschichte schreiben.",
-    "Dein Artificer · D&D Recorder"
+    "Dein Artificer · DnD Recorder"
   ];
 
   const paragraphHtml = input.paragraphs
@@ -79,8 +87,8 @@ export function buildBrandedEmail(input: BrandedEmailInput): BrandedEmail {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#1a1a2e;border:1px solid #2d2d4a;border-radius:16px;overflow:hidden;">
           <tr><td style="padding:24px 30px;background:#151525;border-bottom:1px solid #2d2d4a;">
             <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
-              <td style="font-size:30px;padding-right:12px;">🎲</td>
-              <td><div style="color:#ffffff;font-size:19px;font-weight:800;letter-spacing:.2px;">D&amp;D Recorder</div><div style="color:#a78bfa;font-size:12px;margin-top:3px;">Dein KI-Chronist am Spieltisch</div></td>
+              <td style="padding-right:14px;"><img src="${escapeHtml(brandLogoUrl())}" width="48" height="48" alt="DnD Recorder" style="display:block;width:48px;height:48px;border:0;"></td>
+              <td><div style="color:#ffffff;font-size:19px;font-weight:800;letter-spacing:.2px;">DnD Recorder</div><div style="color:#a78bfa;font-size:12px;margin-top:3px;">Dein KI-Chronist am Spieltisch</div></td>
             </tr></table>
           </td></tr>
           <tr><td style="padding:32px 30px;">
@@ -94,7 +102,7 @@ export function buildBrandedEmail(input: BrandedEmailInput): BrandedEmail {
           </td></tr>
           <tr><td style="padding:22px 30px;border-top:1px solid #2d2d4a;background:#151525;color:#9ca3af;font-size:12px;line-height:1.6;">
             Möge die nächste Session eine gute Geschichte schreiben.<br>
-            <strong style="color:#c4b5fd;">Dein Artificer · D&amp;D Recorder</strong>
+            <strong style="color:#c4b5fd;">Dein Artificer · DnD Recorder</strong>
           </td></tr>
         </table>
       </td></tr>
@@ -109,12 +117,12 @@ export function buildEmailVerificationEmail(
   verificationUrl: string
 ): BrandedEmail {
   return buildBrandedEmail({
-    subject: "Bestätige deine E-Mail-Adresse · D&D Recorder",
+    subject: "Bestätige deine E-Mail-Adresse · DnD Recorder",
     preheader: "Bestätige deine E-Mail-Adresse und aktiviere dein Konto.",
     title: "Ein letzter Wurf",
     displayName,
     paragraphs: [
-      "dein Konto ist vorbereitet. Bestätige jetzt deine E-Mail-Adresse, bevor dein Abenteuer im D&D Recorder beginnt."
+      "dein Konto ist vorbereitet. Bestätige jetzt deine E-Mail-Adresse, bevor dein Abenteuer im DnD Recorder beginnt."
     ],
     action: { label: "E-Mail-Adresse bestätigen", url: verificationUrl },
     notice: "Der Link ist 24 Stunden gültig und kann nur einmal verwendet werden.",
@@ -124,7 +132,7 @@ export function buildEmailVerificationEmail(
 
 export function buildAccountActivatedEmail(displayName: string, loginUrl: string): BrandedEmail {
   return buildBrandedEmail({
-    subject: "Dein Konto ist aktiviert · D&D Recorder",
+    subject: "Dein Konto ist aktiviert · DnD Recorder",
     preheader: "Dein Konto ist aktiviert und der Spieltisch wartet.",
     title: "Willkommen am Spieltisch",
     displayName,
@@ -132,14 +140,14 @@ export function buildAccountActivatedEmail(displayName: string, loginUrl: string
       "deine E-Mail-Adresse ist bestätigt und dein Konto wurde aktiviert.",
       "Du kannst jetzt deine Gruppe und Kampagne einrichten, den Discord-Bot verbinden und eure nächsten Abenteuer festhalten."
     ],
-    action: { label: "Zum D&D Recorder", url: loginUrl }
+    action: { label: "Zum DnD Recorder", url: loginUrl }
   });
 }
 
 export function buildPasswordResetEmail(displayName: string, resetUrl: string): BrandedEmail {
   return buildBrandedEmail({
-    subject: "Passwort zurücksetzen · D&D Recorder",
-    preheader: "Lege ein neues Passwort für dein D&D-Recorder-Konto fest.",
+    subject: "Passwort zurücksetzen · DnD Recorder",
+    preheader: "Lege ein neues Passwort für dein DnD-Recorder-Konto fest.",
     title: "Ein neuer Schlüssel für dein Konto",
     displayName,
     paragraphs: [

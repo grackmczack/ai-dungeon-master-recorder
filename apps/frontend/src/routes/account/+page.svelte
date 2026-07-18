@@ -41,7 +41,7 @@
   }
 </script>
 
-<svelte:head><title>Konto — DM Recorder</title></svelte:head>
+<svelte:head><title>Konto — DnD Recorder</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-10 sm:px-6">
   <a href="/dashboard" class="mb-6 inline-flex min-h-11 items-center text-sm text-gray-300 hover:text-white">← Dashboard</a>

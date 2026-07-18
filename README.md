@@ -1,4 +1,4 @@
-# AI Dungeon Master Recorder
+# DnD Recorder
 
 Ein Discord-first Recording- und Analyse-System für Tabletop-Rollenspiel-Sessions (TTRPG/D&D).
 
@@ -251,7 +251,7 @@ SMTP_SECURE=false       # true für implizites TLS, meist Port 465
 SMTP_TLS_SERVERNAME=    # Optionaler Zertifikats-/SNI-Name, wenn SMTP_HOST eine IP ist
 SMTP_USER=
 SMTP_PASSWORD=
-SMTP_FROM=Artificer · D&D Recorder <noreply@example.com>
+SMTP_FROM=Artificer · DnD Recorder <noreply@example.com>
 DISCORD_CLIENT_ID=        # identisch zur Discord-App; erzeugt den öffentlichen Invite-Link
 ```
 

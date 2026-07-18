@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api.js';
+  import BrandHeader from '$lib/components/BrandHeader.svelte';
 
   let email = $state('');
   let loading = $state(false);
@@ -22,10 +23,11 @@
   }
 </script>
 
-<svelte:head><title>Passwort vergessen — DM Recorder</title></svelte:head>
+<svelte:head><title>Passwort vergessen — DnD Recorder</title></svelte:head>
 
 <div class="min-h-screen flex items-center justify-center bg-surface-900 p-4">
   <div class="w-full max-w-md">
+    <BrandHeader subtitle="Zugang wiederherstellen" compact />
     <a href="/login" class="mb-6 inline-flex min-h-11 items-center text-sm text-gray-300 hover:text-white">← Zur Anmeldung</a>
     <form onsubmit={submit} class="bg-surface-800 rounded-2xl p-6 sm:p-8 border border-surface-600 shadow-xl space-y-5">
       <div>

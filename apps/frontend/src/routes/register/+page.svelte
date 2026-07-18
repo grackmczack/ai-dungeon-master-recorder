@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { api } from '$lib/api.js';
+  import BrandHeader from '$lib/components/BrandHeader.svelte';
 
   let email = $state('');
   let password = $state('');
@@ -55,15 +56,11 @@
   }
 </script>
 
-<svelte:head><title>Registrieren — DM Recorder</title></svelte:head>
+<svelte:head><title>Registrieren — DnD Recorder</title></svelte:head>
 
 <div class="min-h-screen flex items-center justify-center bg-surface-900 p-4 py-10">
   <div class="w-full max-w-md">
-    <div class="text-center mb-8">
-      <div class="text-5xl mb-3" aria-hidden="true">🎲</div>
-      <h1 class="text-2xl font-bold text-white">DM Recorder</h1>
-      <p class="text-gray-400 text-sm mt-1">Konto erstellen</p>
-    </div>
+    <BrandHeader subtitle="Konto erstellen" />
 
     {#if registeredEmail}
       <section class="bg-surface-800 rounded-2xl p-6 sm:p-8 border border-surface-600 shadow-xl space-y-5 text-center">

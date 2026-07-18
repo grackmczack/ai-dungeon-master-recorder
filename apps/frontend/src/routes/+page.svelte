@@ -13,4 +13,4 @@
   });
 </script>
 
-<svelte:head><title>DM Recorder</title></svelte:head>
+<svelte:head><title>DnD Recorder</title></svelte:head>

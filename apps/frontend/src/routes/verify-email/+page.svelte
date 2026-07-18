@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import BrandHeader from '$lib/components/BrandHeader.svelte';
 
   let status = $state<'loading' | 'success' | 'error'>('loading');
   let message = $state('Deine E-Mail-Adresse wird bestätigt...');
@@ -46,10 +47,11 @@
   }
 </script>
 
-<svelte:head><title>E-Mail bestätigen — DM Recorder</title></svelte:head>
+<svelte:head><title>E-Mail bestätigen — DnD Recorder</title></svelte:head>
 
 <div class="min-h-screen flex items-center justify-center bg-surface-900 p-4">
   <main class="w-full max-w-md rounded-2xl border border-surface-600 bg-surface-800 p-6 text-center shadow-xl sm:p-8">
+    <BrandHeader subtitle="E-Mail-Bestätigung" compact />
     {#if status === 'loading'}
       <div class="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-4 border-surface-600 border-t-brand-500" aria-hidden="true"></div>
       <h1 class="text-xl font-semibold text-white">Der Artificer prüft dein Siegel</h1>

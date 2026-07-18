@@ -74,7 +74,8 @@
   <nav class="bg-surface-800 border-b border-surface-600 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50">
     <div class="flex min-w-0 items-center gap-3 sm:gap-6">
       <a href="/dashboard" class="text-brand-500 font-bold text-lg tracking-tight flex items-center gap-2">
-        🎲 DM Recorder
+        <img src="/logo-d20.svg" alt="" aria-hidden="true" width="32" height="32" class="h-8 w-8" />
+        <span>DnD Recorder</span>
       </a>
       {#if $user}
         <a href="/dashboard" aria-current={$page.url.pathname.startsWith('/dashboard') ? 'page' : undefined}

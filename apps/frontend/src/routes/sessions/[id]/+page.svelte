@@ -295,7 +295,7 @@
   }
 </script>
 
-<svelte:head><title>{session?.title ?? 'Session'} — DM Recorder</title></svelte:head>
+<svelte:head><title>{session?.title ?? 'Session'} — DnD Recorder</title></svelte:head>
 
 {#if campaignBackgroundImageUrl}
   <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">

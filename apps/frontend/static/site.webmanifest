@@ -1,20 +1,27 @@
 {
-  "name": "DM Recorder",
-  "short_name": "DM Recorder",
+  "name": "DnD Recorder",
+  "short_name": "DnD Recorder",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0f0f1a",
   "theme_color": "#0f0f1a",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "/logo-d20.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     },
     {
-      "src": "/favicon-dnd-recorder.png",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-d20.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

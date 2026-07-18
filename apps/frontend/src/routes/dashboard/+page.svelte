@@ -26,7 +26,7 @@
   });
 </script>
 
-<svelte:head><title>Dashboard — DM Recorder</title></svelte:head>
+<svelte:head><title>Dashboard — DnD Recorder</title></svelte:head>
 
 <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">

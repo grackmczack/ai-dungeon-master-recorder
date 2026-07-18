@@ -35,7 +35,7 @@ export function createStatusCommand(voiceRecorderService: VoiceRecorderService):
       const activeForGuild = activeJobs.filter((job) => job.data.guildId === guildId).length;
 
       const lines = [
-        "🤖 **AI Dungeon Master Recorder** — Online",
+        "**DnD Recorder** — Online",
         `📡 Latenz: ${interaction.client.ws.ping} ms`,
         `🔴 Aufnahme: ${voiceRecorderService.isRecording(guildId) ? "läuft" : "inaktiv"}`,
         `🎙️ Verarbeitung: ${waitingForGuild} wartend, ${activeForGuild} aktiv`

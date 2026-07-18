@@ -1,4 +1,4 @@
-# DND Recorder Roadmap
+# DnD Recorder Roadmap
 
 ---
 
@@ -152,6 +152,7 @@ Der Dokumentationsbereich ist vollstaendig implementiert und im Top-Menue (`/doc
 
 ## v2 -- Ausblick
 
+- [ ] Offline-Session als Audiodatei hochladen und anschließend wie eine Discord-Aufnahme transkribieren, zusammenfassen und einer Kampagne zuordnen
 - [ ] Spieler koennen sich selbst einloggen und eigenen Charakter-Bereich einsehen
 - [ ] Oeffentlich teilbare Kampagnen-Uebersicht (Share-Link)
 - [ ] Kampagnen-Wiki-Export (PDF / Markdown)

@@ -5,6 +5,7 @@
   import { tick } from 'svelte';
   import { auth } from '$lib/auth.js';
   import { api } from '$lib/api.js';
+  import BrandHeader from '$lib/components/BrandHeader.svelte';
 
   let email = $state('');
   let password = $state('');
@@ -60,15 +61,11 @@
   }
 </script>
 
-<svelte:head><title>Anmelden — DM Recorder</title></svelte:head>
+<svelte:head><title>Anmelden — DnD Recorder</title></svelte:head>
 
 <div class="min-h-screen flex items-center justify-center bg-surface-900 p-4">
   <div class="w-full max-w-md">
-    <div class="text-center mb-8">
-      <div class="text-5xl mb-3" aria-hidden="true">🎲</div>
-      <h1 class="text-2xl font-bold text-white">DM Recorder</h1>
-      <p class="text-gray-400 text-sm mt-1">Dein KI-Chronist für D&D Sessions</p>
-    </div>
+    <BrandHeader subtitle="Dein KI-Chronist für D&D-Sessions" />
 
     <form onsubmit={login} class="bg-surface-800 rounded-2xl p-6 sm:p-8 border border-surface-600 shadow-xl space-y-5">
       <h2 class="text-xl font-semibold text-white">Anmelden</h2>

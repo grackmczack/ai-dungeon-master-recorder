@@ -6,7 +6,7 @@ import {
   buildPasswordResetEmail
 } from "../src/lib/mailer.js";
 
-test("all account emails use the same D&D Recorder design and Artificer voice", () => {
+test("all account emails use the same DnD Recorder design and Artificer voice", () => {
   const emails = [
     buildEmailVerificationEmail("Alrik", "https://dndbot.example.com/verify-email?token=abc"),
     buildAccountActivatedEmail("Alrik", "https://dndbot.example.com/login"),
@@ -14,13 +14,14 @@ test("all account emails use the same D&D Recorder design and Artificer voice", 
   ];
 
   for (const email of emails) {
-    assert.match(email.subject, /D&D Recorder/);
+    assert.match(email.subject, /DnD Recorder/);
     assert.match(email.text, /Hallo Alrik,/);
-    assert.match(email.text, /Dein Artificer · D&D Recorder/);
+    assert.match(email.text, /Dein Artificer · DnD Recorder/);
     assert.match(email.html, /Botschaft des Artificers/);
     assert.match(email.html, /background:#0f0f1a/);
     assert.match(email.html, /background:#7c3aed/);
-    assert.match(email.html, /D&amp;D Recorder/);
+    assert.match(email.html, /alt="DnD Recorder"/);
+    assert.match(email.html, /logo-d20\.png/);
   }
 });
 

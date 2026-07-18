@@ -85,7 +85,8 @@ function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): obje
     color: 0x7c3aed, // brand purple
     fields,
     footer: {
-      text: `Generiert von ${summary.provider}/${summary.model} · AI Dungeon Master Recorder`
+      text: `Generiert von ${summary.provider}/${summary.model} · DnD Recorder`,
+      icon_url: "https://dndbot.haffelpaff.de/logo-d20.png"
     },
     timestamp: new Date().toISOString()
   };

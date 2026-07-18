@@ -335,7 +335,7 @@
   }
 </script>
 
-<svelte:head><title>{group?.name ?? 'Gruppe'} — DM Recorder</title></svelte:head>
+<svelte:head><title>{group?.name ?? 'Gruppe'} — DnD Recorder</title></svelte:head>
 
 <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10 relative">
   <!-- Seitenweiter Hintergrund (Parallax) -->
@@ -685,7 +685,7 @@
                   <label for="new-member-role" class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
                   <select id="new-member-role" bind:value={newRole}
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
-                    <option value="PLAYER">🎲 Spieler</option>
+                    <option value="PLAYER">🧙 Spieler</option>
                     <option value="GM">🎭 Spielleiter (GM)</option>
                     <option value="OBSERVER">👁️ Zuschauer</option>
                   </select>
@@ -747,7 +747,7 @@
                 </button>
                 <div class="flex items-center gap-2 shrink-0">
                   <span class="text-xs px-2 py-1 rounded-full {member.role === 'GM' ? 'bg-brand-500/20 text-brand-400' : 'bg-gray-700/50 text-gray-400'}">
-                    {member.role === 'GM' ? '🎭 GM' : member.role === 'PLAYER' ? '🎲 Spieler' : '👁️ Zuschauer'}
+                    {member.role === 'GM' ? '🎭 GM' : member.role === 'PLAYER' ? '🧙 Spieler' : '👁️ Zuschauer'}
                   </span>
                   <div class="flex gap-1">
                     <button onclick={() => openEditMember(member)}
@@ -806,7 +806,7 @@
                   <label for="edit-member-role" class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
                   <select id="edit-member-role" bind:value={editRole}
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
-                    <option value="PLAYER">🎲 Spieler</option>
+                    <option value="PLAYER">🧙 Spieler</option>
                     <option value="GM">🎭 Spielleiter (GM)</option>
                     <option value="OBSERVER">👁️ Zuschauer</option>
                   </select>

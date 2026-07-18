@@ -66,7 +66,7 @@
   }
 </script>
 
-<svelte:head><title>Discord verbinden — DM Recorder</title></svelte:head>
+<svelte:head><title>Discord verbinden — DnD Recorder</title></svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 py-10 sm:px-6">
   <a href="/dashboard" class="mb-8 inline-flex text-sm text-gray-500 hover:text-white">← Dashboard</a>

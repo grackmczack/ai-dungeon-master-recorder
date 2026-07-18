@@ -22,7 +22,7 @@
   }
 </script>
 
-<svelte:head><title>Neue Gruppe — DM Recorder</title></svelte:head>
+<svelte:head><title>Neue Gruppe — DnD Recorder</title></svelte:head>
 
 <div class="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <a href="/dashboard" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-8 transition">← Zurück</a>

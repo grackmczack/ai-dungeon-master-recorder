@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
+  import BrandHeader from '$lib/components/BrandHeader.svelte';
 
   const token = $derived($page.url.searchParams.get('token') ?? '');
   let password = $state('');
@@ -27,10 +28,12 @@
   }
 </script>
 
-<svelte:head><title>Neues Passwort — DM Recorder</title></svelte:head>
+<svelte:head><title>Neues Passwort — DnD Recorder</title></svelte:head>
 
 <div class="min-h-screen flex items-center justify-center bg-surface-900 p-4">
-  <form onsubmit={submit} class="w-full max-w-md space-y-5 rounded-2xl border border-surface-600 bg-surface-800 p-6 shadow-xl sm:p-8">
+  <div class="w-full max-w-md">
+    <BrandHeader subtitle="Zugang wiederherstellen" compact />
+    <form onsubmit={submit} class="space-y-5 rounded-2xl border border-surface-600 bg-surface-800 p-6 shadow-xl sm:p-8">
     <div>
       <h1 class="text-2xl font-semibold text-white">Neues Passwort festlegen</h1>
       <p class="mt-2 text-sm text-gray-300">Nach der Änderung werden alle bisherigen Sitzungen abgemeldet.</p>
@@ -55,5 +58,6 @@
       {loading ? 'Wird geändert...' : 'Passwort ändern'}
     </button>
     <a href="/login" class="block min-h-11 py-3 text-center text-sm text-gray-300 hover:text-white">Zur Anmeldung</a>
-  </form>
+    </form>
+  </div>
 </div>

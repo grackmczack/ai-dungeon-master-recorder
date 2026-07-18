@@ -13,12 +13,12 @@
 </script>
 
 <svelte:head>
-  <title>Dokumentation — D&D Recorder</title>
+  <title>Dokumentation — DnD Recorder</title>
 </svelte:head>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <h1 class="text-3xl font-bold text-white mb-4">📖 Dokumentation</h1>
-  <p class="text-gray-400 mb-2">Alles was du über den D&D Bot wissen musst — vom Start bis zur epischen Zusammenfassung</p>
+  <p class="text-gray-400 mb-2">Alles über den DnD Recorder Bot — vom Start bis zur epischen Zusammenfassung</p>
   <div class="flex flex-wrap items-center gap-4 mb-10">
     <p class="text-sm text-gray-600">Wähle ein Thema aus der Sidebar oder dem Dropdown-Menü (mobil). Bei Fragen hilft dir der FAQ-Bereich weiter.</p>
     {#if discordInviteUrl}
