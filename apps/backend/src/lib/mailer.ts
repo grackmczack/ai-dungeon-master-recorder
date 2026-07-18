@@ -21,6 +21,9 @@ export async function sendPasswordResetEmail(
     host: process.env.SMTP_HOST,
     port,
     secure,
+    tls: process.env.SMTP_TLS_SERVERNAME
+      ? { servername: process.env.SMTP_TLS_SERVERNAME }
+      : undefined,
     auth: process.env.SMTP_USER
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD ?? "" }
       : undefined

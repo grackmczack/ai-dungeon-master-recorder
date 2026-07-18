@@ -248,6 +248,7 @@ TRUST_PROXY=true        # Für korrekte Client-IP hinter Nginx/Cloudflare
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_SECURE=false       # true für implizites TLS, meist Port 465
+SMTP_TLS_SERVERNAME=    # Optionaler Zertifikats-/SNI-Name, wenn SMTP_HOST eine IP ist
 SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM=DM Recorder <noreply@example.com>
