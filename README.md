@@ -58,6 +58,14 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 - Git-basiertes Deployment (`git pull && docker compose up -d --build`)
 - Produktionsdomain: `dnd-recorder.de`
 
+### Produktionsdomain und Plesk
+
+- `https://dnd-recorder.de` ist die kanonische öffentliche URL.
+- Der Plesk-vHost leitet mit [`deploy/plesk/dnd-recorder.htaccess`](deploy/plesk/dnd-recorder.htaccess) intern an den Docker-Gateway auf `127.0.0.1:8080` weiter. Datenbank-Volumes und Uploads bleiben dadurch am bestehenden Ort.
+- `APP_URL` und `PUBLIC_BASE_URL` müssen beide auf die kanonische URL zeigen. `CORS_ORIGIN` darf während der Übergangszeit zusätzlich die vorherige Domain enthalten.
+- Der Docker-nginx leitet die vorherige Domain mit Status 308 auf `https://dnd-recorder.de` um.
+- Mailhosts dürfen bei Cloudflare nicht als Proxy betrieben werden; nur der Webhost wird proxied.
+
 ---
 
 ## Architektur

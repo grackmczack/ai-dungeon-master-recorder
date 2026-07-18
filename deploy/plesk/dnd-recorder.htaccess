@@ -1,0 +1,6 @@
+RewriteEngine On
+
+# The stateful Docker stack remains in its existing deployment directory.
+# Proxying the new Plesk vhost avoids copying PostgreSQL/Redis volumes and
+# user uploads during a domain-only migration.
+RewriteRule ^(.*)$ http://127.0.0.1:8080/$1 [P,L]
