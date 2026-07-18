@@ -65,6 +65,8 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 - `APP_URL` und `PUBLIC_BASE_URL` müssen beide auf die kanonische URL zeigen. `CORS_ORIGIN` darf während der Übergangszeit zusätzlich die vorherige Domain enthalten.
 - Der Docker-nginx leitet die vorherige Domain mit Status 308 auf `https://dnd-recorder.de` um.
 - Mailhosts dürfen bei Cloudflare nicht als Proxy betrieben werden; nur der Webhost wird proxied.
+- Ausgehende Transaktionsmails werden über die verifizierte Mailgun-Domain `dnd-recorder.de` versendet. Der bestehende Plesk-Mailserver bleibt ausschließlich für eingehende Nachrichten zuständig; die von Mailgun vorgeschlagenen MX-Einträge dürfen deshalb nicht übernommen werden.
+- Der SPF-Eintrag muss Plesk und Mailgun in genau einem TXT-Record autorisieren. Mailgun-DKIM verwendet einen eigenen Selector und kann parallel zu den Plesk-DKIM-Selectoren bestehen.
 - PostgreSQL und Redis verwenden explizite Docker-Volume-Namen. Dadurch bleiben die Daten beim Wechsel des Plesk-Verzeichnisses erhalten; `docker compose down -v` darf in Produktion trotzdem niemals verwendet werden.
 
 ---
@@ -255,13 +257,13 @@ PORT=3001
 APP_URL=https://dnd-recorder.de
 PUBLIC_BASE_URL=https://dnd-recorder.de
 TRUST_PROXY=true        # Für korrekte Client-IP hinter Nginx/Cloudflare
-SMTP_HOST=smtp.example.com
+SMTP_HOST=smtp.mailgun.org
 SMTP_PORT=587
-SMTP_SECURE=false       # true für implizites TLS, meist Port 465
-SMTP_TLS_SERVERNAME=    # Optionaler Zertifikats-/SNI-Name, wenn SMTP_HOST eine IP ist
-SMTP_USER=
+SMTP_SECURE=false       # STARTTLS auf Port 587
+SMTP_TLS_SERVERNAME=smtp.mailgun.org
+SMTP_USER=postmaster@dnd-recorder.de
 SMTP_PASSWORD=
-SMTP_FROM=Artificer · DnD Recorder <noreply@example.com>
+SMTP_FROM=Artificer · DnD Recorder <Artificer@dnd-recorder.de>
 DISCORD_CLIENT_ID=        # identisch zur Discord-App; erzeugt den öffentlichen Invite-Link
 ```
 
