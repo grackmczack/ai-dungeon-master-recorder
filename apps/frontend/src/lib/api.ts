@@ -35,17 +35,20 @@ const ERROR_TRANSLATIONS: Record<string, string> = {
   "Account is inactive": "Konto ist deaktiviert",
   "Admin access required": "Für diese Seite werden Administratorrechte benötigt",
   "Email already registered": "E-Mail ist bereits registriert",
-  "Discord server already linked": "Dieser Discord-Server ist bereits mit einer Gruppe verknüpft",
+  "Discord server already linked": "Dieser Discord-Server ist bereits mit einer Kampagne verknüpft",
   INVALID_OR_EXPIRED_LINK_TOKEN:
     "Der Verbindungslink ist ungültig oder abgelaufen. Fordere in Discord mit /status einen neuen an",
   DISCORD_SERVER_ALREADY_LINKED: "Dieser Discord-Server wurde bereits verbunden",
-  TARGET_GROUP_NOT_AVAILABLE: "Die ausgewählte Gruppe kann nicht verbunden werden",
+  TARGET_CAMPAIGN_NOT_AVAILABLE: "Die ausgewählte Kampagne kann nicht verbunden werden",
   ADMIN_KEYS_NOT_CONFIGURED:
-    "Beim Superadmin sind noch keine verwendbaren API-Keys in den Gruppeneinstellungen hinterlegt",
+    "Beim Superadmin sind noch keine verwendbaren API-Keys in den Kampagneneinstellungen hinterlegt",
   ADMIN_KEY_GRANT_CHANGED:
     "Die Admin-Key-Freigabe wurde zwischenzeitlich geändert. Lade die Einstellungen neu",
   USER_HAS_ACTIVE_SESSIONS:
     "Der Account hat noch laufende oder zu verarbeitende Sessions und kann derzeit nicht gelöscht werden",
+  CAMPAIGN_HAS_ACTIVE_SESSIONS:
+    "Die Kampagne hat noch eine laufende oder zu verarbeitende Session und kann derzeit nicht gelöscht werden",
+  VOICE_CHANNEL_ALREADY_BOUND: "Dieser Voice-Channel ist bereits einer anderen Kampagne zugeordnet",
   "Campaign not found": "Kampagne wurde nicht gefunden",
   "Session not found": "Session wurde nicht gefunden",
   "Member not found": "Mitglied wurde nicht gefunden",
@@ -57,8 +60,8 @@ const ERROR_TRANSLATIONS: Record<string, string> = {
   "Only valid png/jpeg/webp/gif images allowed":
     "Bitte wähle ein gültiges PNG-, JPEG-, WebP- oder GIF-Bild",
   "No Replicate API key configured": "Es ist kein Replicate-API-Key konfiguriert",
-  "No Replicate API key configured for this group":
-    "Für diese Gruppe ist kein Replicate-API-Key konfiguriert"
+  "No Replicate API key configured for this campaign":
+    "Für diese Kampagne ist kein Replicate-API-Key konfiguriert"
 };
 
 function errorMessage(data: any, status: number): string {
@@ -167,34 +170,58 @@ export const api = {
       body: JSON.stringify({ displayName })
     }),
 
-  // Groups
-  getGroups: () => request<any[]>("/groups"),
-  createGroup: (data: { name: string; description?: string }) =>
-    request<any>("/groups", { method: "POST", body: JSON.stringify(data) }),
+  // Kampagnen
+  getCampaigns: () => request<any[]>("/campaigns"),
   previewDiscordConnection: (token: string) =>
     request<{
       guildName: string;
       expiresAt: string;
       existingSessions: number;
-      groups: Array<{ id: string; name: string; description?: string }>;
+      campaigns: Array<{ id: string; name: string; description?: string }>;
     }>("/discord-connect/preview", { method: "POST", body: JSON.stringify({ token }) }),
   claimDiscordConnection: (
     token: string,
-    data: { targetGroupId?: string; newGroupName?: string }
+    data: { targetCampaignId?: string; newCampaignName?: string }
   ) =>
-    request<{ groupId: string; groupName: string; guildName: string; mergedSessions: number }>(
-      "/discord-connect/claim",
-      { method: "POST", body: JSON.stringify({ token, ...data }) }
-    ),
-  getGroup: (id: string) => request<any>(`/groups/${id}`),
+    request<{
+      campaignId: string;
+      campaignName: string;
+      guildName: string;
+      mergedSessions: number;
+    }>("/discord-connect/claim", { method: "POST", body: JSON.stringify({ token, ...data }) }),
+  getCampaign: (id: string) => request<any>(`/campaigns/${id}`),
   createCampaign: (
-    groupId: string,
-    data: { name: string; description?: string; setting?: string }
-  ) => request<any>(`/groups/${groupId}/campaigns`, { method: "POST", body: JSON.stringify(data) }),
+    dataOrLegacyCampaignId: { name: string; description?: string; setting?: string } | string,
+    legacyData?: { name: string; description?: string; setting?: string }
+  ) =>
+    request<any>("/campaigns", {
+      method: "POST",
+      body: JSON.stringify(
+        typeof dataOrLegacyCampaignId === "string" ? legacyData : dataOrLegacyCampaignId
+      )
+    }),
+  deleteCampaign: (campaignId: string) =>
+    request<any>(`/campaigns/${campaignId}`, { method: "DELETE" }),
+  getDiscordInstallations: () =>
+    request<Array<{ id: string; discordGuildId: string; guildName: string; isActive: boolean }>>(
+      "/discord-installations"
+    ),
+  addCampaignDiscordBinding: (campaignId: string, discordInstallationId: string) =>
+    request<any>(`/campaigns/${campaignId}/discord-bindings`, {
+      method: "POST",
+      body: JSON.stringify({ discordInstallationId })
+    }),
+  updateCampaignDiscordBinding: (campaignId: string, bindingId: string, data: any) =>
+    request<any>(`/campaigns/${campaignId}/discord-bindings/${bindingId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data)
+    }),
+  removeCampaignDiscordBinding: (campaignId: string, bindingId: string) =>
+    request<any>(`/campaigns/${campaignId}/discord-bindings/${bindingId}`, { method: "DELETE" }),
 
   // Members (v1 — direkte Verwaltung, kein Login/Email nötig)
   createMember: (
-    groupId: string,
+    campaignId: string,
     data: {
       discordName?: string;
       characterName?: string;
@@ -202,9 +229,13 @@ export const api = {
       role?: string;
       notes?: string;
     }
-  ) => request<any>(`/groups/${groupId}/members`, { method: "POST", body: JSON.stringify(data) }),
+  ) =>
+    request<any>(`/campaigns/${campaignId}/members`, {
+      method: "POST",
+      body: JSON.stringify(data)
+    }),
   updateMember: (
-    groupId: string,
+    campaignId: string,
     memberId: string,
     data: {
       discordName?: string | null;
@@ -214,28 +245,28 @@ export const api = {
       notes?: string | null;
     }
   ) =>
-    request<any>(`/groups/${groupId}/members/${memberId}`, {
+    request<any>(`/campaigns/${campaignId}/members/${memberId}`, {
       method: "PATCH",
       body: JSON.stringify(data)
     }),
-  pauseMember: (groupId: string, memberId: string, note?: string) =>
-    request<any>(`/groups/${groupId}/members/${memberId}/pause`, {
+  pauseMember: (campaignId: string, memberId: string, note?: string) =>
+    request<any>(`/campaigns/${campaignId}/members/${memberId}/pause`, {
       method: "POST",
       body: JSON.stringify({ note })
     }),
-  resumeMember: (groupId: string, memberId: string) =>
-    request<any>(`/groups/${groupId}/members/${memberId}/resume`, { method: "POST" }),
-  removeMember: (groupId: string, memberId: string) =>
-    request<any>(`/groups/${groupId}/members/${memberId}`, { method: "DELETE" }),
-  uploadMemberAvatar: (groupId: string, memberId: string, file: File) =>
-    upload<{ avatarUrl: string }>(`/groups/${groupId}/members/${memberId}/avatar`, file),
-  uploadMemberCharacterSheet: (groupId: string, memberId: string, file: File) =>
+  resumeMember: (campaignId: string, memberId: string) =>
+    request<any>(`/campaigns/${campaignId}/members/${memberId}/resume`, { method: "POST" }),
+  removeMember: (campaignId: string, memberId: string) =>
+    request<any>(`/campaigns/${campaignId}/members/${memberId}`, { method: "DELETE" }),
+  uploadMemberAvatar: (campaignId: string, memberId: string, file: File) =>
+    upload<{ avatarUrl: string }>(`/campaigns/${campaignId}/members/${memberId}/avatar`, file),
+  uploadMemberCharacterSheet: (campaignId: string, memberId: string, file: File) =>
     upload<{ characterSheetUrl: string }>(
-      `/groups/${groupId}/members/${memberId}/character-sheet`,
+      `/campaigns/${campaignId}/members/${memberId}/character-sheet`,
       file
     ),
-  getMemberCharacterSheet: (groupId: string, memberId: string) =>
-    download(`/groups/${groupId}/members/${memberId}/character-sheet`),
+  getMemberCharacterSheet: (campaignId: string, memberId: string) =>
+    download(`/campaigns/${campaignId}/members/${memberId}/character-sheet`),
 
   // Sessions
   getSession: (id: string) => request<any>(`/sessions/${id}`),
@@ -264,9 +295,12 @@ export const api = {
     request<any>(`/sessions/${sessionId}/image`, { method: "DELETE" }),
 
   // Settings
-  getSettings: (groupId: string) => request<any>(`/groups/${groupId}/settings`),
-  updateSettings: (groupId: string, data: any) =>
-    request<any>(`/groups/${groupId}/settings`, { method: "PUT", body: JSON.stringify(data) }),
+  getSettings: (campaignId: string) => request<any>(`/campaigns/${campaignId}/settings`),
+  updateSettings: (campaignId: string, data: any) =>
+    request<any>(`/campaigns/${campaignId}/settings`, {
+      method: "PUT",
+      body: JSON.stringify(data)
+    }),
 
   // Campaigns
   updateCampaignContext: (campaignId: string, campaignContext: string) =>
@@ -440,9 +474,8 @@ export const api = {
       userId: string;
       displayName: string;
       email: string;
-      exclusiveGroups: Array<{ id: string; name: string }>;
-      sharedGroups: Array<{ id: string; name: string }>;
-      campaigns: number;
+      exclusiveCampaigns: Array<{ id: string; name: string }>;
+      sharedCampaigns: Array<{ id: string; name: string }>;
       sessions: number;
       activeSessions: number;
       recordings: number;

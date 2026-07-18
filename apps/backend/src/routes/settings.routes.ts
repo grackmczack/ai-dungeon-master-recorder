@@ -21,7 +21,6 @@ const DEFAULT_SETTINGS = {
   llmModel: "claude-opus-4-8",
   llmEndpoint: null,
   llmSystemPrompt: null,
-  llmCampaignContext: null,
   summaryLanguage: "de",
   postSummaryChannelId: null
 };
@@ -54,17 +53,20 @@ const SettingsSchema = z.object({
 export async function settingsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
 
-  // GET /groups/:groupId/settings
-  app.get("/groups/:groupId/settings", async (req, reply) => {
-    const { groupId } = req.params as { groupId: string };
+  // GET /campaigns/:campaignId/settings
+  app.get("/campaigns/:campaignId/settings", async (req, reply) => {
+    const { campaignId } = req.params as { campaignId: string };
     const { sub } = req.user as { sub: string };
 
-    const membership = await prisma.groupMembership.findFirst({
-      where: { groupId, userId: sub, role: "GM", leftAt: null }
+    const membership = await prisma.campaignMembership.findFirst({
+      where: { campaignId, userId: sub, role: "GM", leftAt: null }
     });
     if (!membership) return reply.status(403).send({ error: "Only GMs can view settings" });
 
-    const settings = await prisma.groupSettings.findUnique({ where: { groupId } });
+    const [settings, campaign] = await Promise.all([
+      prisma.campaignSettings.findUnique({ where: { campaignId } }),
+      prisma.campaign.findUnique({ where: { id: campaignId }, select: { campaignContext: true } })
+    ]);
 
     const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
 
@@ -79,6 +81,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
     return reply.send({
       ...masked,
+      llmCampaignContext: campaign?.campaignContext ?? null,
       summaryLanguage: "de",
       usingAdminKeys: !!adminProfile,
       adminKeyProviderId: adminProfile?.superAdminId ?? null,
@@ -92,13 +95,13 @@ export async function settingsRoutes(app: FastifyInstance) {
     });
   });
 
-  // PUT /groups/:groupId/settings — only GMs
-  app.put("/groups/:groupId/settings", async (req, reply) => {
-    const { groupId } = req.params as { groupId: string };
+  // PUT /campaigns/:campaignId/settings — only GMs
+  app.put("/campaigns/:campaignId/settings", async (req, reply) => {
+    const { campaignId } = req.params as { campaignId: string };
     const { sub } = req.user as { sub: string };
 
-    const membership = await prisma.groupMembership.findFirst({
-      where: { groupId, userId: sub, role: "GM", leftAt: null }
+    const membership = await prisma.campaignMembership.findFirst({
+      where: { campaignId, userId: sub, role: "GM", leftAt: null }
     });
     if (!membership) return reply.status(403).send({ error: "Only GMs can change settings" });
 
@@ -118,6 +121,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const {
       usingAdminKeys: _usingAdminKeys,
       adminKeyProviderId: _adminKeyProviderId,
+      llmCampaignContext,
       ...settingsData
     } = body.data;
     let dataToUpdate: Record<string, unknown> = { ...settingsData };
@@ -145,11 +149,21 @@ export async function settingsRoutes(app: FastifyInstance) {
     // einem Entzug automatisch wieder.
     dataToUpdate = stripGrantedFields(dataToUpdate, adminProfile);
 
-    const settings = await prisma.groupSettings.upsert({
-      where: { groupId },
-      update: dataToUpdate,
-      create: { groupId, ...dataToUpdate }
-    });
+    const [settings] = await prisma.$transaction([
+      prisma.campaignSettings.upsert({
+        where: { campaignId },
+        update: dataToUpdate,
+        create: { campaignId, ...dataToUpdate }
+      }),
+      ...(llmCampaignContext !== undefined
+        ? [
+            prisma.campaign.update({
+              where: { id: campaignId },
+              data: { campaignContext: llmCampaignContext }
+            })
+          ]
+        : [])
+    ]);
 
     return reply.send({ updated: true, id: settings.id });
   });

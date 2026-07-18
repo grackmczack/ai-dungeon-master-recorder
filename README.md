@@ -9,12 +9,14 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 ## Features
 
 ### Discord-Bot
-- `/record` — Bot joint den Voice-Channel und startet die Aufnahme
+- `/record [kampagne]` — Bot joint den Voice-Channel und startet die Aufnahme; die Kampagnenauswahl ist bei eindeutiger Kanalzuordnung optional
 - `/stop` — Stoppt die Aufnahme, konvertiert zu MP3, startet Transkription
+- `/kampagne verbinden|aktivieren|deaktivieren|status` — Kampagnen und feste Voice-/Summary-Channels pro Discord-Server verwalten
+- `/summary-channel set|status|clear` — Summary-Channel einer Kampagne verwalten
 - **Auto-Stop** wenn alle User den Channel verlassen (30s Karenzzeit)
 - **Chunked Recording** — alle 30 Minuten wird ein Part geschrieben und parallel transkribiert, während weiteraufgenommen wird. Kein Speicherproblem bei stundenlangen Sessions
 - Max. 4 Stunden Failsafe-Timer
-- Multi-Server-fähig
+- Mandantenfähig: mehrere Discord-Server pro DM und mehrere Kampagnen pro Server
 
 ### Transkription
 - **Replicate WhisperX** (victor-upmeet/whisperx) mit Speaker-Diarization
@@ -35,7 +37,7 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 
 ### Web-Panel
 - **Login** mit JWT in einem HttpOnly-Session-Cookie
-- **Dashboard** — Gruppen-Übersicht
+- **Dashboard** — Kampagnen-Übersicht mit 4:3-Hintergrundbild, Sessionanzahl, Laufzeit und verbundenen Discord-Servern
 - **Kampagnen** mit Session-Timeline, Tagebuch-Tab und Mitgliederverwaltung
 - **Kampagnen-Hintergrundbild** mit Parallax-Scroll-Effekt (Banner über jeder Kampagnen-Karte)
 - **Mitgliederverwaltung** — Discordname, Charaktername, freie Rolle (Tank/Healer/…), Avatar-Upload, Charakterbogen-PDF-Upload; volle CRUD-Operationen, kein Login/Account für Mitglieder nötig (nur der DM loggt sich ein)
@@ -54,7 +56,7 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 - **Settings-UI:** API-Keys und Provider/Model-Auswahl für Bildgenerierung getrennt konfigurierbar (überarbeitete Settings-Seite)
 
 ### Infrastruktur
-- Docker Compose (5 Services: Bot, Backend, Transcriber, Frontend, Nginx, Postgres, Redis)
+- Docker Compose (7 Services: Bot, Backend, Transcriber, Frontend, Nginx, Postgres, Redis)
 - Git-basiertes Deployment (`git pull && docker compose up -d --build`)
 - Produktionsdomain: `dnd-recorder.de`
 
@@ -142,7 +144,7 @@ cp .env.postgres.example .env.postgres
 docker compose up -d postgres redis
 
 # DB-Schema
-cd apps/backend && npx prisma db push
+cd apps/backend && npx prisma migrate deploy
 
 # Bot starten
 pnpm --filter @ai-dungeon-master-recorder/discord-recorder dev
@@ -173,10 +175,13 @@ Test-Guild sofort bereitzustellen, während Discord die globalen Commands vertei
 Die Web-Zuordnung benötigt keine manuell kopierte Server-ID: `/status` und `/record` erkennen die
 Guild automatisch. Ist sie noch nicht verbunden, erhält ein Mitglied mit `Manage Guild` einen
 privaten, 15 Minuten gültigen Einmal-Link. Im angemeldeten Web-Panel wird damit eine vorhandene
-Gruppe ausgewählt oder eine neue angelegt; Discord-Benutzer-IDs werden nicht gespeichert.
+Kampagne ausgewählt oder eine neue angelegt. Discord-Benutzer-IDs werden nicht zur
+Kontoverfolgung gespeichert; sie bleiben ausschließlich als Sprecher-Snapshot an einer Session.
 
-Ein fester Kanal für fertige Zusammenfassungen kann im Web-Panel oder direkt in Discord verwaltet
-werden: `/summary-channel set`, `/summary-channel status`, `/summary-channel clear`.
+Mit `/kampagne verbinden` wird eine Kampagne einem Voice-Channel und optional einem festen
+Summary-Channel zugeordnet. `/record` löst die Kampagne in dieser Reihenfolge auf: explizite
+Auswahl, Voice-Channel-Bindung, einzige aktive Kampagne; mehrdeutige Fälle erfordern eine Auswahl.
+Ein freier Voice-Channel wird bei eindeutiger Kampagne automatisch gebunden.
 
 ### Produktions-Deployment (Strato)
 
@@ -198,15 +203,21 @@ docker compose up -d --build
 git pull && docker compose up -d --build
 ```
 
-### Datenbank-Migration (nach Schema-Änderungen)
+### Datenbank-Migrationen
 
 ```bash
-# Lokal
-docker exec dnd-backend sh -c "npx prisma db push --schema ./prisma/schema.prisma --skip-generate"
+# Lokal/CI
+pnpm --filter @ai-dungeon-master-recorder/backend db:migrate
 
-# Oder via Docker-Neustart (start.sh führt db push automatisch aus)
+# Produktion: start.sh führt `prisma migrate deploy` automatisch aus
 docker compose up -d --build
 ```
+
+Die Migration `20260718000200_campaign_multitenancy` wandelt die frühere
+Gruppe→Kampagne-Hülle verlustfrei in direkte Kampagnen um. Bei einer bestehenden, noch mit
+`prisma db push` angelegten Datenbank erkennt `start.sh` den Legacy-Stand, markiert einmalig die
+Baseline als angewendet und spielt danach die echte Migration ein. Vor Produktiv-Deployments
+sollte trotzdem ein Datenbank-Backup erstellt werden.
 
 **Nach dem ersten Deployment der Multi-User-Features:**
 Der erste existierende User muss manuell zum SUPER_ADMIN befördert werden:
@@ -215,20 +226,17 @@ docker exec dnd-postgres psql -U ai_dungeon -d ai_dungeon_master_recorder \
   -c "UPDATE \"User\" SET role='SUPER_ADMIN' WHERE email='deine@email.de';"
 ```
 
-**Bekannter Gotcha — Prisma `db push` schlägt beim Backend-Start fehl:****
+**Bekannter Gotcha — Prisma-Migration schlägt beim Backend-Start fehl:**
 Wenn `docker logs dnd-backend` beim Start `Could not parse schema engine response` zeigt: Prismas
-auto-heruntergeladene Schema-Engine-Binary (genutzt von `prisma db push` in `start.sh`) linkt gegen
+auto-heruntergeladene Schema-Engine-Binary (genutzt von `prisma migrate deploy` in `start.sh`) linkt gegen
 OpenSSL 1.1 (`libssl.so.1.1`), aktuelle Alpine-Images liefern aber nur OpenSSL 3.x. Der Fix ist
 bereits dauerhaft in `apps/backend/Dockerfile` eingebaut (installiert die archivierten Alpine-v3.16-
 Compat-Pakete `libssl1.1`/`libcrypto1.1` in der Runner-Stage) — falls das Backend-Base-Image mal
 aktualisiert wird, hier zuerst nachsehen, ob der Fix noch greift.
 
-Bei Schema-Änderungen, die alte `@@unique`-Constraints entfernen oder Spalten von required auf
-optional umstellen, kann `prisma db push` mit einem Constraint-Konflikt fehlschlagen (z.B.
-`cannot drop index ... because constraint ... requires it`). In dem Fall den alten Constraint
-einmalig manuell per `docker exec dnd-postgres psql ...` entfernen, dann erneut `db push` laufen
-lassen (passiert automatisch beim nächsten Container-Neustart, oder manuell via
-`docker exec dnd-backend sh -c "npx prisma db push --schema ./prisma/schema.prisma --skip-generate"`).
+Schemaänderungen werden nicht mehr per `db push`, sondern ausschließlich als eingecheckte,
+reviewbare Migrationen ausgerollt. Dadurch werden Datenübernahmen und unterschiedliche
+Constraint-Varianten ausdrücklich behandelt und sind vorab auf einem Produktionsklon testbar.
 
 ---
 
@@ -308,25 +316,30 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | POST | `/auth/change-password` | Eigenes Passwort ändern und andere Sitzungen widerrufen |
 | PATCH | `/auth/profile` | Eigenen Anzeigenamen ändern |
 | GET | `/auth/me` | Aktueller User |
-| GET | `/groups` | Eigene Gruppen |
-| POST | `/groups` | Gruppe erstellen |
-| GET | `/groups/:id` | Gruppe mit Kampagnen + Sessions |
-| GET | `/groups/:groupId/members` | Alle Mitglieder (inkl. Historie) |
-| POST | `/groups/:groupId/members` | Mitglied direkt anlegen (kein Login nötig) |
-| PATCH | `/groups/:groupId/members/:memberId` | Mitglied bearbeiten |
-| POST | `/groups/:groupId/members/:memberId/pause` | Mitglied pausieren |
-| POST | `/groups/:groupId/members/:memberId/resume` | Pause aufheben |
-| DELETE | `/groups/:groupId/members/:memberId` | Mitglied entfernen (soft-delete) |
-| POST | `/groups/:groupId/members/:memberId/avatar` | Avatar/Gesichtsbild hochladen |
-| POST | `/groups/:groupId/members/:memberId/character-sheet` | Charakterbogen (PDF) hochladen |
-| GET | `/groups/:groupId/settings` | Einstellungen lesen |
-| PUT | `/groups/:groupId/settings` | Einstellungen speichern |
+| GET | `/campaigns` | Eigene Kampagnen mit Session- und Serverstatus |
+| POST | `/campaigns` | Kampagne erstellen |
+| GET | `/campaigns/:id` | Kampagne mit Mitgliedern, Bindings und Sessions |
+| PATCH | `/campaigns/:id` | Kampagne bearbeiten oder global aktiv/inaktiv setzen |
+| DELETE | `/campaigns/:id` | Kampagne samt abgeschlossenen Sessions und Uploads löschen |
+| GET | `/campaigns/:campaignId/members` | Alle Mitglieder (inkl. Historie) |
+| POST | `/campaigns/:campaignId/members` | Mitglied direkt anlegen (kein Login nötig) |
+| PATCH | `/campaigns/:campaignId/members/:memberId` | Mitglied bearbeiten |
+| POST | `/campaigns/:campaignId/members/:memberId/pause` | Mitglied pausieren |
+| POST | `/campaigns/:campaignId/members/:memberId/resume` | Pause aufheben |
+| DELETE | `/campaigns/:campaignId/members/:memberId` | Mitglied entfernen (soft-delete) |
+| POST | `/campaigns/:campaignId/members/:memberId/avatar` | Avatar/Gesichtsbild hochladen |
+| POST | `/campaigns/:campaignId/members/:memberId/character-sheet` | Charakterbogen (PDF) hochladen |
+| GET | `/campaigns/:campaignId/settings` | Kampagneneinstellungen lesen |
+| PUT | `/campaigns/:campaignId/settings` | Kampagneneinstellungen speichern |
+| GET | `/discord-installations` | Für den DM verfügbare Discord-Server |
+| POST | `/campaigns/:campaignId/discord-bindings` | Kampagne einem weiteren Server zuordnen |
+| PATCH | `/campaigns/:campaignId/discord-bindings/:bindingId` | Server-/Channel-Bindung aktivieren oder ändern |
+| DELETE | `/campaigns/:campaignId/discord-bindings/:bindingId` | Serverbindung trennen |
 | GET | `/sessions/:id` | Session-Detail mit Transcript + Summary |
 | PATCH | `/sessions/:id` | Session-Titel ändern |
 | PUT | `/sessions/:id/speakers` | Speaker-Namen zuordnen (inkl. Diarization-Label) |
 | GET | `/sessions/:id/diarization-labels` | Erkannte Sprecher-Labels aus dem Transkript mit Textausschnitt |
 | PUT | `/campaigns/:id/context` | Kampagnen-Kontext setzen |
-| PATCH | `/campaigns/:id` | Kampagne bearbeiten (Name, Beschreibung, Setting, aktiv) |
 | POST | `/campaigns/:id/background` | Kampagnen-Hintergrundbild hochladen (GM-only) |
 | POST | `/campaigns/:id/generate-background` | Kampagnen-Hintergrundbild via Replicate generieren (GM-only) |
 | DELETE | `/campaigns/:id/background` | Kampagnen-Hintergrundbild entfernen (GM-only) |
@@ -345,16 +358,16 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | POST | `/admin/users` | Neuen DM anlegen |
 | PATCH | `/admin/users/:id` | DM bearbeiten (Name, Email, aktiv/deaktiv) |
 | GET | `/admin/users/:id/deletion-impact` | Auswirkungen einer vollständigen Account-Löschung |
-| DELETE | `/admin/users/:id` | DM löschen; allein verwaltete Gruppen/Daten mitlöschen |
+| DELETE | `/admin/users/:id` | DM löschen; allein verwaltete Kampagnen/Daten mitlöschen |
 | GET | `/admin/grants` | Alle aktiven Key-Grants |
 | POST | `/admin/users/:id/grant-keys` | Admin-API-Keys für DM freigeben |
 | DELETE | `/admin/users/:id/grant-keys` | Key-Grant entziehen |
-| GET | `/admin/overview` | DM-Übersicht mit Gruppen & Kampagnen |
+| GET | `/admin/overview` | DM-Übersicht mit Kampagnen und Discord-Bindings |
 
 ### Multi-User & Admin-System
 - **SUPER_ADMIN** verwaltet alle DMs, kann Accounts anlegen, sperren, reaktivieren und endgültig löschen. Eine Sperre widerruft sofort alle Sessions, lässt die Daten aber bestehen.
 - **Double-Opt-in:** Öffentlich registrierte Accounts können sich erst nach Bestätigung der E-Mail-Adresse anmelden. Links sind 24 Stunden und einmalig gültig; anschließend folgt eine Aktivierungsbestätigung. Bestehende und administrativ angelegte Accounts gelten als bestätigt.
-- **Vollständige Löschung:** Account, Grants und Memberships werden entfernt. Allein verwaltete Gruppen werden inklusive Kampagnen, Sessions, Aufnahmen und Uploads gelöscht; gemeinsame Gruppen bleiben erhalten.
+- **Vollständige Löschung:** Account, Grants und Memberships werden entfernt. Allein verwaltete Kampagnen werden inklusive Sessions, Aufnahmen und Uploads gelöscht; gemeinsame Kampagnen bleiben erhalten.
 - **Key-Grant-System:** Der Superadmin kann vorhandene API-Key-Profile an DMs verleihen. Key, Provider, Modell und Endpoint werden atomar übernommen; Settings zeigen die verfügbaren Key-Typen sowie sechs Präfix-Zeichen zur Kontrolle.
 - Transcriber, Kampagnenbilder und Sessionbilder lösen Grants bei jeder neuen Operation auf. Nach einem Revoke fällt der DM sofort auf seine zuvor gespeicherten eigenen Keys zurück.
 - Datenmodell: `User.role` (SUPER_ADMIN|DM), `User.isActive`, `AdminApiKeyGrant`-Tabelle
@@ -377,25 +390,27 @@ AdminApiKeyGrant
   ├── grantedAt
   └── revokedAt? (null = aktiv)
 
-Group (Discord-Server / Spielgruppe)
-  ├── GroupMembership (Mitglied — braucht KEINEN eigenen Login/Account in v1;
+Campaign (oberste fachliche Ebene)
+  ├── CampaignMembership (Mitglied — braucht KEINEN eigenen Login/Account in v1;
   │     userId optional (nur GM/DM), discordName, characterName, partyRole,
   │     avatarUrl, characterSheetUrl, Rolle GM/PLAYER/OBSERVER, joinedAt/leftAt)
-  ├── GroupSettings (API-Keys, Provider, Prompt, Kampagnen-Kontext)
-  └── Campaign (Kampagne, z.B. "Vergessene Reiche")
-        ├── campaignContext (Hintergrundinfo für LLM)
-        ├── backgroundImageUrl (generierbares Hintergrundbild)
-        └── Session (eine Spielrunde)
-              ├── sessionImageUrl (generierbares Header-Bild)
-              ├── Recording (MP3-Chunk, filePath, durationSeconds)
-              ├── Transcript (rawJson mit Segmenten, Speaker-Label, Timestamps)
-              ├── Summary (narrative, npcs, quests, loot, locations, openThreads)
-              └── SpeakerMap (discordUserId ↔ characterName ↔ playerName ↔ diarizationLabel)
+  ├── CampaignSettings (API-Keys, Provider, Prompt)
+  ├── CampaignDiscordBinding[]
+  │     └── DiscordInstallation (Server) + Voice-/Summary-Channel + aktiv/inaktiv
+  ├── campaignContext (Hintergrundinfo für LLM)
+  ├── backgroundImageUrl (generierbares 4:3-Hintergrundbild)
+  └── Session (wird ausschließlich durch den Bot angelegt)
+        ├── discordBindingId + Voice-/Text-Channel-Snapshot
+        ├── sessionImageUrl (generierbares 4:3-Header-Bild)
+        ├── Recording (MP3-Chunk, filePath, durationSeconds)
+        ├── Transcript (rawJson mit Segmenten, Speaker-Label, Timestamps)
+        ├── Summary (deutsch; englischer sessionImagePrompt)
+        └── SpeakerMap (Discord-Snapshot ↔ characterName ↔ playerName ↔ diarizationLabel)
 ```
 
 **Hinweis Mitglieder-Modell:** Ein `discordName` (realer User) kann in verschiedenen
 Kampagnen unterschiedliche Charaktere haben — die Zuordnung liegt daher pro
-`GroupMembership`, nicht global am User.
+`CampaignMembership`, nicht global am User.
 
 ---
 

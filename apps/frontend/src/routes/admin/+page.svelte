@@ -126,11 +126,11 @@
         toast.error(`Der Account hat noch ${impact.activeSessions} laufende oder zu verarbeitende Session(s). Warte bis zum Abschluss oder prüfe den Fehlerstatus.`);
         return;
       }
-      const groupText = impact.exclusiveGroups.length > 0
-        ? `${impact.exclusiveGroups.length} allein verwaltete Gruppe(n), ${impact.campaigns} Kampagne(n), ${impact.sessions} Session(s) und ${impact.recordings} Aufnahme(n) werden vollständig gelöscht.`
-        : 'Es werden keine gemeinsam genutzten Gruppen oder Sessions gelöscht.';
-      const sharedText = impact.sharedGroups.length > 0
-        ? ` Aus ${impact.sharedGroups.length} gemeinsam genutzten Gruppe(n) wird nur die Mitgliedschaft entfernt.`
+      const groupText = impact.exclusiveCampaigns.length > 0
+        ? `${impact.exclusiveCampaigns.length} allein verwaltete Kampagne(n), ${impact.sessions} Session(s) und ${impact.recordings} Aufnahme(n) werden vollständig gelöscht.`
+        : 'Es werden keine gemeinsam verwalteten Kampagnen oder Sessions gelöscht.';
+      const sharedText = impact.sharedCampaigns.length > 0
+        ? ` Aus ${impact.sharedCampaigns.length} gemeinsam verwalteten Kampagne(n) wird nur die Mitgliedschaft entfernt.`
         : '';
       const confirmed = await confirmAction({
         title: `${user.displayName} endgültig löschen?`,
@@ -292,7 +292,7 @@
                     {/if}
                   </td>
                   <td class="px-5 py-3 text-gray-400">
-                    {user.groupCount ?? 0} Gruppen · {user.campaignCount ?? 0} Kampagnen
+                    {user.campaignCount ?? 0} Kampagnen
                   </td>
                   <td class="px-5 py-3">
                     {#if user.hasAdminKeys}
@@ -388,8 +388,8 @@
             <tr class="border-b border-surface-700">
               <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Discord-Server</th>
               <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Bot-Status</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Verknüpfte Gruppe</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Summary-Kanal</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Verknüpfte Kampagnen</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Kanäle</th>
               <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Zuletzt gesehen</th>
             </tr>
           </thead>
@@ -407,15 +407,22 @@
                   <p class="text-xs text-gray-600 mt-2">Seit {formatDateTime(installation.installedAt)}</p>
                 </td>
                 <td class="px-5 py-4">
-                  {#if installation.group}
-                    <a href="/groups/{installation.group.id}" class="text-brand-400 hover:text-brand-300">{installation.group.name}</a>
-                    <p class="text-xs text-gray-600 mt-1">{installation.group.campaignCount} Kampagnen · {installation.group.memberCount} Mitglieder</p>
+                  {#if installation.campaigns?.length}
+                    <div class="space-y-1">
+                      {#each installation.campaigns as campaign}
+                        <a href="/kampagnen/{campaign.id}" class="block text-brand-400 hover:text-brand-300">{campaign.name} <span class="text-xs text-gray-600">· {campaign.memberCount} Mitglieder</span></a>
+                      {/each}
+                    </div>
                   {:else}
                     <span class="text-gray-600 italic">Noch nicht verknüpft</span>
                   {/if}
                 </td>
                 <td class="px-5 py-4 font-mono text-xs text-gray-400">
-                  {installation.group?.postSummaryChannelId ?? 'Nicht gesetzt'}
+                  {#if installation.campaigns?.length}
+                    {#each installation.campaigns as campaign}
+                      <p>{campaign.voiceChannelName ?? campaign.voiceChannelId ?? 'Voice offen'} → {campaign.summaryChannelName ?? campaign.summaryChannelId ?? 'Record-Kanal'}</p>
+                    {/each}
+                  {:else}Nicht gesetzt{/if}
                 </td>
                 <td class="px-5 py-4 text-gray-400">{formatDateTime(installation.lastSeenAt)}</td>
               </tr>
@@ -445,28 +452,27 @@
               </span>
             </div>
 
-            {#if dm.groups.length > 0}
+            {#if dm.campaigns.length > 0}
               <div class="space-y-2">
-                <p class="text-xs text-gray-600 uppercase tracking-wider mb-2">Gruppen & Kampagnen</p>
-                {#each dm.groups as group}
+                <p class="text-xs text-gray-600 uppercase tracking-wider mb-2">Kampagnen</p>
+                {#each dm.campaigns as campaign}
                   <div class="flex items-center justify-between bg-surface-700/50 rounded-lg px-3 py-2">
-                    <span class="text-sm text-gray-300">{group.name}</span>
-                    <span class="text-xs text-gray-500">{group.campaignCount} Kampagne{group.campaignCount !== 1 ? 'n' : ''}</span>
+                    <a href="/kampagnen/{campaign.id}" class="text-sm text-gray-300 hover:text-brand-300">{campaign.name}</a>
                   </div>
                 {/each}
               </div>
               <div class="mt-4 pt-4 border-t border-surface-700 flex items-center gap-3">
-                <span class="text-xs text-gray-500">Gesamt: {dm.groups.length} Gruppe{dm.groups.length !== 1 ? 'n' : ''} · {dm.groups.reduce((sum: number, g: any) => sum + g.campaignCount, 0)} Kampagne{dm.groups.reduce((sum: number, g: any) => sum + g.campaignCount, 0) !== 1 ? 'n' : ''}</span>
+                <span class="text-xs text-gray-500">Gesamt: {dm.campaigns.length} Kampagne{dm.campaigns.length !== 1 ? 'n' : ''}</span>
                 {#if dm.hasAdminKeys}
                   <span class="text-xs bg-brand-500/10 text-brand-400 px-2 py-0.5 rounded-full">🔑 Admin-Keys aktiv</span>
                 {/if}
               </div>
             {:else}
-              <p class="text-sm text-gray-600 italic">Keine Gruppen</p>
+              <p class="text-sm text-gray-600 italic">Keine Kampagnen</p>
             {/if}
           </div>
         {:else}
-          <div class="text-center py-12 text-gray-600 text-sm">Keine DMs mit Gruppen</div>
+          <div class="text-center py-12 text-gray-600 text-sm">Keine DMs mit Kampagnen</div>
         {/each}
       </div>
     {/if}

@@ -4,6 +4,7 @@ import {
   GatewayIntentBits,
   REST,
   Routes,
+  type AutocompleteInteraction,
   type ChatInputCommandInteraction,
   type SlashCommandBuilder,
   type SlashCommandOptionsOnlyBuilder,
@@ -18,6 +19,7 @@ import {
 export interface DiscordCommand {
   data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder;
   execute(interaction: ChatInputCommandInteraction): Promise<void>;
+  autocomplete?(interaction: AutocompleteInteraction): Promise<void>;
 }
 
 interface DiscordServiceOptions {
@@ -105,6 +107,21 @@ export class DiscordService {
     });
 
     this.client.on(Events.InteractionCreate, async (interaction) => {
+      if (interaction.isAutocomplete()) {
+        const command = this.commands.get(interaction.commandName);
+        if (!command?.autocomplete) {
+          await interaction.respond([]);
+          return;
+        }
+        try {
+          await command.autocomplete(interaction);
+        } catch (error) {
+          console.error(`Autocomplete failed: ${interaction.commandName}`, error);
+          await interaction.respond([]).catch(() => undefined);
+        }
+        return;
+      }
+
       if (!interaction.isChatInputCommand()) {
         return;
       }

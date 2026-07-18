@@ -412,7 +412,7 @@ export async function authRoutes(app: FastifyInstance) {
         emailVerifiedAt: true,
         createdAt: true,
         memberships: {
-          include: { group: { select: { id: true, name: true } } }
+          include: { campaign: { select: { id: true, name: true } } }
         },
         receivedKeys: {
           where: { revokedAt: null },

@@ -21,9 +21,11 @@ export function createStopCommand(voiceRecorderService: VoiceRecorderService): D
       await interaction.deferReply();
 
       try {
-        await voiceRecorderService.stop(guildId);
+        const recordingKey = voiceRecorderService.getActiveRecordingKey(guildId);
+        if (!recordingKey) throw new Error("NO_RECORDING_ACTIVE");
+        await voiceRecorderService.stop(recordingKey);
         await interaction.editReply(
-          "✅ **Aufnahme gestoppt.** Transkription läuft — du bekommst eine Nachricht wenn die Summary fertig ist."
+          "✅ **Aufnahme gestoppt.** Transkription läuft — du bekommst eine Nachricht, wenn die Zusammenfassung fertig ist."
         );
       } catch (error) {
         if (error instanceof Error && error.message === "NO_RECORDING_ACTIVE") {

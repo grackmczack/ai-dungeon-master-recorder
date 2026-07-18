@@ -7,6 +7,7 @@ import {
 import type { DiscordCommand } from "../services/discord.service.js";
 import type { VoiceRecorderService } from "../services/voice-recorder.service.js";
 import { getDiscordConnectLink } from "../services/database.service.js";
+import { getGuildCampaigns } from "../services/database.service.js";
 
 export function createStatusCommand(voiceRecorderService: VoiceRecorderService): DiscordCommand {
   return {
@@ -33,13 +34,26 @@ export function createStatusCommand(voiceRecorderService: VoiceRecorderService):
       ]);
       const waitingForGuild = waitingJobs.filter((job) => job.data.guildId === guildId).length;
       const activeForGuild = activeJobs.filter((job) => job.data.guildId === guildId).length;
+      const recording = voiceRecorderService.getRecordingInfo(guildId);
+      const campaignConfig = await getGuildCampaigns(guildId).catch(() => null);
 
       const lines = [
         "**DnD Recorder** — Online",
         `📡 Latenz: ${interaction.client.ws.ping} ms`,
-        `🔴 Aufnahme: ${voiceRecorderService.isRecording(guildId) ? "läuft" : "inaktiv"}`,
+        `🔴 Aufnahme: ${recording ? `läuft in <#${recording.voiceChannelId}>` : "inaktiv"}`,
         `🎙️ Verarbeitung: ${waitingForGuild} wartend, ${activeForGuild} aktiv`
       ];
+
+      if (campaignConfig?.campaigns.length) {
+        lines.push("", "**Kampagnen auf diesem Server:**");
+        for (const binding of campaignConfig.campaigns) {
+          lines.push(
+            `${binding.isActive ? "🟢" : "⚫"} ${binding.campaignName}` +
+              `${binding.voiceChannelId ? ` · <#${binding.voiceChannelId}>` : " · kein Voice-Channel"}` +
+              `${binding.summaryChannelId ? ` → <#${binding.summaryChannelId}>` : ""}`
+          );
+        }
+      }
 
       if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
         try {

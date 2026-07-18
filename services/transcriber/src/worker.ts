@@ -32,9 +32,10 @@ const STORAGE_DIR = path.resolve(
   process.env.STORAGE_DIR ?? path.join(process.cwd(), "..", "..", "storage", "recordings")
 );
 
-async function getSettings(guildId: string) {
-  const group = await prisma.group.findFirst({
-    where: { discordGuildId: guildId },
+async function getSettings(campaignId: string | undefined) {
+  if (!campaignId) return null;
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
     include: {
       settings: true,
       memberships: {
@@ -45,8 +46,8 @@ async function getSettings(guildId: string) {
     }
   });
 
-  const settings = group?.settings ?? null;
-  const dmUserIds = group?.memberships.flatMap((membership) =>
+  const settings = campaign?.settings ?? null;
+  const dmUserIds = campaign?.memberships.flatMap((membership) =>
     membership.userId ? [membership.userId] : []
   );
 
@@ -64,15 +65,15 @@ async function getSettings(guildId: string) {
   });
 
   for (const grant of grants) {
-    const adminSettings = await prisma.groupSettings.findMany({
+    const adminSettings = await prisma.campaignSettings.findMany({
       where: {
-        group: {
+        campaign: {
           memberships: {
             some: { userId: grant.superAdminId, role: "GM", leftAt: null }
           }
         }
       },
-      orderBy: { group: { createdAt: "asc" } },
+      orderBy: { campaign: { createdAt: "asc" } },
       select: {
         whisperProvider: true,
         whisperApiKey: true,
@@ -348,7 +349,8 @@ const worker = new Worker<TranscriptionJobData>(
       `[WORKER] Job ${job.id}: ${filename}${isBatch ? ` (batch: ${batchChunks!.length} chunks)` : isChunked ? ` (chunk ${job.data.chunkIndex})` : ""}`
     );
 
-    const settings = await getSettings(guildId);
+    const session = await findSession(job.data);
+    const settings = await getSettings(job.data.campaignId ?? session?.campaignId);
     const provider = (settings?.whisperProvider as WhisperConfig["provider"]) ?? "replicate";
 
     // ── Determine if provider supports single-file approach ──
@@ -356,7 +358,6 @@ const worker = new Worker<TranscriptionJobData>(
     // OpenAI: 25 MB hard limit → MUST use per-chunk approach
     // Replicate: 100 MB file upload limit, plus whisperx handles "a couple 100 MB" files
 
-    const session = await findSession(job.data);
     if (job.data.summaryOnly) {
       if (!session) throw new Error(`Session ${job.data.sessionId} not found for summarization`);
       console.log(`[WORKER] Regenerating summary only for session ${session.id}`);
@@ -612,8 +613,8 @@ async function handleSingleTranscription(
       characterName: string | null;
     }> = [];
     try {
-      const grp = await prisma.group.findFirst({
-        where: { discordGuildId: session.discordGuildId ?? guildId },
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: session.campaignId },
         include: {
           memberships: {
             where: { leftAt: null },
@@ -621,9 +622,9 @@ async function handleSingleTranscription(
           }
         }
       });
-      memberships = grp?.memberships ?? [];
+      memberships = campaign?.memberships ?? [];
     } catch {
-      console.log(`[WORKER] Konnte GroupMemberships für Backfill nicht laden`);
+      console.log(`[WORKER] Konnte CampaignMemberships für Backfill nicht laden`);
     }
 
     const scores: Record<string, Record<string, number>> = {};
@@ -681,7 +682,7 @@ async function handleSingleTranscription(
             if (!existing.playerName)
               updateData.playerName = m.discordDisplayName ?? m.discordName ?? undefined;
             console.log(
-              `[WORKER]    + characterName '${m.characterName}' aus GroupMembership nachgetragen`
+              `[WORKER]    + characterName '${m.characterName}' aus CampaignMembership nachgetragen`
             );
           }
         }
@@ -888,7 +889,10 @@ async function handleSummarization(
   }
 
   // Discord Notification
-  const notifyChannelId = resolveSummaryChannelId(settings?.postSummaryChannelId, discordChannelId);
+  const notifyChannelId = resolveSummaryChannelId(
+    (job.data as TranscriptionJobData).summaryChannelId ?? settings?.postSummaryChannelId,
+    discordChannelId
+  );
   const discordToken = process.env.DISCORD_TOKEN;
   const skipNotification = (job.data as TranscriptionJobData).skipNotification === true;
   if (!skipNotification && notifyChannelId && discordToken) {

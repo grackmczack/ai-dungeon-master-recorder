@@ -11,6 +11,7 @@ import { groupsRoutes } from "./routes/groups.routes.js";
 import { sessionsRoutes } from "./routes/sessions.routes.js";
 import { settingsRoutes } from "./routes/settings.routes.js";
 import { campaignsRoutes } from "./routes/campaigns.routes.js";
+import { campaignBindingsRoutes } from "./routes/campaign-bindings.routes.js";
 import { internalRoutes } from "./routes/internal.routes.js";
 import { membersRoutes } from "./routes/members.routes.js";
 import { wikiRoutes } from "./routes/wiki.routes.js";
@@ -84,6 +85,7 @@ await app.register(groupsRoutes);
 await app.register(sessionsRoutes);
 await app.register(settingsRoutes);
 await app.register(campaignsRoutes);
+await app.register(campaignBindingsRoutes);
 
 await app.register(internalRoutes);
 await app.register(membersRoutes);

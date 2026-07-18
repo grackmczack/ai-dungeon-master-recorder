@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isExclusivelyManagedGroup } from "../src/lib/user-deletion.js";
+import { isExclusivelyManagedCampaign } from "../src/lib/user-deletion.js";
 
-test("solely managed groups are deleted with the DM account", () => {
+test("solely managed campaigns are deleted with the DM account", () => {
   assert.equal(
-    isExclusivelyManagedGroup({
+    isExclusivelyManagedCampaign({
       userId: "dm-1",
       role: "GM",
       leftAt: null,
@@ -14,9 +14,9 @@ test("solely managed groups are deleted with the DM account", () => {
   );
 });
 
-test("shared groups are retained when another web account is active", () => {
+test("shared campaigns are retained when another web account is active", () => {
   assert.equal(
-    isExclusivelyManagedGroup({
+    isExclusivelyManagedCampaign({
       userId: "dm-1",
       role: "GM",
       leftAt: null,
@@ -26,9 +26,9 @@ test("shared groups are retained when another web account is active", () => {
   );
 });
 
-test("player memberships and historical GM memberships never own a group", () => {
+test("player memberships and historical GM memberships never own a campaign", () => {
   assert.equal(
-    isExclusivelyManagedGroup({
+    isExclusivelyManagedCampaign({
       userId: "dm-1",
       role: "PLAYER",
       leftAt: null,
@@ -37,7 +37,7 @@ test("player memberships and historical GM memberships never own a group", () =>
     false
   );
   assert.equal(
-    isExclusivelyManagedGroup({
+    isExclusivelyManagedCampaign({
       userId: "dm-1",
       role: "GM",
       leftAt: new Date(),

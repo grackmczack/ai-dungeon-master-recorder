@@ -8,9 +8,8 @@ export interface UserDeletionImpact {
   userId: string;
   displayName: string;
   email: string;
-  exclusiveGroups: Array<{ id: string; name: string }>;
-  sharedGroups: Array<{ id: string; name: string }>;
-  campaigns: number;
+  exclusiveCampaigns: Array<{ id: string; name: string }>;
+  sharedCampaigns: Array<{ id: string; name: string }>;
   sessions: number;
   activeSessions: number;
   recordings: number;
@@ -21,7 +20,7 @@ export interface UserDeletionPlan extends UserDeletionImpact {
   files: string[];
 }
 
-export function isExclusivelyManagedGroup(input: {
+export function isExclusivelyManagedCampaign(input: {
   userId: string;
   role: string;
   leftAt: Date | null;
@@ -51,16 +50,16 @@ export async function buildUserDeletionPlan(
   });
   if (!user || user.role !== "DM") return null;
 
-  const memberships = await tx.groupMembership.findMany({
+  const memberships = await tx.campaignMembership.findMany({
     where: { userId },
     select: {
       id: true,
-      groupId: true,
+      campaignId: true,
       role: true,
       leftAt: true,
       avatarUrl: true,
       characterSheetUrl: true,
-      group: {
+      campaign: {
         select: {
           id: true,
           name: true,
@@ -73,42 +72,40 @@ export async function buildUserDeletionPlan(
     }
   });
 
-  const exclusiveGroupIds = new Set(
+  const exclusiveCampaignIds = new Set(
     memberships
       .filter((membership) =>
-        isExclusivelyManagedGroup({
+        isExclusivelyManagedCampaign({
           userId,
           role: membership.role,
           leftAt: membership.leftAt,
-          activeUserIds: membership.group.memberships.map((other) => other.userId)
+          activeUserIds: membership.campaign.memberships.map((other) => other.userId)
         })
       )
-      .map((membership) => membership.groupId)
+      .map((membership) => membership.campaignId)
   );
-  const memberGroupIds = new Set(memberships.map((membership) => membership.groupId));
-  const sharedGroups = Array.from(memberGroupIds)
-    .filter((groupId) => !exclusiveGroupIds.has(groupId))
-    .map((groupId) => {
-      const group = memberships.find((membership) => membership.groupId === groupId)!.group;
-      return { id: group.id, name: group.name };
+  const memberCampaignIds = new Set(memberships.map((membership) => membership.campaignId));
+  const sharedCampaigns = Array.from(memberCampaignIds)
+    .filter((campaignId) => !exclusiveCampaignIds.has(campaignId))
+    .map((campaignId) => {
+      const campaign = memberships.find(
+        (membership) => membership.campaignId === campaignId
+      )!.campaign;
+      return { id: campaign.id, name: campaign.name };
     });
 
-  const exclusiveGroups = await tx.group.findMany({
-    where: { id: { in: Array.from(exclusiveGroupIds) } },
+  const exclusiveCampaigns = await tx.campaign.findMany({
+    where: { id: { in: Array.from(exclusiveCampaignIds) } },
     select: {
       id: true,
       name: true,
+      backgroundImageUrl: true,
       memberships: { select: { avatarUrl: true, characterSheetUrl: true } },
-      campaigns: {
+      sessions: {
         select: {
-          backgroundImageUrl: true,
-          sessions: {
-            select: {
-              sessionImageUrl: true,
-              status: true,
-              recordings: { select: { filePath: true } }
-            }
-          }
+          sessionImageUrl: true,
+          status: true,
+          recordings: { select: { filePath: true } }
         }
       }
     }
@@ -120,35 +117,31 @@ export async function buildUserDeletionPlan(
     if (file) files.add(file);
   };
 
-  // Eigene Uploads werden auch aus gemeinsam genutzten Gruppen entfernt.
+  // Eigene Uploads werden auch aus gemeinsam genutzten Kampagnen entfernt.
   for (const membership of memberships) {
     addFile("avatars", membership.avatarUrl);
     addFile("character-sheets", membership.characterSheetUrl);
   }
 
-  let campaigns = 0;
   let sessions = 0;
   let activeSessions = 0;
   let recordings = 0;
-  for (const group of exclusiveGroups) {
-    for (const membership of group.memberships) {
+  for (const campaign of exclusiveCampaigns) {
+    addFile("campaign-backgrounds", campaign.backgroundImageUrl);
+    for (const membership of campaign.memberships) {
       addFile("avatars", membership.avatarUrl);
       addFile("character-sheets", membership.characterSheetUrl);
     }
-    campaigns += group.campaigns.length;
-    for (const campaign of group.campaigns) {
-      addFile("campaign-backgrounds", campaign.backgroundImageUrl);
-      sessions += campaign.sessions.length;
-      for (const session of campaign.sessions) {
-        if (session.status !== "DONE" && session.status !== "FAILED") activeSessions += 1;
-        addFile("session-images", session.sessionImageUrl);
-        recordings += session.recordings.length;
-        for (const recording of session.recordings) {
-          const recordingFile = storageFile("recordings", recording.filePath);
-          if (recordingFile) {
-            files.add(recordingFile);
-            files.add(recordingFile.replace(/\.(mp3|wav)$/i, ".speakers.json"));
-          }
+    sessions += campaign.sessions.length;
+    for (const session of campaign.sessions) {
+      if (session.status !== "DONE" && session.status !== "FAILED") activeSessions += 1;
+      addFile("session-images", session.sessionImageUrl);
+      recordings += session.recordings.length;
+      for (const recording of session.recordings) {
+        const recordingFile = storageFile("recordings", recording.filePath);
+        if (recordingFile) {
+          files.add(recordingFile);
+          files.add(recordingFile.replace(/\.(mp3|wav)$/i, ".speakers.json"));
         }
       }
     }
@@ -158,9 +151,8 @@ export async function buildUserDeletionPlan(
     userId: user.id,
     displayName: user.displayName,
     email: user.email,
-    exclusiveGroups: exclusiveGroups.map(({ id, name }) => ({ id, name })),
-    sharedGroups,
-    campaigns,
+    exclusiveCampaigns: exclusiveCampaigns.map(({ id, name }) => ({ id, name })),
+    sharedCampaigns,
     sessions,
     activeSessions,
     recordings,

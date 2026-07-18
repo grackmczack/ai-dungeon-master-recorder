@@ -49,7 +49,7 @@ function defaultLlmModel(provider: string): string {
 }
 
 /**
- * Builds one credential profile from all groups managed by a super-admin.
+ * Builds one credential profile from all campaigns managed by a super-admin.
  * Provider, model and endpoint are copied from the same row as their key so a
  * Replicate or SiliconFlow key can never accidentally be sent to another API.
  */
@@ -112,9 +112,9 @@ export function applyAdminKeyProfile<T extends Record<string, unknown>>(
 }
 
 async function loadProfileForSuperAdmin(prisma: PrismaClient, superAdminId: string) {
-  const sources = await prisma.groupSettings.findMany({
+  const sources = await prisma.campaignSettings.findMany({
     where: {
-      group: {
+      campaign: {
         memberships: {
           some: { userId: superAdminId, role: "GM", leftAt: null }
         }
@@ -131,7 +131,7 @@ async function loadProfileForSuperAdmin(prisma: PrismaClient, superAdminId: stri
       llmModel: true,
       llmEndpoint: true
     },
-    orderBy: { group: { createdAt: "asc" } }
+    orderBy: { campaign: { createdAt: "asc" } }
   });
   return buildAdminKeyProfile(sources);
 }

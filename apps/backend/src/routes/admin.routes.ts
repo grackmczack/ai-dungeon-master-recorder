@@ -59,7 +59,7 @@ export async function adminRoutes(app: FastifyInstance) {
         memberships: {
           where: { leftAt: null },
           select: {
-            group: { select: { id: true, _count: { select: { campaigns: true } } } }
+            campaign: { select: { id: true } }
           }
         },
         // Aktive Key-Grants (nicht revoked)
@@ -73,9 +73,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     return reply.send(
       users.map((u) => {
-        const groups = new Map(
-          u.memberships.map((membership) => [membership.group.id, membership.group])
-        );
+        const campaigns = new Set(u.memberships.map((membership) => membership.campaign.id));
         return {
           id: u.id,
           email: u.email,
@@ -84,11 +82,7 @@ export async function adminRoutes(app: FastifyInstance) {
           isActive: u.isActive,
           emailVerifiedAt: u.emailVerifiedAt,
           createdAt: u.createdAt,
-          groupCount: groups.size,
-          campaignCount: Array.from(groups.values()).reduce(
-            (sum, group) => sum + group._count.campaigns,
-            0
-          ),
+          campaignCount: campaigns.size,
           hasAdminKeys: u.receivedKeys.length > 0,
           keyGrantedAt: u.receivedKeys[0]?.grantedAt ?? null,
           availableAdminKeys: adminProfile?.availability ?? {
@@ -193,9 +187,9 @@ export async function adminRoutes(app: FastifyInstance) {
           return { deleted: false as const, plan: deletionPlan };
         }
 
-        if (deletionPlan.exclusiveGroups.length > 0) {
-          await tx.group.deleteMany({
-            where: { id: { in: deletionPlan.exclusiveGroups.map((group) => group.id) } }
+        if (deletionPlan.exclusiveCampaigns.length > 0) {
+          await tx.campaign.deleteMany({
+            where: { id: { in: deletionPlan.exclusiveCampaigns.map((campaign) => campaign.id) } }
           });
         }
         // FK-Cascades entfernen Grants und sämtliche verbleibenden Memberships.
@@ -305,13 +299,7 @@ export async function adminRoutes(app: FastifyInstance) {
         memberships: {
           where: { leftAt: null },
           include: {
-            group: {
-              select: {
-                id: true,
-                name: true,
-                _count: { select: { campaigns: true } }
-              }
-            }
+            campaign: { select: { id: true, name: true } }
           }
         },
         receivedKeys: {
@@ -328,10 +316,9 @@ export async function adminRoutes(app: FastifyInstance) {
         email: dm.email,
         displayName: dm.displayName,
         isActive: dm.isActive,
-        groups: dm.memberships.map((m) => ({
-          id: m.group.id,
-          name: m.group.name,
-          campaignCount: m.group._count.campaigns
+        campaigns: dm.memberships.map((m) => ({
+          id: m.campaign.id,
+          name: m.campaign.name
         })),
         hasAdminKeys: dm.receivedKeys.length > 0
       }))
@@ -341,23 +328,21 @@ export async function adminRoutes(app: FastifyInstance) {
   /** GET /admin/installations — Discord-Server mit aktuellem Bot-Status */
   app.get("/admin/installations", async (_req, reply) => {
     const installations = await prisma.discordInstallation.findMany({
-      orderBy: [{ isActive: "desc" }, { lastSeenAt: "desc" }]
-    });
-    const groups = await prisma.group.findMany({
-      where: { discordGuildId: { in: installations.map((item) => item.discordGuildId) } },
-      select: {
-        id: true,
-        name: true,
-        discordGuildId: true,
-        settings: { select: { postSummaryChannelId: true } },
-        _count: { select: { campaigns: true, memberships: true } }
+      orderBy: [{ isActive: "desc" }, { lastSeenAt: "desc" }],
+      include: {
+        bindings: {
+          include: {
+            campaign: {
+              select: { id: true, name: true, _count: { select: { memberships: true } } }
+            }
+          },
+          orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }]
+        }
       }
     });
-    const groupsByGuild = new Map(groups.map((group) => [group.discordGuildId, group]));
 
     return reply.send(
       installations.map((installation) => {
-        const group = groupsByGuild.get(installation.discordGuildId);
         return {
           id: installation.id,
           discordGuildId: installation.discordGuildId,
@@ -366,15 +351,18 @@ export async function adminRoutes(app: FastifyInstance) {
           installedAt: installation.installedAt,
           removedAt: installation.removedAt,
           lastSeenAt: installation.lastSeenAt,
-          group: group
-            ? {
-                id: group.id,
-                name: group.name,
-                campaignCount: group._count.campaigns,
-                memberCount: group._count.memberships,
-                postSummaryChannelId: group.settings?.postSummaryChannelId ?? null
-              }
-            : null
+          campaigns: installation.bindings.map((binding) => ({
+            bindingId: binding.id,
+            id: binding.campaign.id,
+            name: binding.campaign.name,
+            memberCount: binding.campaign._count.memberships,
+            voiceChannelId: binding.voiceChannelId,
+            voiceChannelName: binding.voiceChannelName,
+            summaryChannelId: binding.summaryChannelId,
+            summaryChannelName: binding.summaryChannelName,
+            isActive: binding.isActive,
+            isDefault: binding.isDefault
+          }))
         };
       })
     );

@@ -10,10 +10,10 @@ export interface User {
   createdAt: string;
 }
 
-export interface GroupMembership {
+export interface CampaignMembership {
   id: string;
   userId?: string | null;
-  groupId: string;
+  campaignId: string;
   role: "GM" | "PLAYER" | "OBSERVER";
   discordName?: string;
   characterName?: string;
@@ -30,21 +30,8 @@ export interface GroupMembership {
   user?: { id: string; email: string; displayName: string } | null;
 }
 
-export interface Group {
-  id: string;
-  name: string;
-  description?: string;
-  discordGuildId?: string | null;
-  discordGuildName?: string | null;
-  discordBotActive?: boolean;
-  role?: "GM" | "PLAYER" | "OBSERVER";
-  _count?: { campaigns: number; memberships: number };
-  memberships?: GroupMembership[];
-}
-
 export interface Campaign {
   id: string;
-  groupId: string;
   name: string;
   description?: string;
   setting?: string;
@@ -52,7 +39,29 @@ export interface Campaign {
   campaignContext?: string;
   backgroundImageUrl?: string;
   createdAt: string;
+  firstSessionAt?: string | null;
+  role?: "GM" | "PLAYER" | "OBSERVER";
+  memberships?: CampaignMembership[];
+  bindings?: DiscordCampaignBinding[];
+  _count?: { sessions: number; memberships: number };
   sessions?: Session[];
+}
+
+export interface DiscordCampaignBinding {
+  id: string;
+  voiceChannelId?: string | null;
+  voiceChannelName?: string | null;
+  summaryChannelId?: string | null;
+  summaryChannelName?: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+  installation: {
+    id: string;
+    discordGuildId: string;
+    guildName: string;
+    isActive: boolean;
+    lastSeenAt: string;
+  };
 }
 
 export interface Session {
@@ -128,7 +137,7 @@ export interface DiarizationLabelInfo {
   sample: string;
 }
 
-export interface GroupSettings {
+export interface CampaignSettings {
   whisperProvider: string;
   whisperApiKey?: string;
   whisperEndpoint?: string;

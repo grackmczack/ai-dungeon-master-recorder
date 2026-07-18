@@ -138,7 +138,7 @@ export function buildAccountActivatedEmail(displayName: string, loginUrl: string
     displayName,
     paragraphs: [
       "deine E-Mail-Adresse ist bestätigt und dein Konto wurde aktiviert.",
-      "Du kannst jetzt deine Gruppe und Kampagne einrichten, den Discord-Bot verbinden und eure nächsten Abenteuer festhalten."
+      "Du kannst jetzt deine Kampagne einrichten, den Discord-Bot verbinden und eure nächsten Abenteuer festhalten."
     ],
     action: { label: "Zum DnD Recorder", url: loginUrl }
   });

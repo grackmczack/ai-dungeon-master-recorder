@@ -1,18 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
   import { parallax, parallaxFixed } from '$lib/actions/parallax.js';
   import WikiView from '$lib/components/WikiView.svelte';
   import Dialog from '$lib/components/Dialog.svelte';
   import { keyboardTabs } from '$lib/actions/tabs.js';
   import { confirmAction } from '$lib/confirm.js';
-  import type { Group } from '$lib/types.js';
 
   let group: any = $state(null);
   let loading = $state(true);
   let error = $state('');
   let discordInviteUrl = $state('');
+  let discordInstallations: Array<{ id: string; guildName: string; isActive: boolean }> = $state([]);
+  let bindingBusy = $state('');
   let editingContext: string | null = $state(null);
   let contextEdits: Record<string, string> = $state({});
 
@@ -54,17 +56,10 @@
   let generatePrompt: Record<string, string> = $state({});
   let generateError: Record<string, string> = $state({});
   let backgroundVersion: Record<string, number> = $state({});
+  let deletingCampaign = $state(false);
 
   // Paginierte Sessions
   let loadingMoreSessions: Record<string, boolean> = $state({});
-
-  // Create-campaign state
-  let showCreateCampaign = $state(false);
-  let newCampaignName = $state('');
-  let newCampaignDescription = $state('');
-  let newCampaignSetting = $state('');
-  let creatingCampaign = $state(false);
-  let createCampaignError = $state('');
 
   const STATUS_LABELS: Record<string, string> = {
     RECORDING: '🔴 Aufnahme',
@@ -83,14 +78,31 @@
     FAILED: 'text-red-400 bg-red-500/10'
   };
 
+  function campaignView(campaign: any) {
+    const primaryBinding = campaign.bindings?.[0];
+    return {
+      ...campaign,
+      campaigns: [campaign],
+      discordGuildId: primaryBinding?.installation.discordGuildId ?? null,
+      discordGuildName: primaryBinding?.installation.guildName ?? null,
+      discordBotActive: primaryBinding?.installation.isActive ?? false
+    };
+  }
+
+  async function reloadCampaign() {
+    group = campaignView(await api.getCampaign($page.params.id!));
+  }
+
   onMount(async () => {
     try {
-      const [groupData, discordConfig] = await Promise.all([
-        api.getGroup($page.params.id!),
-        api.getDiscordConfig().catch(() => ({ configured: false, inviteUrl: null }))
+      const [campaign, discordConfig, installations] = await Promise.all([
+        api.getCampaign($page.params.id!),
+        api.getDiscordConfig().catch(() => ({ configured: false, inviteUrl: null })),
+        api.getDiscordInstallations().catch(() => [])
       ]);
-      group = groupData;
+      group = campaignView(campaign);
       discordInviteUrl = discordConfig.inviteUrl ?? '';
+      discordInstallations = installations;
     } catch (e: any) {
       error = e.error ?? 'Fehler beim Laden';
     } finally {
@@ -100,30 +112,6 @@
 
   function formatDate(d: string) {
     return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  }
-
-  async function createCampaign(e: Event) {
-    e.preventDefault();
-    creatingCampaign = true;
-    createCampaignError = '';
-    try {
-      const campaign = await api.createCampaign(group.id, {
-        name: newCampaignName,
-        description: newCampaignDescription || undefined,
-        setting: newCampaignSetting || undefined
-      });
-      campaign.sessions = [];
-      campaign._count = { sessions: 0 };
-      group.campaigns = [campaign, ...group.campaigns];
-      showCreateCampaign = false;
-      newCampaignName = '';
-      newCampaignDescription = '';
-      newCampaignSetting = '';
-    } catch (e: any) {
-      createCampaignError = e.error ?? 'Kampagne konnte nicht erstellt werden';
-    } finally {
-      creatingCampaign = false;
-    }
   }
 
   function backgroundImageUrl(campaign: any | null | undefined) {
@@ -240,7 +228,7 @@
         partyRole: newPartyRole || undefined,
         role: newRole
       });
-      group = await api.getGroup($page.params.id!);
+      await reloadCampaign();
       showAddMember = false;
       newDiscordName = '';
       newCharacterName = '';
@@ -273,7 +261,7 @@
         partyRole: editPartyRole || null,
         role: editRole
       });
-      group = await api.getGroup($page.params.id!);
+      await reloadCampaign();
       editingMember = null;
     } catch (e: any) {
       editError = e.error ?? 'Fehler beim Speichern';
@@ -289,7 +277,7 @@
     try {
       const { avatarUrl } = await api.uploadMemberAvatar($page.params.id!, editingMember.id, file);
       editingMember.avatarUrl = avatarUrl;
-      group = await api.getGroup($page.params.id!);
+      await reloadCampaign();
     } catch (e: any) {
       editError = e.error ?? 'Fehler beim Avatar-Upload';
     } finally {
@@ -304,7 +292,7 @@
     try {
       const { characterSheetUrl } = await api.uploadMemberCharacterSheet($page.params.id!, editingMember.id, file);
       editingMember.characterSheetUrl = characterSheetUrl;
-      group = await api.getGroup($page.params.id!);
+      await reloadCampaign();
     } catch (e: any) {
       editError = e.error ?? 'Fehler beim PDF-Upload';
     } finally {
@@ -314,28 +302,91 @@
 
   async function pauseMember(memberId: string) {
     await api.pauseMember($page.params.id!, memberId, pauseNote);
-    group = await api.getGroup($page.params.id!);
+    await reloadCampaign();
     pausingMemberId = null;
   }
 
   async function resumeMember(memberId: string) {
     await api.resumeMember($page.params.id!, memberId);
-    group = await api.getGroup($page.params.id!);
+    await reloadCampaign();
   }
 
   async function removeMember(memberId: string, name: string) {
     if (!await confirmAction({
       title: 'Mitglied entfernen?',
-      message: `${name} wird aus der Gruppe entfernt. Die Session-Historie bleibt erhalten.`,
+      message: `${name} wird aus der Kampagne entfernt. Die Session-Historie bleibt erhalten.`,
       confirmLabel: 'Mitglied entfernen',
       danger: true
     })) return;
     await api.removeMember($page.params.id!, memberId);
-    group = await api.getGroup($page.params.id!);
+    await reloadCampaign();
+  }
+
+  async function deleteCurrentCampaign() {
+    if (!await confirmAction({
+      title: 'Kampagne löschen?',
+      message: `„${group.name}“ wird einschließlich Sessions, Zusammenfassungen und Wiki dauerhaft gelöscht.`,
+      confirmLabel: 'Kampagne löschen',
+      danger: true
+    })) return;
+    deletingCampaign = true;
+    try {
+      await api.deleteCampaign(group.id);
+      await goto('/dashboard');
+    } catch (e: any) {
+      error = e.error ?? 'Kampagne konnte nicht gelöscht werden';
+      deletingCampaign = false;
+    }
+  }
+
+  async function addDiscordServer(installationId: string) {
+    if (!installationId) return;
+    bindingBusy = installationId;
+    try {
+      await api.addCampaignDiscordBinding(group.id, installationId);
+      await reloadCampaign();
+    } finally {
+      bindingBusy = '';
+    }
+  }
+
+  async function setBindingActive(binding: any, isActive: boolean) {
+    bindingBusy = binding.id;
+    try {
+      await api.updateCampaignDiscordBinding(group.id, binding.id, { isActive });
+      await reloadCampaign();
+    } finally {
+      bindingBusy = '';
+    }
+  }
+
+  async function removeBinding(binding: any) {
+    if (!await confirmAction({
+      title: 'Discord-Server trennen?',
+      message: `${binding.installation.guildName} wird von dieser Kampagne getrennt.`,
+      confirmLabel: 'Verbindung trennen',
+      danger: true
+    })) return;
+    bindingBusy = binding.id;
+    try {
+      await api.removeCampaignDiscordBinding(group.id, binding.id);
+      await reloadCampaign();
+    } finally {
+      bindingBusy = '';
+    }
+  }
+
+  function availableDiscordInstallations() {
+    return discordInstallations.filter(
+      (installation) =>
+        !(group?.campaigns?.[0]?.bindings ?? []).some(
+          (binding: any) => binding.installation.id === installation.id
+        )
+    );
   }
 </script>
 
-<svelte:head><title>{group?.name ?? 'Gruppe'} — DnD Recorder</title></svelte:head>
+<svelte:head><title>{group?.name ?? 'Kampagne'} — DnD Recorder</title></svelte:head>
 
 <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10 relative">
   <!-- Seitenweiter Hintergrund (Parallax) -->
@@ -362,25 +413,26 @@
       <div>
         <h1 class="text-3xl font-bold text-white">{group.name}</h1>
         {#if group.description}<p class="text-gray-500 mt-1">{group.description}</p>{/if}
-        {#if group.discordGuildId}
-          <div role="status" class="mt-3 inline-flex items-center gap-3 rounded-xl border px-3 py-2 {group.discordBotActive ? 'border-green-500/30 bg-green-500/10' : 'border-amber-500/30 bg-amber-500/10'}">
-            <span class="h-3 w-3 rounded-full {group.discordBotActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]' : 'bg-amber-500'}" aria-hidden="true"></span>
-            <span>
-              <span class="block text-xs {group.discordBotActive ? 'text-green-300' : 'text-amber-300'}">{group.discordBotActive ? 'Bot verbunden' : 'Bot derzeit nicht installiert'}</span>
-              <span class="block text-sm font-medium text-white">{group.discordGuildName ?? group.name}</span>
-            </span>
-          </div>
-        {/if}
+        <div class="mt-3 flex flex-wrap gap-2">
+          {#each group.campaigns?.[0]?.bindings ?? [] as binding}
+            <div role="status" class="inline-flex items-center gap-2 rounded-full border px-3 py-2 {binding.isActive && binding.installation.isActive ? 'border-green-500/30 bg-green-500/10' : 'border-amber-500/30 bg-amber-500/10'}">
+              <span class="h-2.5 w-2.5 rounded-full {binding.isActive && binding.installation.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 'bg-amber-500'}" aria-hidden="true"></span>
+              <span class="text-sm text-white">{binding.installation.guildName}</span>
+              {#if binding.voiceChannelName}<span class="text-xs text-gray-400">· {binding.voiceChannelName}</span>{/if}
+            </div>
+          {/each}
+        </div>
       </div>
-      <div class="flex flex-col sm:flex-row gap-2">
-        <button type="button" onclick={() => showCreateCampaign = true}
-          class="text-sm bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg transition">
-          + Kampagne
-        </button>
-        <a href="/settings?groupId={group.id}"
+      <div class="flex flex-wrap gap-2">
+        {#if discordInviteUrl}<a href={discordInviteUrl} target="_blank" rel="noreferrer" class="text-sm border border-brand-500/40 text-brand-300 hover:bg-brand-500/10 px-4 py-2 rounded-lg transition">🤖 Weiteren Server</a>{/if}
+        <a href="/settings?campaignId={group.id}"
           class="text-gray-500 hover:text-white text-sm border border-surface-600 hover:border-surface-500 px-4 py-2 rounded-lg transition">
           ⚙️ Einstellungen
         </a>
+        <button type="button" onclick={deleteCurrentCampaign} disabled={deletingCampaign}
+          class="text-sm border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50 px-4 py-2 rounded-lg transition">
+          {deletingCampaign ? 'Lösche…' : 'Kampagne löschen'}
+        </button>
       </div>
     </div>
 
@@ -393,7 +445,7 @@
             <ol class="mt-4 space-y-2 text-sm text-gray-300">
               <li><span class="mr-2 text-brand-400">1.</span>Bot zum gewünschten Server einladen.</li>
               <li><span class="mr-2 text-brand-400">2.</span>Als Server-Admin <code>/status</code> ausführen – alternativ erscheint der Hinweis nach <code>/record</code>.</li>
-              <li><span class="mr-2 text-brand-400">3.</span>Den privaten Link anklicken und diese Web-Gruppe auswählen.</li>
+              <li><span class="mr-2 text-brand-400">3.</span>Den privaten Link anklicken und diese Kampagne auswählen.</li>
             </ol>
           </div>
           <div class="flex shrink-0 flex-col items-start gap-1">
@@ -409,8 +461,51 @@
       </section>
     {/if}
 
-    <!-- Tab-Switcher für Kampagnen-Ansicht -->
-    <div role="tablist" aria-label="Gruppenbereiche" use:keyboardTabs
+    <section aria-labelledby="campaign-discord-title" class="mb-8 rounded-2xl border border-surface-600 bg-surface-800 p-5">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="campaign-discord-title" class="font-semibold text-white">Discord-Zuordnungen</h2>
+          <p class="mt-1 text-xs text-gray-500">Voice- und Summary-Kanal setzt du komfortabel mit <code>/kampagne verbinden</code>.</p>
+        </div>
+        {#if availableDiscordInstallations().length > 0}
+          <label class="text-xs text-gray-400">
+            <span class="sr-only">Weiteren Discord-Server zuordnen</span>
+            <select disabled={!!bindingBusy} onchange={(event) => { const select = event.currentTarget; addDiscordServer(select.value); select.value = ''; }}
+              class="min-h-10 rounded-lg border border-surface-600 bg-surface-700 px-3 text-sm text-white focus:border-brand-500 focus:outline-none">
+              <option value="">Server zuordnen…</option>
+              {#each availableDiscordInstallations() as installation}<option value={installation.id}>{installation.guildName}</option>{/each}
+            </select>
+          </label>
+        {/if}
+      </div>
+      {#if (group.campaigns?.[0]?.bindings ?? []).length > 0}
+        <div class="mt-4 space-y-2">
+          {#each group.campaigns[0].bindings as binding}
+            <div class="flex flex-col gap-3 rounded-xl border border-surface-600 bg-surface-700/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-white">{binding.installation.guildName}</p>
+                <p class="mt-0.5 text-xs text-gray-500">
+                  {binding.voiceChannelName ? `Voice: ${binding.voiceChannelName}` : 'Voice-Channel noch nicht gesetzt'}
+                  {binding.summaryChannelName ? ` · Summary: ${binding.summaryChannelName}` : ''}
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" disabled={bindingBusy === binding.id} onclick={() => setBindingActive(binding, !binding.isActive)}
+                  class="min-h-10 rounded-lg border px-3 text-xs transition {binding.isActive ? 'border-green-500/30 text-green-300 hover:bg-green-500/10' : 'border-surface-500 text-gray-400 hover:text-white'}">
+                  {binding.isActive ? '🟢 Aktiv' : '⚫ Inaktiv'}
+                </button>
+                <button type="button" disabled={bindingBusy === binding.id} onclick={() => removeBinding(binding)}
+                  class="min-h-10 rounded-lg border border-red-500/20 px-3 text-xs text-red-400 hover:bg-red-500/10 transition">Trennen</button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="mt-4 text-sm text-gray-500">Noch kein Discord-Server zugeordnet.</p>
+      {/if}
+    </section>
+
+    <div role="tablist" aria-label="Kampagnenbereiche" use:keyboardTabs
       class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 max-w-full overflow-x-auto border border-surface-600">
       <button id="group-tab-sessions" role="tab" aria-selected={activeView === 'sessions'} aria-controls="group-panel-sessions" tabindex={activeView === 'sessions' ? 0 : -1} onclick={() => activeView = 'sessions'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'sessions' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
@@ -449,8 +544,7 @@
       {:else}
         {#each group.campaigns as campaign}
           <div class="mb-8">
-            <!-- Kampagnen-Hintergrundbild mit Parallax -->
-            <div class="relative h-80 sm:h-64 md:h-56 rounded-2xl overflow-hidden mb-4 border border-surface-600 bg-surface-800">
+            <div class="relative aspect-[4/3] rounded-2xl overflow-hidden mb-4 border border-surface-600 bg-surface-800">
               {#if campaign.backgroundImageUrl}
                 <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
                   <img src={backgroundImageUrl(campaign)!} alt="" class="w-full h-full object-cover opacity-60" />
@@ -465,39 +559,30 @@
                   <h2 class="text-xl font-semibold text-white drop-shadow">{campaign.name}</h2>
                   {#if campaign.setting}<span class="text-xs text-gray-200 bg-black/40 backdrop-blur px-2 py-1 rounded">{campaign.setting}</span>{/if}
                 </div>
-                <div class="flex w-full sm:w-auto flex-col items-stretch sm:items-end gap-2">
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-200 bg-black/40 hover:bg-black/60 backdrop-blur px-3 py-1.5 rounded-lg transition cursor-pointer">
-                      {uploadingBackgroundFor === campaign.id ? 'Lade hoch...' : campaign.backgroundImageUrl ? 'Bild ersetzen' : '🖼️ Hintergrundbild hinzufügen'}
-                      <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
-                        onchange={(e) => onBackgroundSelected(e, campaign.id)}
-                        disabled={uploadingBackgroundFor === campaign.id} />
-                    </label>
-                    {#if campaign.backgroundImageUrl}
-                      <button onclick={() => removeBackground(campaign.id)}
-                        class="text-xs text-gray-200 bg-black/40 hover:bg-red-900/60 backdrop-blur px-2 py-1.5 rounded-lg transition">✕</button>
-                    {/if}
-                  </div>
-                  <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
-                    <input
-                      bind:value={generatePrompt[campaign.id]}
-                      class="w-full sm:w-60 text-xs bg-black/50 backdrop-blur border border-white/20 hover:border-white/30 focus:border-brand-500/60 text-white placeholder:text-gray-300 rounded-lg px-3 py-2 outline-none transition"
-                      placeholder="Beschreibe die Stimmung der Kampagne..." />
-                    <button
-                      onclick={() => generateBackground(campaign)}
-                      disabled={generatingBackgroundFor === campaign.id}
-                      class="min-h-10 text-xs text-white bg-brand-600 hover:bg-brand-500 disabled:opacity-60 backdrop-blur px-3 py-2 rounded-lg transition min-w-[9rem] flex items-center justify-center gap-2">
-                      {#if generatingBackgroundFor === campaign.id}
-                        <span class="h-3.5 w-3.5 rounded-full border-2 border-white/70 border-t-transparent animate-spin"></span>
-                        Generiere...
-                      {:else if campaign.backgroundImageUrl}
-                        🔄 Neu generieren
-                      {:else}
-                        🎨 Bild generieren
+                <details class="w-full sm:w-auto rounded-lg bg-black/50 text-xs text-gray-200 backdrop-blur">
+                  <summary class="cursor-pointer list-none px-3 py-2 text-right hover:text-white">🖼️ Kampagnenbild bearbeiten</summary>
+                  <div class="flex w-full sm:w-80 flex-col gap-2 border-t border-white/10 p-3">
+                    <div class="flex items-center gap-2">
+                      <label class="cursor-pointer rounded-lg border border-white/20 px-3 py-2 hover:bg-white/10 transition">
+                        {uploadingBackgroundFor === campaign.id ? 'Lade hoch…' : campaign.backgroundImageUrl ? 'Bild ersetzen' : 'Bild hochladen'}
+                        <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
+                          onchange={(e) => onBackgroundSelected(e, campaign.id)}
+                          disabled={uploadingBackgroundFor === campaign.id} />
+                      </label>
+                      {#if campaign.backgroundImageUrl}
+                        <button onclick={() => removeBackground(campaign.id)} class="rounded-lg border border-red-500/30 px-3 py-2 text-red-300 hover:bg-red-900/40 transition">Entfernen</button>
                       {/if}
+                    </div>
+                    <label for={`campaign-image-prompt-${campaign.id}`} class="sr-only">Prompt für das Kampagnenbild</label>
+                    <input id={`campaign-image-prompt-${campaign.id}`} bind:value={generatePrompt[campaign.id]}
+                      class="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-white placeholder:text-gray-400 outline-none focus:border-brand-500/60"
+                      placeholder="Stimmung oder Motiv beschreiben…" />
+                    <button onclick={() => generateBackground(campaign)} disabled={generatingBackgroundFor === campaign.id}
+                      class="min-h-10 rounded-lg bg-brand-600 px-3 py-2 text-white hover:bg-brand-500 disabled:opacity-60 transition">
+                      {generatingBackgroundFor === campaign.id ? 'Generiere…' : campaign.backgroundImageUrl ? '🔄 Neu generieren' : '🎨 Bild generieren'}
                     </button>
                   </div>
-                </div>
+                </details>
               </div>
             </div>
             {#if backgroundError[campaign.id]}
@@ -829,7 +914,7 @@
               <div class="mb-5 pb-5 border-b border-surface-700">
                 <p class="block text-xs text-gray-500 mb-2">Charakterbogen (PDF)</p>
                 {#if editingMember.characterSheetUrl}
-                  <a href={`/api/groups/${$page.params.id}/members/${editingMember.id}/character-sheet`} target="_blank" rel="noreferrer" class="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1.5 mb-2">
+                  <a href={`/api/campaigns/${$page.params.id}/members/${editingMember.id}/character-sheet`} target="_blank" rel="noreferrer" class="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1.5 mb-2">
                     📄 Aktueller Charakterbogen öffnen
                   </a>
                 {/if}
@@ -888,33 +973,5 @@
     {/if}
     </div>
 
-    {#if showCreateCampaign}
-      <Dialog title="Neue Kampagne" titleId="create-campaign-dialog-title" onClose={() => showCreateCampaign = false}>
-        <form onsubmit={createCampaign} class="space-y-4">
-          {#if createCampaignError}<p class="text-sm text-red-400">{createCampaignError}</p>{/if}
-          <div>
-            <label for="campaign-name" class="block text-xs text-gray-500 mb-1">Name *</label>
-            <input id="campaign-name" bind:value={newCampaignName} required maxlength="120"
-              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500" />
-          </div>
-          <div>
-            <label for="campaign-setting" class="block text-xs text-gray-500 mb-1">Setting</label>
-            <input id="campaign-setting" bind:value={newCampaignSetting} maxlength="200"
-              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500" />
-          </div>
-          <div>
-            <label for="campaign-description" class="block text-xs text-gray-500 mb-1">Beschreibung</label>
-            <textarea id="campaign-description" bind:value={newCampaignDescription} maxlength="2000" rows="3"
-              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500"></textarea>
-          </div>
-          <div class="flex gap-3 justify-end">
-            <button type="button" onclick={() => showCreateCampaign = false} class="text-gray-400 hover:text-white px-4 py-2">Abbrechen</button>
-            <button type="submit" disabled={creatingCampaign} class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg">
-              {creatingCampaign ? 'Erstellen...' : 'Erstellen'}
-            </button>
-          </div>
-        </form>
-      </Dialog>
-    {/if}
   {/if}
 </div>

@@ -103,15 +103,11 @@ export async function wikiRoutes(app: FastifyInstance) {
     const { campaignId } = req.params as { campaignId: string };
     const { sub } = req.user as { sub: string };
 
-    // Berechtigung prüfen: User muss Mitglied der Gruppe der Kampagne sein
+    // Berechtigung prüfen: User muss Mitglied der Kampagne sein
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
       include: {
-        group: {
-          include: {
-            memberships: { where: { userId: sub, leftAt: null } }
-          }
-        },
+        memberships: { where: { userId: sub, leftAt: null } },
         sessions: {
           where: { summary: { isNot: null } },
           orderBy: { sessionNumber: "asc" },
@@ -123,8 +119,7 @@ export async function wikiRoutes(app: FastifyInstance) {
     });
 
     if (!campaign) return reply.status(404).send({ error: "Campaign not found" });
-    if (!campaign.group.memberships.length)
-      return reply.status(403).send({ error: "Not a member" });
+    if (!campaign.memberships.length) return reply.status(403).send({ error: "Not a member" });
 
     // Lookup für Session-Nummern (auch Sessions ohne Summary), damit manuelle
     // Einträge korrekt mit first/lastSeenSessionNumber angereichert werden können.
@@ -475,7 +470,7 @@ export async function wikiRoutes(app: FastifyInstance) {
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
       include: {
-        group: { include: { memberships: { where: { userId: sub, leftAt: null } } } },
+        memberships: { where: { userId: sub, leftAt: null } },
         sessions: {
           where: { summary: { isNot: null } },
           orderBy: { sessionNumber: "asc" },
@@ -485,8 +480,7 @@ export async function wikiRoutes(app: FastifyInstance) {
     });
 
     if (!campaign) return reply.status(404).send({ error: "Campaign not found" });
-    if (!campaign.group.memberships.length)
-      return reply.status(403).send({ error: "Not a member" });
+    if (!campaign.memberships.length) return reply.status(403).send({ error: "Not a member" });
 
     const sessionNumberMap = new Map<string, number | null>();
     const allSessions = await prisma.session.findMany({

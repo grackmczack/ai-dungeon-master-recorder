@@ -48,7 +48,9 @@ interface Chunk {
 }
 
 interface ActiveRecording {
+  recordingKey: string;
   guildId: string;
+  voiceChannelId: string;
   sessionId: string;
   connection: VoiceConnection;
   client: Client;
@@ -69,6 +71,10 @@ interface ActiveRecording {
 export interface StopResult {
   chunks: Array<{ filename: string; filePath: string; index: number }>;
   participantIds: string[];
+}
+
+export function makeRecordingKey(guildId: string, voiceChannelId: string): string {
+  return `${guildId}:${voiceChannelId}`;
 }
 
 class ParticipantAudio {
@@ -125,14 +131,15 @@ export class VoiceRecorderService {
     member: GuildMember,
     onChunkReady: (chunk: Chunk, isLast: boolean) => Promise<void>,
     onAutoStop: () => Promise<void>
-  ): Promise<void> {
+  ): Promise<string> {
     const { guild, voice } = member;
     const voiceChannel = voice.channel;
 
     if (!voiceChannel) throw new Error("USER_NOT_IN_VOICE_CHANNEL");
-    if (this.recordings.has(guild.id) || this.startingGuilds.has(guild.id)) {
+    if (this.getActiveRecordingKey(guild.id) || this.startingGuilds.has(guild.id)) {
       throw new Error("RECORDING_ALREADY_ACTIVE");
     }
+    const recordingKey = makeRecordingKey(guild.id, voiceChannel.id);
     this.startingGuilds.add(guild.id);
 
     const existingConnection = getVoiceConnection(guild.id);
@@ -193,7 +200,9 @@ export class VoiceRecorderService {
     };
 
     const recording: ActiveRecording = {
+      recordingKey,
       guildId: guild.id,
+      voiceChannelId: voiceChannel.id,
       sessionId,
       connection,
       client: guild.client,
@@ -237,16 +246,17 @@ export class VoiceRecorderService {
       console.log(`[VOICE STATE] ${guild.id}: → ${newState.status}`);
     });
 
-    this.recordings.set(guild.id, recording);
+    this.recordings.set(recordingKey, recording);
     this.startingGuilds.delete(guild.id);
     try {
       this.trackCurrentMembers(recording, voiceChannel.members, member.client.user.id);
     } catch (error) {
-      await this.cancel(guild.id);
+      await this.cancel(recordingKey);
       throw error;
     }
     console.log(`[RECORDER] Session ${sessionId} started for guild ${guild.id}`);
     console.log(`[RECORDER] Voice ready for guild ${guild.id}`);
+    return recordingKey;
   }
 
   private async createChunk(guildId: string, sessionId: string, index: number): Promise<Chunk> {
@@ -306,11 +316,11 @@ export class VoiceRecorderService {
     await recording.onChunkReady(oldChunk, isLast);
   }
 
-  public async stop(guildId: string): Promise<StopResult> {
-    const recording = this.recordings.get(guildId);
+  public async stop(recordingKey: string): Promise<StopResult> {
+    const recording = this.recordings.get(recordingKey);
     if (!recording) throw new Error("NO_RECORDING_ACTIVE");
 
-    this.recordings.delete(guildId);
+    this.recordings.delete(recordingKey);
     clearInterval(recording.mixer);
     clearInterval(recording.chunkTimer);
     clearTimeout(recording.maxTimer);
@@ -319,7 +329,7 @@ export class VoiceRecorderService {
     recording.connection.receiver.speaking.removeAllListeners();
 
     console.log(
-      `[RECORDER] Stopping recording for guild ${guildId} — ${recording.chunks.length} chunk(s) total`
+      `[RECORDER] Stopping recording ${recordingKey} — ${recording.chunks.length} chunk(s) total`
     );
 
     for (const participant of recording.participants.values()) {
@@ -343,10 +353,10 @@ export class VoiceRecorderService {
     };
   }
 
-  public async cancel(guildId: string): Promise<void> {
-    const recording = this.recordings.get(guildId);
+  public async cancel(recordingKey: string): Promise<void> {
+    const recording = this.recordings.get(recordingKey);
     if (!recording) return;
-    this.recordings.delete(guildId);
+    this.recordings.delete(recordingKey);
     clearInterval(recording.mixer);
     clearInterval(recording.chunkTimer);
     clearTimeout(recording.maxTimer);
@@ -365,14 +375,31 @@ export class VoiceRecorderService {
     );
   }
 
-  public isRecording(guildId: string): boolean {
-    return this.recordings.has(guildId);
+  public isRecording(guildId: string, voiceChannelId?: string): boolean {
+    return voiceChannelId
+      ? this.recordings.has(makeRecordingKey(guildId, voiceChannelId))
+      : this.getActiveRecordingKey(guildId) !== null;
   }
 
-  public getRecordingInfo(guildId: string): { chunkCount: number; startedAt: Date } | null {
-    const r = this.recordings.get(guildId);
+  public getActiveRecordingKey(guildId: string): string | null {
+    return (
+      [...this.recordings.entries()].find(([, recording]) => recording.guildId === guildId)?.[0] ??
+      null
+    );
+  }
+
+  public getRecordingInfo(
+    guildId: string
+  ): { recordingKey: string; voiceChannelId: string; chunkCount: number; startedAt: Date } | null {
+    const key = this.getActiveRecordingKey(guildId);
+    const r = key ? this.recordings.get(key) : undefined;
     if (!r) return null;
-    return { chunkCount: r.chunks.length, startedAt: r.chunks[0]!.startedAt };
+    return {
+      recordingKey: r.recordingKey,
+      voiceChannelId: r.voiceChannelId,
+      chunkCount: r.chunks.length,
+      startedAt: r.chunks[0]!.startedAt
+    };
   }
 
   private trackParticipant(recording: ActiveRecording, userId: string): void {

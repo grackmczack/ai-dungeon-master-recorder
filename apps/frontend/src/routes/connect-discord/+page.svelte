@@ -9,8 +9,8 @@
   let error = $state('');
   let preview: Awaited<ReturnType<typeof api.previewDiscordConnection>> | null = $state(null);
   let mode: 'existing' | 'new' = $state('new');
-  let selectedGroupId = $state('');
-  let newGroupName = $state('');
+  let selectedCampaignId = $state('');
+  let newCampaignName = $state('');
   let token = $state('');
 
   onMount(async () => {
@@ -33,10 +33,10 @@
     }
     try {
       preview = await api.previewDiscordConnection(token);
-      newGroupName = preview.guildName;
-      if (preview.groups.length > 0) {
+      newCampaignName = preview.guildName;
+      if (preview.campaigns.length > 0) {
         mode = 'existing';
-        selectedGroupId = preview.groups[0].id;
+        selectedCampaignId = preview.campaigns[0].id;
       }
     } catch (e: any) {
       error = e.error ?? 'Der Discord-Server konnte nicht geladen werden.';
@@ -53,11 +53,11 @@
       const result = await api.claimDiscordConnection(
         token,
         mode === 'existing'
-          ? { targetGroupId: selectedGroupId }
-          : { newGroupName: newGroupName.trim() || preview.guildName }
+          ? { targetCampaignId: selectedCampaignId }
+          : { newCampaignName: newCampaignName.trim() || preview.guildName }
       );
       sessionStorage.removeItem('postLoginReturnTo');
-      await goto(`/groups/${result.groupId}?discord=connected`);
+      await goto(`/kampagnen/${result.campaignId}?discord=connected`);
     } catch (e: any) {
       error = e.error ?? 'Der Discord-Server konnte nicht verbunden werden.';
     } finally {
@@ -97,14 +97,14 @@
         </div>
       {/if}
 
-      {#if preview.groups.length > 0}
+      {#if preview.campaigns.length > 0}
         <fieldset class="space-y-3">
-          <legend class="text-sm font-medium text-gray-300">Mit welcher Web-Gruppe verbinden?</legend>
-          {#each preview.groups as candidate}
-            <label class="flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border p-3 transition {mode === 'existing' && selectedGroupId === candidate.id ? 'border-brand-500/60 bg-brand-500/10' : 'border-surface-600 hover:border-surface-500'}">
-              <input type="radio" name="target-group" value={candidate.id}
-                checked={mode === 'existing' && selectedGroupId === candidate.id}
-                onchange={() => { mode = 'existing'; selectedGroupId = candidate.id; }}
+          <legend class="text-sm font-medium text-gray-300">Mit welcher Kampagne verbinden?</legend>
+          {#each preview.campaigns as candidate}
+            <label class="flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border p-3 transition {mode === 'existing' && selectedCampaignId === candidate.id ? 'border-brand-500/60 bg-brand-500/10' : 'border-surface-600 hover:border-surface-500'}">
+              <input type="radio" name="target-campaign" value={candidate.id}
+                checked={mode === 'existing' && selectedCampaignId === candidate.id}
+                onchange={() => { mode = 'existing'; selectedCampaignId = candidate.id; }}
                 class="mt-1 accent-brand-500" />
               <span>
                 <span class="block font-medium text-white">{candidate.name}</span>
@@ -116,22 +116,22 @@
           <label class="flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border p-3 transition {mode === 'new' ? 'border-brand-500/60 bg-brand-500/10' : 'border-surface-600 hover:border-surface-500'}">
             <input type="radio" name="target-group" checked={mode === 'new'} onchange={() => mode = 'new'}
               class="mt-1 accent-brand-500" />
-            <span class="font-medium text-white">Als neue Web-Gruppe hinzufügen</span>
+            <span class="font-medium text-white">Als neue Kampagne hinzufügen</span>
           </label>
         </fieldset>
       {/if}
 
       {#if mode === 'new'}
         <div class="space-y-2">
-          <label for="new-group-name" class="text-sm text-gray-300">Name der neuen Web-Gruppe</label>
-          <input id="new-group-name" bind:value={newGroupName} required maxlength="100"
+          <label for="new-campaign-name" class="text-sm text-gray-300">Name der neuen Kampagne</label>
+          <input id="new-campaign-name" bind:value={newCampaignName} required maxlength="100"
             class="w-full rounded-lg border border-surface-600 bg-surface-700 px-4 py-3 text-white focus:border-brand-500 focus:outline-none" />
         </div>
       {/if}
 
       {#if error}<p role="alert" class="text-sm text-red-300">{error}</p>{/if}
 
-      <button type="submit" disabled={connecting || (mode === 'existing' && !selectedGroupId)}
+      <button type="submit" disabled={connecting || (mode === 'existing' && !selectedCampaignId)}
         class="min-h-12 w-full rounded-lg bg-brand-600 px-5 py-3 font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
         {connecting ? 'Verbinde…' : 'Discord-Server verbinden'}
       </button>

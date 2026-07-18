@@ -11,6 +11,10 @@ export interface BatchChunkMeta {
 export interface TranscriptionJobData {
   sessionId: string;
   guildId: string;
+  campaignId?: string;
+  bindingId?: string;
+  voiceChannelId?: string;
+  summaryChannelId?: string;
   filePath: string;
   filename: string;
   durationSeconds?: number;

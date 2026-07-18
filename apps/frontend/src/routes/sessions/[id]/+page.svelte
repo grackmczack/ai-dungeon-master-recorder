@@ -352,7 +352,7 @@
 
     <!-- Session-Bild Header-Kachel -->
     {#if sessionImageUrl()}
-      <div class="mb-6 relative overflow-hidden rounded-2xl h-64 group">
+      <div class="mb-6 relative overflow-hidden rounded-2xl aspect-[4/3] group">
         <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
           <img src={sessionImageUrl()!} alt={`Session-Bild zu ${session.title ?? `Session #${session.sessionNumber ?? '?'}`}`} class="w-full h-full object-cover opacity-60" />
         </div>
@@ -369,13 +369,11 @@
 
     {#if session.status === 'DONE'}
       <!-- Generate/regenerate/upload (GM only) -->
-      <div class="mb-6 bg-surface-800 rounded-2xl border border-surface-600 border-dashed p-6">
-        <p class="text-sm text-gray-400 mb-4">
-          {sessionImageUrl()
-            ? '🎨 Session-Bild neu generieren oder durch ein eigenes Bild ersetzen'
-            : '🎨 Session-Bild generieren — zeigt eine illustrierte Szene dieser Session als Header'}
-        </p>
-        <div class="space-y-3">
+      <details class="mb-6 bg-surface-800 rounded-2xl border border-surface-600">
+        <summary class="cursor-pointer px-5 py-4 text-sm font-medium text-gray-300 hover:text-white transition">
+          🎨 Session-Bild {sessionImageUrl() ? 'bearbeiten oder neu generieren' : 'generieren'}
+        </summary>
+        <div class="space-y-3 border-t border-surface-600 p-5">
           <label for="session-image-prompt" class="sr-only">Prompt für das Session-Bild</label>
           <textarea
             id="session-image-prompt"
@@ -397,7 +395,7 @@
           {#if generateSessionImageError}<p class="text-red-400 text-xs">{generateSessionImageError}</p>{/if}
           {#if uploadSessionImageError}<p class="text-red-400 text-xs">{uploadSessionImageError}</p>{/if}
         </div>
-      </div>
+      </details>
     {/if}
 
     <!-- Tabs -->

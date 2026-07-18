@@ -75,15 +75,12 @@ async function readErrorBody(res: Response) {
   }
 }
 
-/** Prüft ob User GM in der Kampagnen-Gruppe ist */
+/** Prüft, ob der User GM der Kampagne ist. */
 async function isGm(campaignId: string, userId: string): Promise<boolean> {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-    include: {
-      group: { include: { memberships: { where: { userId, role: "GM", leftAt: null } } } }
-    }
+  const membership = await prisma.campaignMembership.findFirst({
+    where: { campaignId, userId, role: "GM", leftAt: null }
   });
-  return !!campaign?.group.memberships.length;
+  return !!membership;
 }
 
 export async function sessionsRoutes(app: FastifyInstance) {
@@ -98,9 +95,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
       where: { id },
       include: {
         campaign: {
-          include: {
-            group: { include: { memberships: { where: { userId: sub, leftAt: null } } } }
-          }
+          include: { memberships: { where: { userId: sub, leftAt: null } } }
         },
         recordings: true,
         transcript: true,
@@ -110,7 +105,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
     });
 
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!session.campaign.group.memberships.length)
+    if (!session.campaign.memberships.length)
       return reply.status(403).send({ error: "Not a member" });
 
     // Campaign-Hintergrundbild für seitenweiten Parallax mitgeben
@@ -131,9 +126,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
         session: {
           include: {
             campaign: {
-              include: {
-                group: { include: { memberships: { where: { userId: sub, leftAt: null } } } }
-              }
+              include: { memberships: { where: { userId: sub, leftAt: null } } }
             }
           }
         }
@@ -141,7 +134,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
     });
 
     if (!recording) return reply.status(404).send({ error: "Recording not found" });
-    if (!recording.session.campaign.group.memberships.length) {
+    if (!recording.session.campaign.memberships.length) {
       return reply.status(403).send({ error: "Not a member" });
     }
 
@@ -164,13 +157,13 @@ export async function sessionsRoutes(app: FastifyInstance) {
       where: { id },
       include: {
         campaign: {
-          include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+          include: { memberships: { where: { userId: sub, leftAt: null } } }
         }
       }
     });
 
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!session.campaign.group.memberships.length)
+    if (!session.campaign.memberships.length)
       return reply.status(403).send({ error: "Not a member" });
 
     const updated = await prisma.session.update({ where: { id }, data: { title } });
@@ -195,13 +188,13 @@ export async function sessionsRoutes(app: FastifyInstance) {
       where: { id },
       include: {
         campaign: {
-          include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+          include: { memberships: { where: { userId: sub, leftAt: null } } }
         }
       }
     });
 
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!session.campaign.group.memberships.length)
+    if (!session.campaign.memberships.length)
       return reply.status(403).send({ error: "Not a member" });
 
     await Promise.all(
@@ -231,14 +224,14 @@ export async function sessionsRoutes(app: FastifyInstance) {
       where: { id },
       include: {
         campaign: {
-          include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+          include: { memberships: { where: { userId: sub, leftAt: null } } }
         },
         transcript: true
       }
     });
 
     if (!session) return reply.status(404).send({ error: "Not found" });
-    if (!session.campaign.group.memberships.length)
+    if (!session.campaign.memberships.length)
       return reply.status(403).send({ error: "Not a member" });
 
     const allSegments = extractTranscriptSegments(session.transcript?.rawJson);
@@ -298,7 +291,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
     const session = await prisma.session.findUnique({
       where: { id },
       include: {
-        campaign: { include: { group: { include: { settings: true } } } },
+        campaign: { include: { settings: true } },
         summary: true,
         speakerMaps: true
       }
@@ -309,13 +302,12 @@ export async function sessionsRoutes(app: FastifyInstance) {
 
     const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
     const replicateApiKey =
-      adminProfile?.replicateApiKey?.trim() ??
-      session.campaign.group.settings?.replicateApiKey?.trim();
+      adminProfile?.replicateApiKey?.trim() ?? session.campaign.settings?.replicateApiKey?.trim();
     if (!replicateApiKey)
       return reply.status(400).send({ error: "No Replicate API key configured" });
 
     const sessionImageModel =
-      session.campaign.group.settings?.sessionImageModel?.trim() || DEFAULT_SESSION_IMAGE_MODEL;
+      session.campaign.settings?.sessionImageModel?.trim() || DEFAULT_SESSION_IMAGE_MODEL;
 
     // Prompt: Vom User explizit angegeben, oder den vorausgefüllten aus der Summary, oder Fallback
     let prompt = body.data.prompt?.trim() || session.summary?.sessionImagePrompt?.trim() || "";
@@ -335,14 +327,14 @@ export async function sessionsRoutes(app: FastifyInstance) {
     let inputPayload: Record<string, unknown> = { prompt };
 
     if (isImageEditModel && session.speakerMaps.length > 0) {
-      // Hole GroupMemberships für die Charaktere in dieser Session
+      // Hole Kampagnen-Mitglieder für die Charaktere in dieser Session
       const characterNames = session.speakerMaps
         .map((sm) => sm.characterName)
         .filter(Boolean) as string[];
 
-      const membersWithAvatars = await prisma.groupMembership.findMany({
+      const membersWithAvatars = await prisma.campaignMembership.findMany({
         where: {
-          groupId: session.campaign.groupId,
+          campaignId: session.campaignId,
           characterName: { in: characterNames },
           avatarUrl: { not: null },
           leftAt: null
@@ -362,7 +354,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
         inputPayload = {
           prompt,
           image: avatarUrls,
-          aspect_ratio: "16:9",
+          aspect_ratio: "4:3",
           output_format: "webp",
           go_fast: true
         };
@@ -372,11 +364,11 @@ export async function sessionsRoutes(app: FastifyInstance) {
       } else {
         // Keine Avatare gefunden — falle zurück auf reinen Text-Prompt
         console.log(`[generate-image] No avatar URLs found for characters, using text-only prompt`);
-        inputPayload = { prompt, aspect_ratio: "16:9", output_format: "webp", go_fast: true };
+        inputPayload = { prompt, aspect_ratio: "4:3", output_format: "webp", go_fast: true };
       }
     } else {
       // Standard text-to-image (flux-schnell etc.)
-      inputPayload = { prompt, aspect_ratio: "16:9", output_format: "webp", go_fast: true };
+      inputPayload = { prompt, aspect_ratio: "4:3", output_format: "webp", go_fast: true };
     }
 
     const predictionUrl = `https://api.replicate.com/v1/models/${sessionImageModel}/predictions`;

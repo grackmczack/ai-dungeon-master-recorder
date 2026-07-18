@@ -3,6 +3,7 @@ import "dotenv/config";
 import { createRecordCommand } from "./commands/record.js";
 import { createStatusCommand } from "./commands/status.js";
 import { summaryChannelCommand } from "./commands/summary-channel.js";
+import { campaignCommand } from "./commands/campaign.js";
 import { createStopCommand } from "./commands/stop.js";
 import { DiscordService } from "./services/discord.service.js";
 import { VoiceRecorderService } from "./services/voice-recorder.service.js";
@@ -32,6 +33,7 @@ const discordService = new DiscordService({
     createRecordCommand(voiceRecorderService, chunkProcessor),
     createStopCommand(voiceRecorderService),
     createStatusCommand(voiceRecorderService),
+    campaignCommand,
     summaryChannelCommand
   ]
 });

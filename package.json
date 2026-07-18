@@ -7,7 +7,14 @@
   "pnpm": {
     "overrides": {
       "ioredis": "5.10.1"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "msgpackr-extract",
+      "prisma"
+    ]
   },
   "scripts": {
     "build": "pnpm -r --if-present build",

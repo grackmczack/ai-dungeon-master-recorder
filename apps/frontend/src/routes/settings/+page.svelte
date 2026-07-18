@@ -4,8 +4,8 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
 
-  let groups: any[] = $state([]);
-  let selectedGroupId = $state('');
+  let campaigns: any[] = $state([]);
+  let selectedCampaignId = $state('');
   let settings: any = $state(null);
   let usingAdminKeys = $state(false);
   let adminKeyProviderName = $state('');
@@ -20,7 +20,7 @@
   let saving = $state(false);
   let saved = $state(false);
   let error = $state('');
-  let loadedGroupId = $state('');
+  let loadedCampaignId = $state('');
   let savedSnapshot = $state('');
   let dirty = $derived(!!savedSnapshot && JSON.stringify(form) !== savedSnapshot);
 
@@ -89,10 +89,10 @@
 
   onMount(async () => {
     try {
-      groups = await api.getGroups();
-      const qGroupId = $page.url.searchParams.get('groupId');
-      selectedGroupId = qGroupId ?? groups[0]?.id ?? '';
-      if (selectedGroupId) await loadSettings();
+      campaigns = await api.getCampaigns();
+      const queryCampaignId = $page.url.searchParams.get('campaignId') ?? $page.url.searchParams.get('groupId');
+      selectedCampaignId = queryCampaignId ?? campaigns[0]?.id ?? '';
+      if (selectedCampaignId) await loadSettings();
     } catch (e: any) {
       error = e.error ?? 'Fehler';
     } finally {
@@ -101,9 +101,9 @@
   });
 
   async function loadSettings() {
-    if (!selectedGroupId) return;
+    if (!selectedCampaignId) return;
     try {
-      settings = await api.getSettings(selectedGroupId);
+      settings = await api.getSettings(selectedCampaignId);
       usingAdminKeys = settings?.usingAdminKeys ?? false;
       adminKeyProviderName = settings?.adminKeyProviderName ?? '';
       adminKeyAvailability = settings?.adminKeyAvailability ?? {
@@ -128,7 +128,7 @@
         postSummaryChannelId: ''
       };
       savedSnapshot = JSON.stringify(form);
-      loadedGroupId = selectedGroupId;
+      loadedCampaignId = selectedCampaignId;
     } catch {
       form = {
         whisperProvider: 'openai', whisperApiKey: '', whisperEndpoint: '',
@@ -140,7 +140,7 @@
         summaryLanguage: 'de', postSummaryChannelId: ''
       };
       savedSnapshot = JSON.stringify(form);
-      loadedGroupId = selectedGroupId;
+      loadedCampaignId = selectedCampaignId;
     }
   }
 
@@ -165,7 +165,7 @@
       if (!payload.llmEndpoint?.trim()) { payload.llmEndpoint = null; }
       if (!payload.whisperEndpoint?.trim()) { payload.whisperEndpoint = null; }
       if (!payload.postSummaryChannelId?.trim()) { payload.postSummaryChannelId = null; }
-      await api.updateSettings(selectedGroupId, payload);
+      await api.updateSettings(selectedCampaignId, payload);
       savedSnapshot = JSON.stringify(form);
       saved = true;
       setTimeout(() => saved = false, 3000);
@@ -176,9 +176,9 @@
     }
   }
 
-  function onGroupChange() {
+  function onCampaignChange() {
     if (dirty && !confirm('Ungespeicherte Änderungen verwerfen?')) {
-      selectedGroupId = loadedGroupId;
+      selectedCampaignId = loadedCampaignId;
       return;
     }
     loadSettings();
@@ -202,7 +202,7 @@
 <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <a href="/dashboard" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-8 transition">← Dashboard</a>
   <h1 class="text-2xl font-bold text-white mb-2">Einstellungen</h1>
-  <p class="text-gray-500 text-sm mb-8">API-Keys und Provider-Konfiguration pro Gruppe</p>
+  <p class="text-gray-500 text-sm mb-8">API-Keys und Provider-Konfiguration pro Kampagne</p>
 
   {#if usingAdminKeys}
     <div class="mb-6 bg-brand-500/10 border border-brand-500/30 rounded-2xl p-5">
@@ -228,13 +228,13 @@
   {#if loading}
     <div class="animate-pulse h-96 bg-surface-800 rounded-2xl"></div>
   {:else}
-    <!-- Gruppenauswahl -->
-    {#if groups.length > 1}
+    <!-- Kampagnenauswahl -->
+    {#if campaigns.length > 1}
       <div class="mb-6">
-        <label for="settings-group" class="block text-sm text-gray-400 mb-2">Gruppe</label>
-        <select id="settings-group" bind:value={selectedGroupId} onchange={onGroupChange}
+        <label for="settings-group" class="block text-sm text-gray-400 mb-2">Kampagne</label>
+        <select id="settings-group" bind:value={selectedCampaignId} onchange={onCampaignChange}
           class="bg-surface-800 border border-surface-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-500 transition">
-          {#each groups as g}<option value={g.id}>{g.name}</option>{/each}
+          {#each campaigns as campaign}<option value={campaign.id}>{campaign.name}</option>{/each}
         </select>
       </div>
     {/if}
@@ -471,7 +471,7 @@
         </div>
 
         <div class="space-y-2">
-          <label for="campaign-context" class="block text-sm text-gray-400">Kampagnen-Kontext <span class="text-gray-600 text-xs">(für alle Sessions dieser Gruppe)</span></label>
+          <label for="campaign-context" class="block text-sm text-gray-400">Kampagnen-Kontext <span class="text-gray-600 text-xs">(für alle Sessions dieser Kampagne)</span></label>
           <textarea id="campaign-context" bind:value={form.llmCampaignContext} rows="4"
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-brand-500 transition resize-y"
             placeholder="z.B.: Wir spielen D&D 5e. Die Kampagne heißt 'Vergessene Reiche'. Spieler: Arkeles (Magier), Neston (Krieger), Akuma (Schurke). Der DM ist Grack. Das aktuelle Setting ist..."></textarea>
