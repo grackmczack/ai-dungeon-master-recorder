@@ -105,7 +105,7 @@
 - **Prisma/Alpine OpenSSL-Bug (der eigentliche Blocker):** Der Alpine-Container hat nur OpenSSL 3.x, Prismas auto-heruntergeladene Schema-Engine-Binary (genutzt von `prisma db push` in `start.sh`) braucht aber OpenSSL 1.1 (`libssl.so.1.1`). `db push` ist deshalb bei **jedem** Container-Start seit langem stillschweigend fehlgeschlagen (`Could not parse schema engine response`) -- ohne dass es je aufgefallen ist, weil das Backend trotzdem hochfuhr. Gefixt dauerhaft im `apps/backend/Dockerfile`: `apk add --repository=.../v3.16/main libssl1.1 libcrypto1.1` in der Runner-Stage.
   - **Wichtig fuer zukuenftige Schema-Aenderungen:** Wenn `docker logs dnd-backend` beim Start `"Could not parse schema engine response"` zeigt, ist das genau dieser Bug -- pruefen ob das Dockerfile noch die OpenSSL-1.1-Compat-Pakete installiert (koennte bei einem Base-Image-Update wieder verschwinden).
   - Ein alter `@@unique([userId, groupId])`-Constraint aus der Zeit vor "userId optional" musste zusaetzlich manuell per SQL entfernt werden, bevor `db push` durchlief.
-- Nach allen Fixes: alle 7 Container laufen, `/groups` liefert 200, Storage-Verzeichnisse existieren im Container. Live verifiziert unter `https://dndbot.haffelpaff.de/`.
+- Nach allen Fixes: alle 7 Container laufen, `/groups` liefert 200, Storage-Verzeichnisse existieren im Container. Live verifiziert unter `https://dnd-recorder.de/`.
 
 ### Sprecher-Zuordnung -- vollstaendig geloest ✅ (v0.2.0, 09.07.2026)
 

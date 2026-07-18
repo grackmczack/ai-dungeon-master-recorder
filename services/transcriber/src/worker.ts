@@ -12,6 +12,7 @@ import { postSummaryToDiscord } from "./discord-notify.js";
 import type { TranscriptionJobData, TranscriptSegment, BatchChunkMeta } from "./types.js";
 import { createChunkJobs } from "./batch.js";
 import { resolveSummaryChannelId } from "./summary-channel.js";
+import { publicUrl } from "./public-url.js";
 import {
   applyGrantedKeyProfile,
   buildGrantedKeyProfile,
@@ -896,7 +897,7 @@ async function handleSummarization(
       token: discordToken,
       summary,
       sessionNumber: session.sessionNumber ?? undefined,
-      webPanelUrl: `https://dndbot.haffelpaff.de/sessions/${sessionId}`
+      webPanelUrl: publicUrl(`/sessions/${encodeURIComponent(sessionId)}`)
     });
   } else if (skipNotification) {
     console.log(`[WORKER] Discord notification skipped for regenerated summary ${sessionId}`);

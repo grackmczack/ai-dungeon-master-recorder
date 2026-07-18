@@ -35,6 +35,14 @@ const ALLOWED_IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_SESSION_IMAGE_MODEL = "qwen/qwen-image-edit-plus";
 
+function publicBaseUrl(): string {
+  return (
+    process.env.PUBLIC_BASE_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    "http://localhost:5173"
+  ).replace(/\/+$/, "");
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -347,8 +355,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
         .map((m) => {
           // avatarUrl ist relativ (z.B. "/uploads/avatars/xxx.png")
           // Replicate braucht öffentlich erreichbare URLs
-          const baseUrl = process.env.PUBLIC_BASE_URL ?? "https://dndbot.haffelpaff.de";
-          return `${baseUrl}${m.avatarUrl}`;
+          return new URL(m.avatarUrl!, `${publicBaseUrl()}/`).toString();
         });
 
       if (avatarUrls.length > 0) {

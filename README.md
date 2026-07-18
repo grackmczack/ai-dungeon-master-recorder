@@ -56,7 +56,7 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 ### Infrastruktur
 - Docker Compose (5 Services: Bot, Backend, Transcriber, Frontend, Nginx, Postgres, Redis)
 - Git-basiertes Deployment (`git pull && docker compose up -d --build`)
-- Subdomain: `dndbot.haffelpaff.de`
+- Produktionsdomain: `dnd-recorder.de`
 
 ---
 
@@ -243,7 +243,8 @@ REDIS_PORT=6379
 JWT_SECRET=
 INTERNAL_TOKEN=         # Langes Zufallsgeheimnis für Bot → Backend
 PORT=3001
-APP_URL=https://dndbot.example.com
+APP_URL=https://dnd-recorder.de
+PUBLIC_BASE_URL=https://dnd-recorder.de
 TRUST_PROXY=true        # Für korrekte Client-IP hinter Nginx/Cloudflare
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
@@ -260,6 +261,7 @@ DISCORD_CLIENT_ID=        # identisch zur Discord-App; erzeugt den öffentlichen
 DATABASE_URL=postgresql://...
 REDIS_HOST=redis
 REDIS_PORT=6379
+PUBLIC_BASE_URL=https://dnd-recorder.de
 ANTHROPIC_API_KEY=       # Fallback wenn kein Key in DB-Settings
 REPLICATE_API_KEY=       # Für WhisperX
 HUGGINGFACE_TOKEN=       # Für Speaker-Diarization (pyannote)

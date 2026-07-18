@@ -3,6 +3,7 @@
  * Kein discord.js nötig — reines fetch.
  */
 import type { SummaryResult } from "./providers/llm.js";
+import { publicUrl } from "./public-url.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 
@@ -86,7 +87,7 @@ function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): obje
     fields,
     footer: {
       text: `Generiert von ${summary.provider}/${summary.model} · DnD Recorder`,
-      icon_url: "https://dndbot.haffelpaff.de/logo-d20.png"
+      icon_url: publicUrl("/logo-d20.png")
     },
     timestamp: new Date().toISOString()
   };
