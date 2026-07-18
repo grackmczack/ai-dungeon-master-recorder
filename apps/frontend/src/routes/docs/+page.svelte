@@ -13,7 +13,10 @@
 </script>
 
 <svelte:head>
-  <title>Dokumentation — DnD Recorder</title>
+  <title>Dokumentation: DnD Recorder Discord Bot einrichten</title>
+  <meta name="description" content="DnD Recorder Dokumentation: Discord Bot verbinden, D&amp;D Session aufnehmen, Kampagnen und Channels zuordnen sowie KI-Zusammenfassungen konfigurieren." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://dnd-recorder.de/docs" />
 </svelte:head>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">

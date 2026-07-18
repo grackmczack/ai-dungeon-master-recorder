@@ -16,7 +16,12 @@
   const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/docs'];
 
   function isPublic(pathname: string) {
-    return PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
+    return pathname === '/'
+      || PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  }
+
+  function isIndexable(pathname: string) {
+    return pathname === '/' || pathname === '/docs';
   }
 
   function loginRedirectUrl() {
@@ -68,9 +73,15 @@
   }
 </script>
 
+<svelte:head>
+  {#if !isIndexable($page.url.pathname)}
+    <meta name="robots" content="noindex, nofollow" />
+  {/if}
+</svelte:head>
+
 <a href="#main-content" class="skip-link">Zum Inhalt springen</a>
 
-{#if !['/login', '/register', '/forgot-password', '/reset-password'].includes($page.url.pathname)}
+{#if !['/', '/login', '/register', '/forgot-password', '/reset-password'].includes($page.url.pathname)}
   <nav class="bg-surface-800 border-b border-surface-600 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50">
     <div class="flex min-w-0 items-center gap-3 sm:gap-6">
       <a href="/dashboard" class="text-brand-500 font-bold text-lg tracking-tight flex items-center gap-2">
