@@ -111,8 +111,12 @@ services:
       - dnd-network
 
 volumes:
+  # Stable names keep production data attached when the Compose working
+  # directory or Plesk subscription changes.
   postgres_data:
+    name: app_postgres_data
   redis_data:
+    name: app_redis_data
 
 networks:
   dnd-network:
