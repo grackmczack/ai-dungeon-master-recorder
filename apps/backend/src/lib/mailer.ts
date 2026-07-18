@@ -118,15 +118,30 @@ export function buildEmailVerificationEmail(
 ): BrandedEmail {
   return buildBrandedEmail({
     subject: "Bestätige deine E-Mail-Adresse · DnD Recorder",
-    preheader: "Bestätige deine E-Mail-Adresse und aktiviere dein Konto.",
+    preheader: "Bestätige deine E-Mail-Adresse für den Beta-Zugang.",
     title: "Ein letzter Wurf",
     displayName,
     paragraphs: [
-      "dein Konto ist vorbereitet. Bestätige jetzt deine E-Mail-Adresse, bevor dein Abenteuer im DnD Recorder beginnt."
+      "dein Konto ist vorbereitet. Bestätige jetzt deine E-Mail-Adresse, damit der Obere Artificer deine Bewerbung für den Beta-Zugang prüfen kann."
     ],
     action: { label: "E-Mail-Adresse bestätigen", url: verificationUrl },
-    notice: "Der Link ist 24 Stunden gültig und kann nur einmal verwendet werden.",
+    notice:
+      "Der Link ist 24 Stunden gültig und kann nur einmal verwendet werden. Anschließend wartet dein Konto auf die manuelle Freigabe.",
     ignoreNotice: "Wenn du dieses Konto nicht erstellt hast, kannst du diese Nachricht ignorieren."
+  });
+}
+
+export function buildEmailConfirmedEmail(displayName: string): BrandedEmail {
+  return buildBrandedEmail({
+    subject: "E-Mail bestätigt · Freigabe ausstehend · DnD Recorder",
+    preheader: "Dein Siegel ist bestätigt; der Beta-Zugang wird nun geprüft.",
+    title: "Dein Siegel ist bestätigt",
+    displayName,
+    paragraphs: [
+      "deine E-Mail-Adresse wurde erfolgreich bestätigt. Der erste Schritt deiner Aufnahme in die Beta ist damit abgeschlossen.",
+      "Nun prüft der Obere Artificer dein Konto und schaltet es manuell frei. Sobald der Zugang bereitsteht, erhältst du eine weitere Botschaft per E-Mail."
+    ],
+    notice: "Du musst nichts weiter tun. Bis zur Freigabe führt dich ein Login in den Wartesaal."
   });
 }
 
@@ -137,7 +152,7 @@ export function buildAccountActivatedEmail(displayName: string, loginUrl: string
     title: "Willkommen am Spieltisch",
     displayName,
     paragraphs: [
-      "deine E-Mail-Adresse ist bestätigt und dein Konto wurde aktiviert.",
+      "der Obere Artificer hat deinen Beta-Zugang freigeschaltet. Dein Konto ist jetzt aktiviert.",
       "Du kannst jetzt deine Kampagne einrichten, den Discord-Bot verbinden und eure nächsten Abenteuer festhalten."
     ],
     action: { label: "Zum DnD Recorder", url: loginUrl }
@@ -198,6 +213,14 @@ export function sendEmailVerificationEmail(
   logger: FastifyBaseLogger
 ): Promise<void> {
   return sendEmail(recipient, buildEmailVerificationEmail(displayName, verificationUrl), logger);
+}
+
+export function sendEmailConfirmedEmail(
+  recipient: string,
+  displayName: string,
+  logger: FastifyBaseLogger
+): Promise<void> {
+  return sendEmail(recipient, buildEmailConfirmedEmail(displayName), logger);
 }
 
 export function sendAccountActivatedEmail(

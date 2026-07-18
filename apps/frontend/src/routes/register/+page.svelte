@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { tick } from 'svelte';
   import { api } from '$lib/api.js';
   import BrandHeader from '$lib/components/BrandHeader.svelte';
@@ -10,9 +11,6 @@
   let showPassword = $state(false);
   let error = $state('');
   let loading = $state(false);
-  let registeredEmail = $state('');
-  let resendStatus = $state('');
-  let resending = $state(false);
   let errorElement = $state<HTMLDivElement>();
 
   async function register(e: Event) {
@@ -28,9 +26,10 @@
     loading = true;
     try {
       const result = await api.register(email, password, displayName);
-      registeredEmail = result.email;
+      sessionStorage.setItem('registrationEmail', result.email);
       password = '';
       passwordConfirmation = '';
+      await goto('/registration-pending?stage=email');
     } catch (e: any) {
       error = typeof e.error === 'string' ? e.error : 'Registrierung fehlgeschlagen';
       await tick();
@@ -40,20 +39,6 @@
     }
   }
 
-  async function resendVerification() {
-    resending = true;
-    resendStatus = '';
-    try {
-      const result = await api.resendVerification(registeredEmail);
-      resendStatus = result.message;
-    } catch (e: any) {
-      resendStatus = typeof e.error === 'string'
-        ? e.error
-        : 'Die Bestätigungsmail konnte nicht erneut angefordert werden.';
-    } finally {
-      resending = false;
-    }
-  }
 </script>
 
 <svelte:head><title>Registrieren — DnD Recorder</title></svelte:head>
@@ -62,41 +47,20 @@
   <div class="w-full max-w-md">
     <BrandHeader subtitle="Konto erstellen" />
 
-    {#if registeredEmail}
-      <section class="bg-surface-800 rounded-2xl p-6 sm:p-8 border border-surface-600 shadow-xl space-y-5 text-center">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/15 text-2xl" aria-hidden="true">✉️</div>
-        <div class="space-y-2">
-          <h2 class="text-xl font-semibold text-white">Schau in dein Postfach</h2>
-          <p class="text-sm leading-6 text-gray-300">
-            Wir haben einen Bestätigungslink an <strong class="text-white">{registeredEmail}</strong> gesendet.
-            Öffne ihn innerhalb von 24 Stunden, um dein Konto zu aktivieren.
-          </p>
-        </div>
-
-        <div class="rounded-lg border border-surface-600 bg-surface-700/60 px-4 py-3 text-left text-sm text-gray-300">
-          Keine Mail zu sehen? Prüfe bitte auch deinen Spam-Ordner oder fordere einen neuen Link an.
-        </div>
-
-        {#if resendStatus}
-          <div role="status" class="rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-200">
-            {resendStatus}
-          </div>
-        {/if}
-
-        <button type="button" onclick={resendVerification} disabled={resending}
-          class="w-full min-h-12 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition">
-          {resending ? 'Wird gesendet...' : 'Bestätigungsmail erneut senden'}
-        </button>
-
-        <div class="flex flex-col gap-2 text-sm">
-          <a href="/login" class="text-brand-400 hover:underline">Zur Anmeldung</a>
-          <button type="button" onclick={() => { registeredEmail = ''; resendStatus = ''; }}
-            class="text-gray-400 hover:text-white hover:underline">Andere E-Mail-Adresse verwenden</button>
-        </div>
-      </section>
-    {:else}
-      <form onsubmit={register} class="bg-surface-800 rounded-2xl p-6 sm:p-8 border border-surface-600 shadow-xl space-y-5">
+    <form onsubmit={register} class="bg-surface-800 rounded-2xl p-6 sm:p-8 border border-surface-600 shadow-xl space-y-5">
         <h2 class="text-xl font-semibold text-white">Registrieren</h2>
+
+        <aside class="rounded-xl border border-brand-500/30 bg-brand-500/10 p-4" aria-labelledby="beta-notice-title">
+          <div class="flex gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-lg" aria-hidden="true">⚗</span>
+            <div>
+              <h3 id="beta-notice-title" class="font-semibold text-violet-100">Beta-Zugang mit persönlicher Freigabe</h3>
+              <p class="mt-1 text-sm leading-6 text-gray-300">
+                Nach der E-Mail-Bestätigung prüft der Obere Artificer jeden neuen Account und schaltet ihn manuell frei. Sobald dein Platz am Spieltisch bereit ist, erhältst du eine Nachricht.
+              </p>
+            </div>
+          </div>
+        </aside>
 
         {#if error}
           <div bind:this={errorElement} tabindex="-1" role="alert"
@@ -149,7 +113,6 @@
         <p class="text-center text-sm text-gray-400">
           Bereits registriert? <a href="/login" class="text-brand-400 hover:underline">Anmelden</a>
         </p>
-      </form>
-    {/if}
+    </form>
   </div>
 </div>

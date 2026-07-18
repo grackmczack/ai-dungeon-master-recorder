@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../db.js";
+import { accountAccessState } from "../lib/account-access.js";
 
 const SESSION_COOKIE = "dnd_session";
 
@@ -45,16 +46,32 @@ export async function authPlugin(app: FastifyInstance) {
 
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { isActive: true, emailVerifiedAt: true, sessionVersion: true }
+      select: {
+        role: true,
+        isActive: true,
+        emailVerifiedAt: true,
+        approvedAt: true,
+        sessionVersion: true
+      }
     });
-    if (!user?.isActive) {
+    const accessState = accountAccessState(user);
+    if (accessState === "INACTIVE") {
       reply.header("Set-Cookie", sessionCookie("", true));
       await reply.status(403).send({ error: "Account is inactive" });
       return;
     }
-    if (!user.emailVerifiedAt) {
+    if (!user) return;
+    if (accessState === "EMAIL_NOT_VERIFIED") {
       reply.header("Set-Cookie", sessionCookie("", true));
       await reply.status(403).send({ error: "E-Mail-Adresse ist noch nicht bestätigt" });
+      return;
+    }
+    if (accessState === "APPROVAL_PENDING") {
+      reply.header("Set-Cookie", sessionCookie("", true));
+      await reply.status(403).send({
+        error: "Dein Beta-Zugang wartet noch auf die Freigabe",
+        code: "APPROVAL_PENDING"
+      });
       return;
     }
     if (payload.sv !== user.sessionVersion) {

@@ -16,6 +16,7 @@ model User {
   role                       UserRole  @default(DM)
   isActive                   Boolean   @default(true)
   emailVerifiedAt            DateTime? @default(now())
+  approvedAt                 DateTime? @default(now())
   emailVerificationTokenHash String?   @unique
   emailVerificationExpiresAt DateTime?
   sessionVersion             Int       @default(0)

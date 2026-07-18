@@ -5,6 +5,7 @@ export interface User {
   role?: "SUPER_ADMIN" | "DM";
   isActive?: boolean;
   emailVerifiedAt?: string | null;
+  approvedAt?: string | null;
   hasAdminKeys?: boolean;
   adminKeyProvider?: string | null;
   createdAt: string;

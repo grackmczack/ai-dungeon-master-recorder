@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import BrandHeader from '$lib/components/BrandHeader.svelte';
@@ -22,6 +23,8 @@
       const result = await api.verifyEmail(token);
       status = 'success';
       message = result.message;
+      sessionStorage.setItem('registrationStage', 'approval');
+      await goto('/registration-pending?stage=approval', { replaceState: true });
     } catch (e: any) {
       status = 'error';
       message = typeof e.error === 'string'
@@ -58,11 +61,11 @@
       <p role="status" class="mt-3 text-sm text-gray-300">{message}</p>
     {:else if status === 'success'}
       <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-green-500/15 text-3xl" aria-hidden="true">✓</div>
-      <h1 class="text-xl font-semibold text-white">Konto aktiviert</h1>
+      <h1 class="text-xl font-semibold text-white">Siegel bestätigt</h1>
       <p role="status" class="mt-3 text-sm leading-6 text-gray-300">{message}</p>
-      <a href="/login?verified=success"
+      <a href="/registration-pending?stage=approval"
         class="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white transition hover:bg-brand-500">
-        Jetzt anmelden
+        Zum Wartesaal
       </a>
     {:else}
       <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/15 text-2xl" aria-hidden="true">!</div>

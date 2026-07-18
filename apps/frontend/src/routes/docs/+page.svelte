@@ -87,7 +87,8 @@
 
 <h3>In wenigen Minuten startklar</h3>
 <ol>
-  <li><strong>Account erstellen:</strong> Registriere dich im Web-Panel unter <code>/register</code> und bestätige deine E-Mail über den 24 Stunden gültigen Einmal-Link. Anschließend erhältst du eine Aktivierungsbestätigung.</li>
+  <li><strong>Account erstellen:</strong> Registriere dich im Web-Panel unter <code>/register</code> und bestätige deine E-Mail über den 24 Stunden gültigen Einmal-Link.</li>
+  <li><strong>Beta-Freigabe abwarten:</strong> Während der Beta prüft der Obere Artificer neue Accounts manuell. Nach der Freigabe erhältst du eine Aktivierungsmail und kannst dich anmelden.</li>
   <li><strong>Kampagne erstellen:</strong> Lege deine Kampagne im Web-Panel an. Eine Discord-Server-ID musst du nicht eintragen.</li>
   <li><strong>Bot einladen:</strong> Lade den Bot über den Einladungslink in deinen Discord-Server ein.</li>
   <li><strong>Server verbinden:</strong> Führe als Server-Admin <code>/status</code> aus, öffne den privaten Verbindungslink und wähle deine Web-Kampagne aus.</li>
@@ -286,6 +287,9 @@
 
 <h3>Account sperren oder aktivieren</h3>
 <p>„Account sperren“ beendet alle bestehenden Web-Sitzungen und verhindert sofort neue Logins sowie API-Zugriffe. Daten, Kampagnen und Sessions bleiben vollständig erhalten. Über „Account aktivieren“ kann der Zugang später wieder freigeschaltet werden.</p>
+
+<h3>Neue Beta-Accounts freigeben</h3>
+<p>Öffentlich registrierte Accounts erscheinen zunächst mit „E-Mail offen“. Nach dem Double-Opt-in wechselt der Status zu „Freigabe offen“. Erst „Für Beta freischalten“ erlaubt den Login und versendet automatisch die Aktivierungsmail. Dieser Freigabestatus ist unabhängig von der späteren Accountsperre.</p>
 
 <h3>E-Mail-Bestätigung bei neuen Accounts</h3>
 <p>Öffentlich registrierte Accounts erscheinen bis zum Double-Opt-in mit dem Status „E-Mail offen“. Der Bestätigungslink ist 24 Stunden gültig und nur einmal nutzbar. Vom Superadmin direkt angelegte oder bearbeitete Accounts gelten als administrativ bestätigt.</p>

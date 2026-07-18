@@ -22,6 +22,6 @@ export function buildEmailVerificationUrl(appUrl: string, token: string): string
 
 export function buildLoginUrl(appUrl: string): string {
   const url = new URL("/login", appUrl);
-  url.searchParams.set("verified", "success");
+  url.searchParams.set("approved", "success");
   return url.toString();
 }

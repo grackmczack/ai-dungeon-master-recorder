@@ -36,6 +36,11 @@
       sessionStorage.removeItem('postLoginReturnTo');
       await goto(returnTo);
     } catch (e: any) {
+      if (e.code === 'APPROVAL_PENDING') {
+        sessionStorage.setItem('registrationEmail', email);
+        await goto('/registration-pending?stage=approval');
+        return;
+      }
       error = typeof e.error === 'string' ? e.error : 'Login fehlgeschlagen';
       emailNotVerified = e.code === 'EMAIL_NOT_VERIFIED';
       await tick();
@@ -78,7 +83,13 @@
 
       {#if $page.url.searchParams.get('verified') === 'success'}
         <div role="status" class="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-200 text-sm">
-          Deine E-Mail-Adresse ist bestätigt. Willkommen am Spieltisch – du kannst dich jetzt anmelden.
+          Deine E-Mail-Adresse ist bestätigt. Dein Beta-Zugang wartet noch auf die manuelle Freigabe.
+        </div>
+      {/if}
+
+      {#if $page.url.searchParams.get('approved') === 'success'}
+        <div role="status" class="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-200 text-sm">
+          Der Obere Artificer hat deinen Zugang freigeschaltet. Willkommen am Spieltisch!
         </div>
       {/if}
 

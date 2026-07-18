@@ -13,7 +13,15 @@
   const { user, loading } = auth;
   let discordInviteUrl = $state('');
 
-  const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/docs'];
+  const PUBLIC_ROUTES = [
+    '/login',
+    '/register',
+    '/registration-pending',
+    '/verify-email',
+    '/forgot-password',
+    '/reset-password',
+    '/docs'
+  ];
 
   function isPublic(pathname: string) {
     return pathname === '/'
@@ -81,7 +89,7 @@
 
 <a href="#main-content" class="skip-link">Zum Inhalt springen</a>
 
-{#if !['/', '/login', '/register', '/forgot-password', '/reset-password'].includes($page.url.pathname)}
+{#if !['/', '/login', '/register', '/registration-pending', '/verify-email', '/forgot-password', '/reset-password'].includes($page.url.pathname)}
   <nav class="bg-surface-800 border-b border-surface-600 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50">
     <div class="flex min-w-0 items-center gap-3 sm:gap-6">
       <a href="/dashboard" class="text-brand-500 font-bold text-lg tracking-tight flex items-center gap-2">

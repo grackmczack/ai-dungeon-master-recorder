@@ -17,6 +17,9 @@
   let error = $state('');
   let activeTab: 'users' | 'grants' | 'installations' | 'overview' = $state('users');
   let currentUser: User | null = $state(null);
+  const pendingApprovals = $derived(
+    users.filter((user) => user.isActive && user.emailVerifiedAt && !user.approvedAt).length
+  );
 
   // Create DM form
   let showCreateForm = $state(false);
@@ -29,6 +32,7 @@
   // Request state per user
   let togglingKeys: Record<string, boolean> = $state({});
   let togglingStatus: Record<string, boolean> = $state({});
+  let togglingApproval: Record<string, boolean> = $state({});
   let deletingUsers: Record<string, boolean> = $state({});
 
   onMount(async () => {
@@ -105,6 +109,19 @@
       toast.error(e.error ?? 'Fehler beim Ändern');
     } finally {
       togglingStatus[userId] = false;
+    }
+  }
+
+  async function approveUser(user: any) {
+    togglingApproval[user.id] = true;
+    try {
+      await api.updateAdminUser(user.id, { isApproved: true });
+      await loadAll();
+      toast.success(`${user.displayName} wurde für die Beta freigeschaltet und per E-Mail benachrichtigt`);
+    } catch (e: any) {
+      toast.error(e.error ?? 'Beta-Freigabe konnte nicht erteilt werden');
+    } finally {
+      togglingApproval[user.id] = false;
     }
   }
 
@@ -217,6 +234,15 @@
     <div role="tabpanel" id={`admin-panel-${activeTab}`} aria-labelledby={`admin-tab-${activeTab}`} tabindex="0">
     {#if activeTab === 'users'}
       <div class="space-y-4">
+        {#if pendingApprovals > 0}
+          <div role="status" class="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[.07] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="font-semibold text-amber-200">⚗ {pendingApprovals} {pendingApprovals === 1 ? 'Account wartet' : 'Accounts warten'} auf Beta-Freigabe</p>
+              <p class="mt-1 text-sm text-gray-400">Die E-Mail-Adressen sind bestätigt. Mit „Für Beta freischalten“ öffnest du den Zugang und versendest die Aktivierungsmail.</p>
+            </div>
+          </div>
+        {/if}
+
         <!-- Actions -->
         <div class="flex justify-end">
           <button onclick={() => showCreateForm = !showCreateForm}
@@ -258,7 +284,7 @@
 
         <!-- DM List -->
         <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-x-auto">
-          <table class="w-full min-w-[1050px] text-sm">
+          <table class="w-full min-w-[1160px] text-sm">
             <thead>
               <tr class="border-b border-surface-700">
                 <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">DM</th>
@@ -287,8 +313,11 @@
                       <span class="text-xs px-2 py-1 rounded-full bg-red-500/10 text-red-400">○ Deaktiviert</span>
                     {:else if !user.emailVerifiedAt}
                       <span class="text-xs px-2 py-1 rounded-full bg-amber-500/10 text-amber-300">◌ E-Mail offen</span>
+                    {:else if !user.approvedAt}
+                      <span class="text-xs px-2 py-1 rounded-full bg-violet-500/10 text-violet-300">⌛ Freigabe offen</span>
                     {:else}
                       <span class="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400">● Aktiv</span>
+                      <p class="mt-1 text-xs text-gray-600">seit {formatDate(user.approvedAt)}</p>
                     {/if}
                   </td>
                   <td class="px-5 py-3 text-gray-400">
@@ -306,6 +335,15 @@
                   </td>
                   <td class="px-5 py-3">
                     <div class="flex items-center justify-end gap-2">
+                      {#if !user.approvedAt}
+                        <button type="button" onclick={() => approveUser(user)}
+                          disabled={togglingApproval[user.id] || !user.emailVerifiedAt || !user.isActive}
+                          title={!user.emailVerifiedAt ? 'Freigabe ist erst nach der E-Mail-Bestätigung möglich' : 'Beta-Zugang freischalten'}
+                          class="min-h-11 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40">
+                          {togglingApproval[user.id] ? 'Wird freigeschaltet...' : 'Für Beta freischalten'}
+                        </button>
+                      {/if}
+
                       <!-- Key-Grant Toggle -->
                       <label class="flex min-h-11 items-center gap-2 cursor-pointer rounded-lg px-2 text-xs text-gray-400" title="Admin-API-Keys für diesen DM freigeben">
                         <span class="select-none">🔑 Keys</span>

@@ -35,6 +35,7 @@ const ERROR_TRANSLATIONS: Record<string, string> = {
   "Account is inactive": "Konto ist deaktiviert",
   "Admin access required": "Für diese Seite werden Administratorrechte benötigt",
   "Email already registered": "E-Mail ist bereits registriert",
+  EMAIL_NOT_VERIFIED: "Die E-Mail-Adresse muss vor der Freigabe bestätigt werden",
   "Discord server already linked": "Dieser Discord-Server ist bereits mit einer Kampagne verknüpft",
   INVALID_OR_EXPIRED_LINK_TOKEN:
     "Der Verbindungslink ist ungültig oder abgelaufen. Fordere in Discord mit /status einen neuen an",
@@ -467,7 +468,7 @@ export const api = {
     request<any>("/admin/users", { method: "POST", body: JSON.stringify(data) }),
   updateAdminUser: (
     id: string,
-    data: { displayName?: string; email?: string; isActive?: boolean }
+    data: { displayName?: string; email?: string; isActive?: boolean; isApproved?: boolean }
   ) => request<any>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   getAdminUserDeletionImpact: (id: string) =>
     request<{

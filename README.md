@@ -369,7 +369,7 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | GET | `/admin/overview` | DM-Übersicht mit Kampagnen und Discord-Bindings |
 
 ### Multi-User & Admin-System
-- **SUPER_ADMIN** verwaltet alle DMs, kann Accounts anlegen, sperren, reaktivieren und endgültig löschen. Eine Sperre widerruft sofort alle Sessions, lässt die Daten aber bestehen.
+- **SUPER_ADMIN** verwaltet alle DMs, gibt öffentlich registrierte Accounts während der Beta nach bestätigter E-Mail manuell frei und kann Accounts später sperren, reaktivieren oder endgültig löschen. Eine Sperre widerruft sofort alle Sessions, lässt die Daten aber bestehen.
 - **Double-Opt-in:** Öffentlich registrierte Accounts können sich erst nach Bestätigung der E-Mail-Adresse anmelden. Links sind 24 Stunden und einmalig gültig; anschließend folgt eine Aktivierungsbestätigung. Bestehende und administrativ angelegte Accounts gelten als bestätigt.
 - **Vollständige Löschung:** Account, Grants und Memberships werden entfernt. Allein verwaltete Kampagnen werden inklusive Sessions, Aufnahmen und Uploads gelöscht; gemeinsame Kampagnen bleiben erhalten.
 - **Key-Grant-System:** Der Superadmin kann vorhandene API-Key-Profile an DMs verleihen. Key, Provider, Modell und Endpoint werden atomar übernommen; Settings zeigen die verfügbaren Key-Typen sowie sechs Präfix-Zeichen zur Kontrolle.

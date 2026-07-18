@@ -11,17 +11,17 @@ import {
 } from "../lib/password-reset.js";
 import {
   buildEmailVerificationUrl,
-  buildLoginUrl,
   createEmailVerificationToken,
   emailVerificationExpiresAt,
   hashEmailVerificationToken
 } from "../lib/email-verification.js";
 import {
-  sendAccountActivatedEmail,
+  sendEmailConfirmedEmail,
   sendEmailVerificationEmail,
   sendPasswordResetEmail
 } from "../lib/mailer.js";
 import { FixedWindowRateLimiter, normalizedEmailFromBody, rateLimit } from "../lib/rate-limit.js";
+import { accountAccessState } from "../lib/account-access.js";
 
 const EmailSchema = z.string().trim().toLowerCase().email();
 const NewPasswordSchema = z.string().min(12).max(128);
@@ -99,6 +99,7 @@ export async function authRoutes(app: FastifyInstance) {
           passwordHash,
           displayName: body.data.displayName,
           emailVerifiedAt: null,
+          approvedAt: null,
           emailVerificationTokenHash: hashEmailVerificationToken(verificationToken),
           emailVerificationExpiresAt: emailVerificationExpiresAt()
         }
@@ -113,7 +114,8 @@ export async function authRoutes(app: FastifyInstance) {
 
       return reply.status(201).send({
         email: user.email,
-        message: "Konto erstellt. Bitte bestätige jetzt deine E-Mail-Adresse."
+        message:
+          "Konto erstellt. Bestätige deine E-Mail-Adresse und warte anschließend auf die manuelle Beta-Freigabe."
       });
     }
   );
@@ -136,11 +138,20 @@ export async function authRoutes(app: FastifyInstance) {
 
       const valid = await bcrypt.compare(body.data.password, user.passwordHash);
       if (!valid) return reply.status(401).send({ error: "E-Mail oder Passwort ist falsch" });
-      if (!user.isActive) return reply.status(403).send({ error: "Konto ist deaktiviert" });
-      if (!user.emailVerifiedAt) {
+      const accessState = accountAccessState(user);
+      if (accessState === "INACTIVE") {
+        return reply.status(403).send({ error: "Konto ist deaktiviert" });
+      }
+      if (accessState === "EMAIL_NOT_VERIFIED") {
         return reply.status(403).send({
           error: "E-Mail-Adresse ist noch nicht bestätigt",
           code: "EMAIL_NOT_VERIFIED"
+        });
+      }
+      if (accessState === "APPROVAL_PENDING") {
+        return reply.status(403).send({
+          error: "Dein Beta-Zugang wartet noch auf die Freigabe",
+          code: "APPROVAL_PENDING"
         });
       }
 
@@ -246,16 +257,16 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Bestätigungslink ist ungültig oder abgelaufen" });
       }
 
-      void sendAccountActivatedEmail(
-        user.email,
-        user.displayName,
-        buildLoginUrl(appUrl()),
-        app.log
-      ).catch((error: unknown) => {
-        app.log.error({ err: error }, "Could not send account activation email");
-      });
+      void sendEmailConfirmedEmail(user.email, user.displayName, app.log).catch(
+        (error: unknown) => {
+          app.log.error({ err: error }, "Could not send email confirmation notice");
+        }
+      );
 
-      return reply.send({ message: "E-Mail-Adresse bestätigt. Dein Konto ist jetzt aktiviert." });
+      return reply.send({
+        message:
+          "E-Mail-Adresse bestätigt. Dein Beta-Zugang wartet jetzt auf die manuelle Freigabe."
+      });
     }
   );
 
@@ -410,6 +421,7 @@ export async function authRoutes(app: FastifyInstance) {
         role: true,
         isActive: true,
         emailVerifiedAt: true,
+        approvedAt: true,
         createdAt: true,
         memberships: {
           include: { campaign: { select: { id: true, name: true } } }

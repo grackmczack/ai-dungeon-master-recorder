@@ -4,6 +4,8 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { getAdminKeyProfileForSuperAdmin } from "../lib/admin-api-keys.js";
 import { buildUserDeletionPlan, removeUserFiles } from "../lib/user-deletion.js";
+import { buildLoginUrl } from "../lib/email-verification.js";
+import { sendAccountActivatedEmail } from "../lib/mailer.js";
 
 const CreateDMInput = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -14,8 +16,11 @@ const CreateDMInput = z.object({
 const UpdateDMInput = z.object({
   displayName: z.string().trim().min(2).max(80).optional(),
   email: z.string().trim().toLowerCase().email().optional(),
-  isActive: z.boolean().optional()
+  isActive: z.boolean().optional(),
+  isApproved: z.boolean().optional()
 });
+
+const appUrl = () => process.env.APP_URL ?? "http://localhost:5173";
 
 /**
  * Admin-Routes — nur für SUPER_ADMIN
@@ -55,6 +60,7 @@ export async function adminRoutes(app: FastifyInstance) {
         role: true,
         isActive: true,
         emailVerifiedAt: true,
+        approvedAt: true,
         createdAt: true,
         memberships: {
           where: { leftAt: null },
@@ -81,6 +87,7 @@ export async function adminRoutes(app: FastifyInstance) {
           role: u.role,
           isActive: u.isActive,
           emailVerifiedAt: u.emailVerifiedAt,
+          approvedAt: u.approvedAt,
           createdAt: u.createdAt,
           campaignCount: campaigns.size,
           hasAdminKeys: u.receivedKeys.length > 0,
@@ -114,7 +121,8 @@ export async function adminRoutes(app: FastifyInstance) {
         displayName: body.data.displayName,
         role: "DM",
         isActive: true,
-        emailVerifiedAt: new Date()
+        emailVerifiedAt: new Date(),
+        approvedAt: new Date()
       },
       select: {
         id: true,
@@ -123,6 +131,7 @@ export async function adminRoutes(app: FastifyInstance) {
         role: true,
         isActive: true,
         emailVerifiedAt: true,
+        approvedAt: true,
         createdAt: true
       }
     });
@@ -139,6 +148,11 @@ export async function adminRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return reply.status(404).send({ error: "User not found" });
     if (user.role !== "DM") return reply.status(400).send({ error: "Cannot modify non-DM users" });
+    if (body.data.isApproved === true && !user.emailVerifiedAt) {
+      return reply.status(409).send({ error: "EMAIL_NOT_VERIFIED" });
+    }
+
+    const newlyApproved = body.data.isApproved === true && !user.approvedAt;
 
     const updated = await prisma.user.update({
       where: { id },
@@ -151,7 +165,12 @@ export async function adminRoutes(app: FastifyInstance) {
           emailVerificationExpiresAt: null
         }),
         ...(body.data.isActive !== undefined && { isActive: body.data.isActive }),
-        ...(body.data.isActive === false && { sessionVersion: { increment: 1 } })
+        ...(body.data.isApproved !== undefined && {
+          approvedAt: body.data.isApproved ? new Date() : null
+        }),
+        ...((body.data.isActive === false || body.data.isApproved === false) && {
+          sessionVersion: { increment: 1 }
+        })
       },
       select: {
         id: true,
@@ -160,9 +179,21 @@ export async function adminRoutes(app: FastifyInstance) {
         role: true,
         isActive: true,
         emailVerifiedAt: true,
+        approvedAt: true,
         createdAt: true
       }
     });
+
+    if (newlyApproved) {
+      void sendAccountActivatedEmail(
+        updated.email,
+        updated.displayName,
+        buildLoginUrl(appUrl()),
+        app.log
+      ).catch((error: unknown) => {
+        app.log.error({ err: error }, "Could not send account activation email");
+      });
+    }
 
     return reply.send(updated);
   });

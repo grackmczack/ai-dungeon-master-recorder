@@ -33,5 +33,5 @@ test("verification links expire after 24 hours and use the configured app origin
 
   const loginUrl = new URL(buildLoginUrl("https://dndbot.example.com/base"));
   assert.equal(loginUrl.pathname, "/login");
-  assert.equal(loginUrl.searchParams.get("verified"), "success");
+  assert.equal(loginUrl.searchParams.get("approved"), "success");
 });
