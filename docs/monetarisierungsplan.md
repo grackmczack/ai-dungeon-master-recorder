@@ -61,24 +61,228 @@ Benötigt mehrere DMs, Server, Exporte, Rollen, Prioritätsverarbeitung, mehr St
 
 Spieler lesen Sessionchroniken, Questfortschritt und Wiki. Leseplätze sollten zunächst im DM-Tarif enthalten und nicht einzeln berechnet werden: Jeder eingeladene Spieler erhöht Reichweite, Bindung und den Gruppennutzen.
 
-## Marktbild und korrekter Vergleich
+## Erweiterte Wettbewerbs- und Funktionsanalyse
 
-Der sichtbare Einstiegspreis vergleichbarer Discord-/TTRPG-Chronisten liegt weiterhin meist bei etwa 6 bis 10 US-Dollar pro Monat. Mehrere Kampagnen, Wiki-/Lore-Funktionen und zusätzliche Server sind typische Premiumgrenzen.
+Recherche-Stand: 19. Juli 2026. Verglichen wurden öffentlich dokumentierte Funktionen auf offiziellen Produkt-, Preis-, FAQ- und Hilfeseiten. Ein `—` bedeutet deshalb nicht sicher „nicht vorhanden“, sondern „in den geprüften offiziellen Quellen nicht belegt“. Marketingversprechen wurden nicht als unabhängig bewiesene Qualitätsaussagen behandelt.
 
-- [The Chronicler](https://rpgchronicler.com/getting_started.html) kombiniert im Free-Tarif vier KI-Sessions mit vier Audiostunden. Bezahlte Stufen liegen bei 5,99, 12,99 und 24,99 US-Dollar und bündeln steigende Stunden-, Kampagnen-, Bild- und Chatkontingente.
-- [Goblin Scribe](https://scribe.goblinstack.com/) bietet kostenlos zwei Sessions mit drei Stunden Maximallänge. 7 US-Dollar decken fünf Sessions und fünf Kampagnen ab; Wiki, Quest- und Lore-Tracking beginnen in der 15-Dollar-Stufe. Zusätzliche Server kosten 2 US-Dollar pro Monat.
-- [SessionKeeper](https://www.sessionkeeper.ai/pricing) hat einen 3,99-Dollar-Einstieg ohne Discord-Recorder. Der Discord-Bot, Wiki und zwei aktive Kampagnen liegen in der 9,99-Dollar-Stufe; der Gruppen-Tarif kostet 24,99 US-Dollar.
-- [Archivist](https://www.rpgarchivist.io/pricing) startet nach einer Zwei-Session-Testphase bei 10 US-Dollar für vier Sessions und eine Kampagne. 20 US-Dollar bieten zehn Sessions und drei Kampagnen; Spielerplätze sind unbegrenzt enthalten.
+### Marktsegmente
 
-Diese Wettbewerber bündeln typischerweise den KI-Verbrauch in ihren Preisen. Ihre Session- und Stundenlimits schützen deshalb gleichzeitig Marge und Infrastruktur. Für DnD Recorder sind dieselben Preise vor allem ein **Zahlungsbereitschafts-Benchmark**, keine Vorlage für die Kostenkurve. Ein BYOK-Angebot darf deutlich großzügigere Sessions bieten, muss aber verständlich erklären, dass Gebühren des gewählten KI-Anbieters nicht im DnD-Recorder-Abo enthalten sind.
+Der Markt besteht inzwischen aus drei eng zusammenrückenden Produktgruppen:
 
-Der wirtschaftliche Nachteil von BYOK ist weniger die Marge als die Einrichtungshürde. Onboarding, Key-Prüfung, Kostenhinweise und ein optionaler OpenRouter-Sparmodus müssen diese Reibung reduzieren. Ein späterer Managed-AI-Tarif wäre ein getrenntes Produkt mit eigenen Credits und höherem Preis, nicht stillschweigend Bestandteil von 4,99 oder 9,99 Euro.
+1. **Discord-native Chronisten:** Goblin Scribe und The Chronicler minimieren die Einrichtung und erledigen Aufnahme, Recap und Lore direkt in Discord.
+2. **Kampagnenplattformen:** Archivist, Epicly und SessionKeeper verbinden Aufnahmen mit Wiki, Spielerzugriff, Kampagnenchat, Analyse und mobilen beziehungsweise öffentlichen Ansichten.
+3. **Audio-/Transkriptprodukte:** Bardlog differenziert sich über getrennte Sprecherspuren, transcript-synchrone Wiedergabe, Suche und Clips; die KI-Chronik ist dort ein optionaler Aufbau.
 
-Die Marktprodukte belegen zugleich eine Positionierungslücke: Automatische Extraktion allein ist nicht dauerhaft einzigartig. Der schärfere Nutzen von DnD Recorder ist:
+DnD Recorder liegt zwischen diesen Segmenten: Discord-native Aufnahme, aber mit eigenem Web-Panel, strukturiertem Wiki und besonders freier KI-Konfiguration. Das ist eine sinnvolle Position, jedoch keine konkurrenzfreie Nische.
 
-> Der deutschsprachige Discord-Chronist, der Gespräche in eine korrigierbare und nachvollziehbare Kampagnenwahrheit aus NSCs, Orten, Beziehungen und fortgeschriebenem Queststatus verwandelt.
+### Konkrete Funktionsmatrix
 
-Dafür sollten später Quellen je Objektänderung, der Schutz manueller Korrekturen und die Verbindung von Discord-Sprechern mit Charakteren sichtbar ausgebaut werden.
+Legende: `✅` klar vorhanden, `◐` teilweise, anders umgesetzt oder tarifabhängig, `—` öffentlich nicht belegt. Der DnD-Recorder-Stand wurde zusätzlich gegen Repository, Datenmodell und UI abgeglichen.
+
+| Funktion | DnD Recorder heute | Goblin Scribe | The Chronicler | SessionKeeper | Archivist | Epicly | Bardlog |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Discord-Voice-Aufnahme | ✅ Slash-Befehle | ✅ | ✅ | ✅ ab Hero | ✅ | —; Discord veröffentlicht Recaps | ✅ |
+| Aufnahme pausieren/fortsetzen | — | ✅ | — | — | ◐ Start/Stop-Kontrolle | nicht anwendbar | — |
+| Audio-, Notiz- oder Transkriptimport | — | — | — | ✅ Audio | ✅ Audio, Text, Notizen, Play-by-Post | ✅ Audio, Multitrack und Notizen | ✅ Audio und Multitrack-ZIP |
+| Lange Sessions | ✅ 30-Minuten-Chunks, bis 6 h | ◐ 3/5 h, höher unbegrenzt | ◐ Stundenkontingent | nicht konkret belegt | nicht konkret belegt | ✅ 6/8 h | ✅ große Dateien werden gechunked |
+| Sprechererkennung | ✅ Discord-Aktivität plus Wortzeiten | ✅ speaker-attributed | ✅ Discord-Charakterbindung | ✅ mit Einwilligung | ✅ | ✅ smart speaker identification | ✅ getrennte Spur je Sprecher |
+| Transcript mit Audiobezug | ◐ Zeitstempel plus MP3-Player | nicht belegt | nicht belegt | nicht belegt | ◐ Transkript und Timeline | ◐ Volltranskript | ✅ Klick auf Zeile, Suche, Spurwahl |
+| Deutscher Produkt- und Summary-Fokus | ✅ | — | — | — | — | ◐ mehrsprachig | — |
+| Narrative Session-Zusammenfassung | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ als optionale KI-Funktion |
+| Automatisch wachsendes Wiki | ✅ Summary-Aggregation | ✅ ab Raider | ◐ Lore plus manuelle Worldbuilding-Befehle | ✅ ab Hero | ✅ | ✅ Codex ab Paid, einmaliger Free-Test | ✅ als KI-Funktion |
+| Strukturierte Wiki-Kategorien | ✅ NSCs, Orte, Quests, Loot, Fäden | ✅ NPCs, Kreaturen, Orte, Quests, Items, Fraktionen | ✅ PCs, NPCs, Orte, Fraktionen, Quests | ◐ Charaktere, Orte, Storylines | ✅ Charaktere, Items, Orte, Fraktionen, Momente | ✅ NPCs, Orte, Quests, Items, Fraktionen | ✅ NPCs, Orte, Items, Fraktionen, Lore |
+| Wiki bearbeiten | ✅ CRUD und Session-Verknüpfung | ✅ editieren, umbenennen, löschen | ✅ Slash-CRUD | nicht konkret belegt | ✅ | ✅ mit Berechtigungen | nicht konkret belegt |
+| KI-Änderungen prüfen, mergen, rückgängig machen | ◐ manuell korrigierbar, aber ohne Vorschlagsdiff | ✅ Review, Merge, Undo | — | — | ✅ Diff, Freigabe, Merge, Rollback | ✅ Review-Modus und Versionshistorie | — |
+| Automatischer Questfortschritt | ◐ Statusaggregation plus manuelle Korrektur | ✅ | ◐ manuell gepflegt | nicht konkret belegt | ✅ kanonisches Quest Log mit Freigabe | ✅ Codex-Updates | nicht konkret belegt |
+| Beziehungen/Graph | — | ✅ Beziehungen und Weltkarte | — | — | ✅ Beziehungs- und Kampagnenkarten | — | — |
+| Kampagnenbezogener KI-Chat | — | ✅ Lore Recall | ✅ @Chronicler/DM-Chat | ✅ Campaign Assistant | ✅ Web, Discord und Foundry | ✅ Lorekeeper | — |
+| Session-/Charakterbilder | ✅ Sessionbild, Kampagnenbild, Avatarreferenzen | ✅ Szenenbilder und Stile | ✅ Szenenbilder | ✅ Portraits | ◐ Trading Cards/Handouts | ◐ Bildergalerien, keine KI-Generierung belegt | — |
+| Spielerzugang | —; Mitglieder sind derzeit DM-gepflegte Datensätze | ◐ Charaktere und Discord-Recaps | ◐ Charaktere und Discord-Zugriff | ✅ gemeinsame Kampagne | ✅ Rollen, Spieleransichten, Chat | ✅ kostenlose Spieleraccounts und Rechte | ✅ Party-Links und geschützte Freigaben |
+| Öffentliche/teilbare Ansichten | — | Discord-Recap | Discord-Notizen | privat eingeladene Mitglieder | ✅ Public Campaign und Handouts | ✅ Link, E-Mail, Public Hub, Discord | ✅ passwortgeschützte Links und Clips |
+| Datenexport | ◐ MP3-Download | — | — | — | ✅ PDF, Obsidian, Markdown, HTML | ◐ Teilen, kein vollständiger Datenexport belegt | ✅ Audio-/Videoclips |
+| Multi-Kampagne auf einem Discord-Server | ✅ Kanalbindung je Kampagne | ✅ | ✅ aktive Kampagne umschalten | ◐ mehrere Kampagnen | ✅ | ✅ | ✅ Party-/Serverbindung |
+| Mehrere Discord-Server pro Konto | ✅ | ✅ Add-on | nicht belegt | nicht belegt | nicht belegt | nicht belegt | nicht belegt |
+| Eigene KI-Keys/Providerwahl | ✅ BYOK | — | — | — | — | — | — |
+| Lokale/self-hosted KI | ✅ Ollama und eigener Whisper-Endpunkt | — | — | — | — | — | — |
+
+### Direkte Wettbewerber im Detail
+
+#### Goblin Scribe – engster Discord-Bot-Wettbewerber
+
+[Goblin Scribe](https://scribe.goblinstack.com/) deckt die größte direkte Überschneidung ab: Discord-Aufnahme, Sprechertranskript, Recap, Sessionbild, automatisch aufgebautes Wiki, Quest-/Lore-Tracking, Charakterverwaltung und Multi-Server. Besonders stark sind die Discord-nahe Bedienung und die ausgereifte Korrekturschicht: neue NPCs werden zur Freigabe vorgeschlagen; Wiki-Einträge lassen sich umbenennen, zusammenführen und rückgängig machen; Recap und Bild können direkt per Befehl korrigiert werden.
+
+**Vorsprung gegenüber DnD Recorder:** Pause/Resume, Lore-Chat, Fraktionen/Beziehungen/Weltkarte sowie Review/Merge/Undo.
+
+**Vorteil DnD Recorder:** deutsche Oberfläche, BYOK, freie Provider- und Modellwahl, Ollama/self-hosted Optionen, feinere Webverwaltung und charakterreferenzierte Sessionbilder.
+
+**Konsequenz:** Goblin Scribe ist der wichtigste Vergleich für das 4,99-/9,99-Euro-Angebot. Ein bloßes „Wiki wächst automatisch“ reicht gegen dessen Funktionsumfang nicht als USP.
+
+#### Archivist – Referenz für Kampagnengedächtnis und Datenqualität
+
+[Archivist](https://www.rpgarchivist.io/) ist funktional die tiefste untersuchte Plattform. Neben Discord und Imports bietet sie Compendium, Timeline, Quest Log, Charakterbögen, Story Highlights, Beziehungsdarstellung, Analyse von Pacing und Beteiligung sowie einen kampagnenbezogenen Chat. Besonders relevant ist der dokumentierte [Review- und Quest-Workflow](https://www.rpgarchivist.io/documentation): vorgeschlagene Änderungen werden als Diff geprüft, manuell gemergt, abgelehnt oder zurückgerollt. Exporte nach Obsidian, Markdown und HTML sowie Foundry-Anbindung stärken Datenportabilität und Ökosystem.
+
+**Vorsprung gegenüber DnD Recorder:** kanonische Wissenspflege, Quellen-/Review-Fluss, Importvielfalt, Chat, Beziehungskarte, Analyse, Exporte, Spieler- und VTT-Zugriff.
+
+**Vorteil DnD Recorder:** niedrigerer geplanter Preis, BYOK statt inkludierter KI, deutscher Fokus, einfachere Discord-first-Nutzung und eigene Modell-/Infrastrukturwahl.
+
+**Konsequenz:** Archivist zeigt, was „selbstaufbauendes Kampagnenwiki“ in einer reifen Version bedeutet. Dessen Review-Prinzip sollte übernommen werden, nicht zwingend die gesamte Analyse-Suite.
+
+#### Epicly – Referenz für Kollaboration, Review und flexible Eingaben
+
+[Epicly](https://playepicly.com/) verarbeitet Audio, Multitrack-Aufnahmen oder vorhandene Notizen, erstellt Recaps und aktualisiert seinen Codex. Spieler können eingeladen, Recaps per E-Mail, Link oder Discord geteilt und Kampagnen öffentlich präsentiert werden. Besonders wertvoll sind der optionale Review-Modus, Änderungsverlauf, feine Wiki-Rechte, automatische GM-Vorbereitung und der Lorekeeper-Chat. Die [Tarife](https://playepicly.com/plans/) liegen bei 9,99 und 19,99 US-Dollar; das Wiki ist im Free-Tarif nur einmal testbar.
+
+**Vorsprung gegenüber DnD Recorder:** Audio-/Notizimport, Spielerportal, Sharing, Review/Versionen, Prep-Dokumente, Lore-Chat.
+
+**Vorteil DnD Recorder:** echte Discord-Voice-Aufnahme statt Upload-Workflow, Multi-Server-Bindings, BYOK und Sessionbilder.
+
+**Konsequenz:** Offline-Upload und Spielerzugang vergrößern den Markt, sollten aber erst auf einer stabilen kanonischen Wiki-Schicht aufbauen.
+
+#### SessionKeeper – Referenz für plattformübergreifende Spielerbindung
+
+[SessionKeeper](https://www.sessionkeeper.ai/) kann in iOS, Android, Web, Discord oder per Audio-Upload aufnehmen. Es kombiniert Wiki und Zusammenfassung mit Charakterportraits, Achievements, Podcasts und DM-/Spieler-Assistenten. Laut [FAQ](https://www.sessionkeeper.ai/faq) werden Sprecher mit Einwilligung erkannt und Kampagnen nur mit eingeladenen Mitgliedern geteilt. Der Discord-Bot und das Wiki beginnen im 9,99-Dollar-Tarif.
+
+**Vorsprung gegenüber DnD Recorder:** mobile und lokale Aufnahme, Spieleraccounts, Party-Sharing und emotionale Retention durch Portraits, Achievements und Audioformate.
+
+**Vorteil DnD Recorder:** deutlich mehr DM-Kontrolle, Wiki-CRUD, Multi-Server/-Channel, BYOK und potenziell günstigeres Abo.
+
+**Konsequenz:** Spielerzugang und später eine Reader-App sind strategisch sinnvoll; Podcasts und Achievements sind erst danach sinnvolle Bindungsfunktionen.
+
+#### The Chronicler – Referenz für konsequente Discord-Bedienung
+
+[The Chronicler](https://rpgchronicler.com/getting_started.html) verwaltet Kampagnen, Charaktere, NPCs, Orte, Fraktionen und Quests über [Slash-Befehle](https://rpgchronicler.com/slash_commands.html). Spieler verknüpfen ihre Charaktere mit Discord; der Bot beantwortet Lore- und Vorbereitungfragen direkt per Mention oder DM und unterstützt wiederkehrende Session-Erinnerungen.
+
+**Vorsprung gegenüber DnD Recorder:** Discord-Chat, Erinnerungen und nahezu vollständige Worldbuilding-Verwaltung ohne Wechsel ins Web.
+
+**Vorteil DnD Recorder:** stärkeres Web-Panel, automatische Wiki-Aggregation, freie KI-Wahl, Multi-Server/-Channel und deutscher Fokus.
+
+**Konsequenz:** `/wiki`, `/quest` und `/recall` müssen nicht das Web-Panel kopieren, aber Status, schnelle Korrekturen und Lore-Abfragen wären wertvolle Discord-Abkürzungen.
+
+#### Bardlog – Referenz für Transkript und Wiedergabe
+
+[Bardlog](https://www.bardlog.com/) nimmt jeden Discord-Sprecher auf einer eigenen Spur auf. Nutzer können eine Transkriptzeile anklicken und exakt zur Audiostelle springen, nach Sprecher oder Begriff suchen, Stille überspringen und Audio-/Videoclips exportieren. Zusätzlich werden D&D-Beyond-Charakterbögen eingeblendet. Aufnahme und Transkription werden kostenlos angeboten; KI-Zusammenfassung und Wiki laufen über Guthaben.
+
+**Vorsprung gegenüber DnD Recorder:** getrennte Audiospuren, transcript-synchrone Wiedergabe, Volltextsuche, Clips, D&D-Beyond-Integration und Audioimport.
+
+**Vorteil DnD Recorder:** stärkere automatische Chronik- und Wiki-Verwaltung, Queststatus, Sessionbilder, Multi-Server und BYOK.
+
+**Konsequenz:** Die Sprecherzuordnung von DnD Recorder ist funktional stark, wird aber erst mit klickbarer Audiostelle, Suche und sichtbarer Zuverlässigkeit zum klaren Produktvorteil.
+
+### Neue und aufkommende Wettbewerber als Trendsignal
+
+Diese Produkte wurden nicht in die Hauptmatrix aufgenommen, zeigen aber wichtige Marktbewegungen:
+
+- [StormScape](https://stormscape.app/) fordert pro Spieler und Session eine Einwilligung an, speichert getrennte Sprecherspuren, erzeugt alle 20 Minuten Live-Kapitel und erstellt Charaktertagebücher, eine In-World-Zeitung sowie DM-Vorbereitungshinweise. Das ist ein starkes Beispiel für Consent-by-Design und emotional teilbare Artefakte.
+- [Kazkar](https://kazkar.ai/) kombiniert Discord-Aufnahme mit Lore-Wiki, automatischem Beziehungsgraph, Spielerportal, mehr als 30 Sprachen und mehreren Kampagnen pro Server. Es zeigt, dass ein Beziehungsgraph und Mehrsprachigkeit bereits in günstigeren Neueinsteigerprodukten auftauchen.
+- [Bardkeeper](https://bardkeeper.com/) bewirbt ein wachsendes Wiki mit Beziehungen und eine MCP-Anbindung, über die Claude, ChatGPT oder Gemini Kampagnenwissen durchsuchen können. Offene Integrationen könnten langfristig wichtiger werden als ein einziger fest eingebauter Chatbot.
+
+### Quellenbasis
+
+- Goblin Scribe: [Produkt, Funktionen, Befehle und Preise](https://scribe.goblinstack.com/)
+- The Chronicler: [Einstieg und Preise](https://rpgchronicler.com/getting_started.html), [Slash-Befehle](https://rpgchronicler.com/slash_commands.html)
+- SessionKeeper: [Produkt](https://www.sessionkeeper.ai/), [Preise](https://www.sessionkeeper.ai/pricing), [FAQ](https://www.sessionkeeper.ai/faq)
+- Archivist: [Produkt](https://www.rpgarchivist.io/), [Preise](https://www.rpgarchivist.io/pricing), [FAQ](https://www.rpgarchivist.io/faq), [Dokumentation](https://www.rpgarchivist.io/documentation)
+- Epicly: [Produkt](https://playepicly.com/), [Preise](https://playepicly.com/plans/), [Dokumentation](https://www.docs.playepicly.com/getting-started/), [Changelog](https://playepicly.com/changelog/)
+- Bardlog: [Produkt und Funktionsübersicht](https://www.bardlog.com/)
+- Trendsignale: [StormScape](https://stormscape.app/), [Kazkar](https://kazkar.ai/), [Bardkeeper](https://bardkeeper.com/)
+
+### Überschneidung und tatsächliche Differenzierung
+
+#### Was inzwischen Basiserwartung ist
+
+Die folgenden Funktionen unterscheiden DnD Recorder nicht mehr zuverlässig vom Markt:
+
+- Discord-Aufnahme mit automatischem Recap
+- Sprechererkennung und Transkript
+- Erkennung von NSCs, Orten, Quests und Gegenständen
+- ein automatisch wachsendes Wiki
+- Sessionbilder oder Charakterportraits
+- mehrere Kampagnen
+- ein Kampagnenchat beziehungsweise Lore Recall in bezahlten Stufen
+
+Diese Funktionen bleiben kaufentscheidend, sind aber Kategorie-Features und keine alleinigen USPs.
+
+#### Wo DnD Recorder sich heute abhebt
+
+Die derzeit stärkste Differenzierung liegt in der **Kombination** folgender Eigenschaften:
+
+1. **Deutsch zuerst:** Oberfläche, Dokumentation und erzwungene deutsche Zusammenfassung sind nicht nur eine auswählbare Sprache, sondern Kern des Produkts.
+2. **KI-Souveränität:** Nutzer wählen Anthropic, Gemini, OpenAI, SiliconFlow oder Ollama, können eigene Keys verwenden und Transkription über OpenAI, Replicate oder einen eigenen kompatiblen Endpunkt betreiben. Keiner der untersuchten direkten Wettbewerber bewirbt eine vergleichbare BYOK-/Self-hosted-Kombination.
+3. **Discord-Sprecher ohne Pflichtaccount:** Discord-Audioaktivität wird mit Wortzeitstempeln verbunden; Charakter- und Spielernamen können anschließend ergänzt werden. Spieler müssen dafür aktuell keinen eigenen Webaccount anlegen.
+4. **Mandanten- und Channel-Modell:** mehrere Server je DM sowie mehrere Kampagnen auf demselben Server mit getrennten Voice- und Summary-Channels sind bereits fachlich vorgesehen.
+5. **Charakterbezogene Bildgenerierung:** Avatare der Kampagnenmitglieder können als Referenzen für Sessionbilder dienen; das geht über einen generischen Szenenprompt hinaus.
+6. **Lange Discord-Abende:** 30-Minuten-Chunks und Zeitoffset-Merge sind gezielt für fünf- bis sechsstündige Sessions gebaut.
+
+Keiner dieser Punkte allein ist unangreifbar. Zusammen bilden sie aber eine glaubwürdige Position für deutschsprachige, technisch selbstbestimmte DMs.
+
+#### Wo die aktuelle App noch hinter der eigenen Aussage zurückbleibt
+
+Das Wiki ist derzeit **Stufe 1**: Session-Summaries werden nach Namen aggregiert; Queststatus wird über eine einfache Priorität fortgeschrieben; manuelle CRUD-Einträge und Session-Verknüpfungen werden darübergelegt. Das ist nützlich, aber noch keine belastbare „Kampagnenwahrheit“:
+
+- ähnliche Namen und Aliasse können doppelte Entitäten erzeugen
+- automatisch zusammengefügte Beschreibungen können widersprüchlich werden
+- manuelle Korrekturen sind nicht als geschützte Fakten mit Feldpriorität modelliert
+- es gibt keine Vorschlagswarteschlange mit Vorher-/Nachher-Diff
+- Merge, Undo und Versionshistorie fehlen
+- Wiki-Aussagen führen nicht bis zur belegenden Transkriptstelle zurück
+- Fraktionen, Beziehungen und ein echter Graph fehlen
+- Questfortschritt ist aggregiert, aber nicht als überprüfte Zustandsänderung mit Begründung gespeichert
+
+Damit ist der bisher formulierte USP „automatische Objektextraktion, selbstaufbauendes Wiki und Questfortschritt“ **als Nutzenversprechen gerechtfertigt, als Alleinstellungsbehauptung jedoch nicht**. Goblin Scribe, Archivist, Epicly, SessionKeeper, Kazkar und Bardkeeper überschneiden sich deutlich damit.
+
+### Empfohlene USP-Fassung
+
+Für den heutigen Stand ist folgende Aussage belastbarer:
+
+> Der deutschsprachige Discord-Chronist für lange Spielabende: DnD Recorder ordnet Stimmen euren Charakteren zu und verwandelt Sessions mit der KI eurer Wahl in eine editierbare Chronik aus Recap, Quests, NSCs, Orten und charakterbezogenen Bildern.
+
+Nach Umsetzung der kanonischen Wissensschicht kann sie geschärft werden zu:
+
+> Der deutschsprachige, selbstbestimmte Discord-Chronist, der jede Aussage bis zur Session belegbar macht und aus langen Spielabenden eine von der Gruppe kontrollierte Kampagnenwahrheit aufbaut – mit der KI eurer Wahl.
+
+Die zweite Formulierung ist stärker als „automatisches Wiki“, weil sie drei konkrete Probleme adressiert, die viele Wettbewerber nur teilweise lösen: Nachvollziehbarkeit, menschliche Kontrolle und Providerunabhängigkeit.
+
+### Priorisierter Funktionsausbau aus der Wettbewerbsanalyse
+
+| Priorität | Ausbau | Nutzen für DnD Recorder | Vorbild/Marktsignal | Monetarisierung |
+| --- | --- | --- | --- | --- |
+| P0 | **Kanonische Wiki-Vorschläge:** Create/Update/Merge als Diff prüfen, annehmen, ablehnen und rückgängig machen | macht den USP wahr und schützt Kampagnenwissen vor KI-Fehlern | Archivist, Epicly, Goblin Scribe | Basisprüfung kostenlos; Verlauf und Bulk-Review im Paid-Tarif |
+| P0 | **Quellen je Fakt:** Session, Sprecher, Transkriptzeit und Extraktionsmodell an jeder Änderung | schafft Vertrauen, erleichtert Korrektur und ist schwerer kopierbar als ein Recap | Archivist Review, Bardlog Audio-Sync | Kernfunktion, nicht vollständig paywallen |
+| P0 | **Manuelle Fakten schützen:** Feldherkunft, Priorität, Alias-/Duplikat-Merge und Konfliktregeln | verhindert, dass spätere KI-Läufe DM-Korrekturen überschreiben | Epicly Versionierung, Goblin Merge/Undo | vollständige Historie ab Abenteurer |
+| P0 | **Pause/Resume und Consent-by-Design:** sichtbare Teilnehmerliste, Einwilligungsstatus, nicht aufgenommene Sprecher | schließt UX-/Datenschutzlücke im Discord-Flow | Goblin Scribe, StormScape, SessionKeeper | Standardfunktion aller Tarife |
+| P1 | **Kampagnensuche und Lore Recall mit Quellenlinks** | häufigster Wiederkehrnutzen zwischen Sessions; nutzt das verbesserte Wiki | Goblin, Archivist, Epicly, Chronicler | begrenzte Free-Fragen, großzügig in Paid; BYOK ohne künstliche Tokenmarge |
+| P1 | **Spielerrolle und Spoilerrechte:** Party/DM-only/Public je Objekt, Einladungen, Reader-Ansicht | erhöht Retention und organisches Wachstum; Voraussetzung für Android | SessionKeeper, Archivist, Epicly | Lesen grundsätzlich inklusive; feinere Rechte und Co-DM später Premium |
+| P1 | **Offline-Import:** Audio, Transkript und Rohnotizen; später Multitrack-ZIP | erschließt Tischrunden und laufende Altkampagnen | Archivist, Epicly, Bardlog | im Chronist-Tarif oder begrenzter Free-Test |
+| P1 | **Transkript-Suche und klickbare Audiostelle** | macht die gute Sprecherzuordnung sichtbar nutzbar und belegbar | Bardlog | Suche Standard; Clips/erweiterte Exporte Premium |
+| P1 | **Datenexport:** Markdown, JSON, PDF und Obsidian-kompatibles ZIP | reduziert Lock-in-Angst bei BYOK-affiner Zielgruppe | Archivist | Basisexport als Nutzerrecht, formatierte Pakete Premium |
+| P2 | **Fraktionen, Beziehungen, Aliasse und Graph** | erhöht den Wert langer Kampagnen und differenziert das Wiki visuell | Archivist, Goblin Scribe, Kazkar | Chronist oder Gildenmeister |
+| P2 | **Strukturierte Charakterintegration:** zunächst D&D-Beyond-Link/Import, später weitere Systeme | verbessert Namen, Sprecher, Bilder und kampagnenspezifischen Kontext | Bardlog | Abenteurer/Chronist |
+| P2 | **GM-Vorbereitungsbrief:** offene Fäden, erwartbare Entscheidungen, betroffene NSCs, Checkliste | übersetzt Dokumentation in direkte Zeitersparnis vor der nächsten Runde | Epicly GM Guide, StormScape Intelligence | Chronist |
+| P2 | **Session-Erinnerungen und Recap-Mail an die Gruppe** | kleine Umsetzung mit hohem Wiederkehr- und Aktivierungseffekt | Chronicler, Epicly | Standard beziehungsweise Abenteurer |
+| P2 | **Bildstil und Charakterkonsistenz ausbauen** | verstärkt eine vorhandene Differenzierung statt ein neues Nebensystem zu beginnen | Goblin Custom Styles, SessionKeeper Portraits | zusätzliche Stile/Referenzsets Premium, Providerkosten bleiben BYOK |
+| P3 | **Foundry-/VTT- und MCP-Schnittstelle** | macht Kampagnenwissen in bestehenden DM-Workflows verfügbar | Archivist Foundry, Bardkeeper MCP | Gildenmeister/API-Tarif |
+| P3 | **Charaktertagebücher, Achievements, Podcast oder In-World-Zeitung** | emotionale Spielerbindung und teilbare Artefakte | StormScape, SessionKeeper | optionales Engagement-Paket nach Spielerrolle |
+| P3 | **Öffentlicher Campaign Hub und Social Clips** | relevant für Actual Play und Pro-DMs, nicht für den Kern-Home-DM | Epicly, Archivist, Bardlog | Gildenmeister/Creator-Tarif |
+
+### Was bewusst nicht sofort kopiert werden sollte
+
+- Ein vollständiges VTT, Encounter Builder oder Regelwerk würde den Fokus verwässern und gegen etablierte Plattformen antreten.
+- Podcasts, Zeitungen und Achievements erzeugen Charme, lösen aber die aktuelle Vertrauenslücke im Wiki nicht.
+- Eine breite Analytics-Suite zu Stimmung und Spielanteilen ist datenschutzsensibel und erst nach Consent-, Rollen- und Datenqualitätsarbeit sinnvoll.
+- Mehr als ein eingebauter Kampagnenchat ist nicht automatisch besser. Zuerst müssen Suche, Quellen und Rechte zuverlässig sein.
+- Mehrsprachigkeit sollte den deutschen Fokus nicht verzögern; später kann sie als Expansion folgen.
+
+### Konsequenz für Preis und Positionierung
+
+Die Wettbewerber bündeln typischerweise KI-Verbrauch und begrenzen deshalb Sessions oder Stunden. Ihre Preise bleiben ein Zahlungsbereitschafts-Benchmark, nicht die Kostenkurve von DnD Recorder. Der Einstieg liegt sichtbar meist zwischen etwa 6 und 10 US-Dollar, während tiefe Wiki-, Chat- und Partyfunktionen häufig erst zwischen 10 und 20 US-Dollar angeboten werden.
+
+Für das BYOK-Modell bleibt die Staffelung 0/4,99/9,99 Euro plausibel, wenn die Stufen nicht nur Zähler, sondern nachvollziehbaren Produktwert vermitteln:
+
+- **Novize:** vier Sessions, eine Kampagne/ein Server, deutscher Recap, Basis-Wiki, Korrektur und Sessionbild mit eigenen Keys.
+- **Abenteurer 4,99 Euro:** drei Kampagnen, kanonischer Review-Fluss, Versionshistorie, Exporte, eigene Prompts und Gruppenfreigabe.
+- **Chronist 9,99 Euro:** Multi-Server, Lore Recall, Offline-Import, Beziehungen/Graph, erweiterter Prep-Brief und Prioritätsverarbeitung.
+- **Gildenmeister später:** Co-DM, VTT/MCP/API, öffentlicher Campaign Hub, Bulk-Export und Creator-/Communityfunktionen.
+
+Der wirtschaftliche Nachteil von BYOK bleibt die Einrichtungshürde. Onboarding, Key-Prüfung, transparente Kostenhinweise und ein optionaler OpenRouter-Sparmodus müssen diese Reibung reduzieren. Ein späterer Managed-AI-Tarif wäre ein getrenntes Produkt mit eigenen Credits und höherem Preis, nicht stillschweigend Bestandteil von 4,99 oder 9,99 Euro.
 
 ## Was monetarisiert wird
 
