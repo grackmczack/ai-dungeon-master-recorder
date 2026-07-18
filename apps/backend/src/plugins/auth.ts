@@ -45,11 +45,16 @@ export async function authPlugin(app: FastifyInstance) {
 
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { isActive: true, sessionVersion: true }
+      select: { isActive: true, emailVerifiedAt: true, sessionVersion: true }
     });
     if (!user?.isActive) {
       reply.header("Set-Cookie", sessionCookie("", true));
       await reply.status(403).send({ error: "Account is inactive" });
+      return;
+    }
+    if (!user.emailVerifiedAt) {
+      reply.header("Set-Cookie", sessionCookie("", true));
+      await reply.status(403).send({ error: "E-Mail-Adresse ist noch nicht bestätigt" });
       return;
     }
     if (payload.sv !== user.sessionVersion) {

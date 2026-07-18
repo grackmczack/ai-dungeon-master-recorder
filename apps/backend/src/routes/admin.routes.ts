@@ -54,6 +54,7 @@ export async function adminRoutes(app: FastifyInstance) {
         displayName: true,
         role: true,
         isActive: true,
+        emailVerifiedAt: true,
         createdAt: true,
         memberships: {
           where: { leftAt: null },
@@ -81,6 +82,7 @@ export async function adminRoutes(app: FastifyInstance) {
           displayName: u.displayName,
           role: u.role,
           isActive: u.isActive,
+          emailVerifiedAt: u.emailVerifiedAt,
           createdAt: u.createdAt,
           groupCount: groups.size,
           campaignCount: Array.from(groups.values()).reduce(
@@ -117,9 +119,18 @@ export async function adminRoutes(app: FastifyInstance) {
         passwordHash,
         displayName: body.data.displayName,
         role: "DM",
-        isActive: true
+        isActive: true,
+        emailVerifiedAt: new Date()
       },
-      select: { id: true, email: true, displayName: true, role: true, createdAt: true }
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isActive: true,
+        emailVerifiedAt: true,
+        createdAt: true
+      }
     });
 
     return reply.status(201).send(user);
@@ -139,7 +150,12 @@ export async function adminRoutes(app: FastifyInstance) {
       where: { id },
       data: {
         ...(body.data.displayName !== undefined && { displayName: body.data.displayName }),
-        ...(body.data.email !== undefined && { email: body.data.email }),
+        ...(body.data.email !== undefined && {
+          email: body.data.email,
+          emailVerifiedAt: new Date(),
+          emailVerificationTokenHash: null,
+          emailVerificationExpiresAt: null
+        }),
         ...(body.data.isActive !== undefined && { isActive: body.data.isActive }),
         ...(body.data.isActive === false && { sessionVersion: { increment: 1 } })
       },
@@ -149,6 +165,7 @@ export async function adminRoutes(app: FastifyInstance) {
         displayName: true,
         role: true,
         isActive: true,
+        emailVerifiedAt: true,
         createdAt: true
       }
     });

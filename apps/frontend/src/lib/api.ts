@@ -130,9 +130,19 @@ export const api = {
       body: JSON.stringify({ email, password })
     }),
   register: (email: string, password: string, displayName: string) =>
-    request<{ user: User }>("/auth/register", {
+    request<{ email: string; message: string }>("/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, password, displayName })
+    }),
+  verifyEmail: (token: string) =>
+    request<{ message: string }>("/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ token })
+    }),
+  resendVerification: (email: string) =>
+    request<{ message: string }>("/auth/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email })
     }),
   me: () => request<any>("/auth/me"),
   logout: () => request<void>("/auth/logout", { method: "POST" }),

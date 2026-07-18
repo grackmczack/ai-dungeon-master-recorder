@@ -84,7 +84,7 @@
 
 <h3>In 5 Minuten startklar</h3>
 <ol>
-  <li><strong>Account erstellen:</strong> Registriere dich im Web-Panel unter <code>/register</code> mit deiner E-Mail.</li>
+  <li><strong>Account erstellen:</strong> Registriere dich im Web-Panel unter <code>/register</code> und bestätige deine E-Mail über den 24 Stunden gültigen Einmal-Link. Anschließend erhältst du eine Aktivierungsbestätigung.</li>
   <li><strong>Gruppe erstellen:</strong> Lege deine Spielgruppe im Web-Panel an. Eine Discord-Server-ID ist nicht nötig.</li>
   <li><strong>Bot einladen:</strong> Lade den Bot über den Einladungslink in deinen Discord-Server ein.</li>
   <li><strong>Gruppe verbinden:</strong> Führe als Server-Admin <code>/status</code> aus, öffne den privaten Verbindungslink und wähle deine Web-Gruppe aus.</li>
@@ -274,6 +274,9 @@
 <h3>Account sperren oder aktivieren</h3>
 <p>„Account sperren“ beendet alle bestehenden Web-Sitzungen und verhindert sofort neue Logins sowie API-Zugriffe. Daten, Gruppen und Sessions bleiben vollständig erhalten. Über „Account aktivieren“ kann der Zugang später wieder freigeschaltet werden.</p>
 
+<h3>E-Mail-Bestätigung bei neuen Accounts</h3>
+<p>Öffentlich registrierte Accounts erscheinen bis zum Double-Opt-in mit dem Status „E-Mail offen“. Der Bestätigungslink ist 24 Stunden gültig und nur einmal nutzbar. Vom Superadmin direkt angelegte oder bearbeitete Accounts gelten als administrativ bestätigt.</p>
+
 <h3>Account endgültig löschen</h3>
 <p>Vor dem Löschen zeigt ein Sicherheitsdialog die betroffenen Gruppen, Kampagnen, Sessions und Aufnahmen:</p>
 <ul>
@@ -306,6 +309,9 @@
 
 <h3>Ich habe mein Passwort vergessen</h3>
 <p>Öffne auf der Anmeldeseite „Passwort vergessen?“. Du erhältst per E-Mail einen einmalig nutzbaren Link, der 30 Minuten gültig ist. Nach dem Zurücksetzen werden bestehende Sitzungen aus Sicherheitsgründen abgemeldet.</p>
+
+<h3>Meine Bestätigungsmail ist nicht angekommen</h3>
+<p>Prüfe zuerst den Spam-Ordner. Auf der Anmeldeseite kannst du nach einem Loginversuch mit korrektem Passwort einen neuen Link anfordern. Auch ein abgelaufener Bestätigungslink bietet diese Möglichkeit. Die Antwort bleibt aus Datenschutzgründen immer neutral.</p>
 
 <h3>Kann ich mehrere Kampagnen gleichzeitig laufen lassen?</h3>
 <p>Ja! Eine Gruppe kann beliebig viele Kampagnen haben. Der Bot nimmt immer im aktuellen Voice-Channel auf und ordnet die Session der aktiven Kampagne zu.</p>

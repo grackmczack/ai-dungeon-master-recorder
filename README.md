@@ -251,7 +251,7 @@ SMTP_SECURE=false       # true für implizites TLS, meist Port 465
 SMTP_TLS_SERVERNAME=    # Optionaler Zertifikats-/SNI-Name, wenn SMTP_HOST eine IP ist
 SMTP_USER=
 SMTP_PASSWORD=
-SMTP_FROM=DM Recorder <noreply@example.com>
+SMTP_FROM=Artificer · D&D Recorder <noreply@example.com>
 DISCORD_CLIENT_ID=        # identisch zur Discord-App; erzeugt den öffentlichen Invite-Link
 ```
 
@@ -286,8 +286,10 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 
 | Method | Path | Beschreibung |
 |--------|------|--------------|
-| POST | `/auth/register` | Account erstellen |
+| POST | `/auth/register` | Account erstellen und 24-Stunden-Bestätigungslink versenden |
 | POST | `/auth/login` | Login → HttpOnly-Session-Cookie |
+| POST | `/auth/verify-email` | E-Mail mit einmaligem Token bestätigen und Aktivierungsmail versenden |
+| POST | `/auth/resend-verification` | Neuen Bestätigungslink anfordern (neutrale Antwort) |
 | POST | `/auth/forgot-password` | Passwort-Reset-Link anfordern (neutrale Antwort) |
 | POST | `/auth/reset-password` | Passwort mit einmaligem 30-Minuten-Token zurücksetzen |
 | POST | `/auth/change-password` | Eigenes Passwort ändern und andere Sitzungen widerrufen |
@@ -338,6 +340,7 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 
 ### Multi-User & Admin-System
 - **SUPER_ADMIN** verwaltet alle DMs, kann Accounts anlegen, sperren, reaktivieren und endgültig löschen. Eine Sperre widerruft sofort alle Sessions, lässt die Daten aber bestehen.
+- **Double-Opt-in:** Öffentlich registrierte Accounts können sich erst nach Bestätigung der E-Mail-Adresse anmelden. Links sind 24 Stunden und einmalig gültig; anschließend folgt eine Aktivierungsbestätigung. Bestehende und administrativ angelegte Accounts gelten als bestätigt.
 - **Vollständige Löschung:** Account, Grants und Memberships werden entfernt. Allein verwaltete Gruppen werden inklusive Kampagnen, Sessions, Aufnahmen und Uploads gelöscht; gemeinsame Gruppen bleiben erhalten.
 - **Key-Grant-System:** Der Superadmin kann vorhandene API-Key-Profile an DMs verleihen. Key, Provider, Modell und Endpoint werden atomar übernommen; Settings zeigen die verfügbaren Key-Typen sowie sechs Präfix-Zeichen zur Kontrolle.
 - Transcriber, Kampagnenbilder und Sessionbilder lösen Grants bei jeder neuen Operation auf. Nach einem Revoke fällt der DM sofort auf seine zuvor gespeicherten eigenen Keys zurück.
@@ -351,6 +354,7 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 User (SUPER_ADMIN oder DM)
   ├── role: SUPER_ADMIN | DM
   ├── isActive: Boolean
+  ├── emailVerifiedAt + gehashter, kurzlebiger Bestätigungstoken
   ├── grantedKeys: AdminApiKeyGrant[] (als Super-Admin verliehene Keys)
   └── receivedKeys: AdminApiKeyGrant[] (als DM erhaltene Keys)
 
@@ -412,8 +416,8 @@ Deployment-Notizen steht in [`ROADMAP.md`](./ROADMAP.md). Kurzüberblick:
 - [x] Session-Seite zeigt Kampagnen-Hintergrundbild (Parallax-Fixed) für konsistenten Look
 - [x] Session-Paginierung (10 pro Kampagne, "Mehr laden"-Button)
 - [ ] Quest-Wiki (Living Lore: Quests, NSCs, Orte, Beute, offene Fäden)
-- [ ] Multi-User mit Super-Admin/DM-Rollensystem, DM-Registrierung
-- [ ] Dokumentationsbereich im Panel
+- [x] Multi-User mit Super-Admin/DM-Rollensystem, DM-Registrierung und Double-Opt-in
+- [x] Dokumentationsbereich im Panel
 
 ---
 

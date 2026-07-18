@@ -9,7 +9,18 @@ import {
   hashPasswordResetToken,
   passwordResetExpiresAt
 } from "../lib/password-reset.js";
-import { sendPasswordResetEmail } from "../lib/mailer.js";
+import {
+  buildEmailVerificationUrl,
+  buildLoginUrl,
+  createEmailVerificationToken,
+  emailVerificationExpiresAt,
+  hashEmailVerificationToken
+} from "../lib/email-verification.js";
+import {
+  sendAccountActivatedEmail,
+  sendEmailVerificationEmail,
+  sendPasswordResetEmail
+} from "../lib/mailer.js";
 import { FixedWindowRateLimiter, normalizedEmailFromBody, rateLimit } from "../lib/rate-limit.js";
 
 const EmailSchema = z.string().trim().toLowerCase().email();
@@ -27,6 +38,8 @@ const LoginSchema = z.object({
 });
 
 const ForgotPasswordSchema = z.object({ email: EmailSchema });
+const ResendVerificationSchema = z.object({ email: EmailSchema });
+const VerifyEmailSchema = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/i) });
 const ResetPasswordSchema = z.object({
   token: z.string().regex(/^[a-f0-9]{64}$/i),
   password: NewPasswordSchema
@@ -40,10 +53,15 @@ const UpdateProfileSchema = z.object({ displayName: z.string().trim().min(2).max
 const loginLimiter = new FixedWindowRateLimiter(10, 15 * 60 * 1000);
 const registerLimiter = new FixedWindowRateLimiter(5, 60 * 60 * 1000);
 const forgotPasswordLimiter = new FixedWindowRateLimiter(5, 60 * 60 * 1000);
+const resendVerificationLimiter = new FixedWindowRateLimiter(5, 60 * 60 * 1000);
+const verifyEmailLimiter = new FixedWindowRateLimiter(20, 60 * 60 * 1000);
 const resetPasswordLimiter = new FixedWindowRateLimiter(10, 60 * 60 * 1000);
 
 const genericResetMessage =
   "Wenn ein aktives Konto zu dieser E-Mail existiert, wurde ein Link zum Zurücksetzen versendet.";
+const genericVerificationMessage =
+  "Wenn ein noch nicht bestätigtes Konto zu dieser E-Mail existiert, wurde ein neuer Bestätigungslink versendet.";
+const appUrl = () => process.env.APP_URL ?? "http://localhost:5173";
 
 function sessionToken(
   app: FastifyInstance,
@@ -74,18 +92,28 @@ export async function authRoutes(app: FastifyInstance) {
       if (existing) return reply.status(409).send({ error: "E-Mail ist bereits registriert" });
 
       const passwordHash = await bcrypt.hash(body.data.password, 12);
+      const verificationToken = createEmailVerificationToken();
       const user = await prisma.user.create({
-        data: { email: body.data.email, passwordHash, displayName: body.data.displayName }
+        data: {
+          email: body.data.email,
+          passwordHash,
+          displayName: body.data.displayName,
+          emailVerifiedAt: null,
+          emailVerificationTokenHash: hashEmailVerificationToken(verificationToken),
+          emailVerificationExpiresAt: emailVerificationExpiresAt()
+        }
       });
 
-      reply.header("Set-Cookie", sessionCookie(sessionToken(app, user)));
-      return reply.status(201).send({
-        user: {
-          id: user.id,
-          email: user.email,
-          displayName: user.displayName,
-          role: user.role
+      const verificationUrl = buildEmailVerificationUrl(appUrl(), verificationToken);
+      void sendEmailVerificationEmail(user.email, user.displayName, verificationUrl, app.log).catch(
+        (error: unknown) => {
+          app.log.error({ err: error }, "Could not send email verification email");
         }
+      );
+
+      return reply.status(201).send({
+        email: user.email,
+        message: "Konto erstellt. Bitte bestätige jetzt deine E-Mail-Adresse."
       });
     }
   );
@@ -109,6 +137,12 @@ export async function authRoutes(app: FastifyInstance) {
       const valid = await bcrypt.compare(body.data.password, user.passwordHash);
       if (!valid) return reply.status(401).send({ error: "E-Mail oder Passwort ist falsch" });
       if (!user.isActive) return reply.status(403).send({ error: "Konto ist deaktiviert" });
+      if (!user.emailVerifiedAt) {
+        return reply.status(403).send({
+          error: "E-Mail-Adresse ist noch nicht bestätigt",
+          code: "EMAIL_NOT_VERIFIED"
+        });
+      }
 
       reply.header("Set-Cookie", sessionCookie(sessionToken(app, user)));
       return reply.send({
@@ -119,6 +153,109 @@ export async function authRoutes(app: FastifyInstance) {
           role: user.role
         }
       });
+    }
+  );
+
+  app.post(
+    "/auth/resend-verification",
+    {
+      preHandler: [
+        rateLimit(
+          resendVerificationLimiter,
+          (request) => `${request.ip}:${normalizedEmailFromBody(request)}`
+        )
+      ]
+    },
+    async (req, reply) => {
+      const startedAt = Date.now();
+      const body = ResendVerificationSchema.safeParse(req.body);
+
+      if (body.success) {
+        const user = await prisma.user.findFirst({
+          where: {
+            email: { equals: body.data.email, mode: "insensitive" },
+            isActive: true,
+            emailVerifiedAt: null
+          },
+          select: { id: true, email: true, displayName: true }
+        });
+
+        if (user) {
+          const verificationToken = createEmailVerificationToken();
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              emailVerificationTokenHash: hashEmailVerificationToken(verificationToken),
+              emailVerificationExpiresAt: emailVerificationExpiresAt()
+            }
+          });
+
+          const verificationUrl = buildEmailVerificationUrl(appUrl(), verificationToken);
+          void sendEmailVerificationEmail(
+            user.email,
+            user.displayName,
+            verificationUrl,
+            app.log
+          ).catch((error: unknown) => {
+            app.log.error({ err: error }, "Could not resend email verification email");
+          });
+        }
+      }
+
+      await waitForMinimumDuration(startedAt);
+      return reply.status(202).send({ message: genericVerificationMessage });
+    }
+  );
+
+  app.post(
+    "/auth/verify-email",
+    { preHandler: [rateLimit(verifyEmailLimiter, (request) => request.ip)] },
+    async (req, reply) => {
+      const body = VerifyEmailSchema.safeParse(req.body);
+      if (!body.success) {
+        return reply.status(400).send({ error: "Bestätigungslink ist ungültig oder abgelaufen" });
+      }
+
+      const tokenHash = hashEmailVerificationToken(body.data.token);
+      const user = await prisma.user.findFirst({
+        where: {
+          emailVerificationTokenHash: tokenHash,
+          emailVerificationExpiresAt: { gt: new Date() },
+          emailVerifiedAt: null,
+          isActive: true
+        },
+        select: { id: true, email: true, displayName: true }
+      });
+      if (!user) {
+        return reply.status(400).send({ error: "Bestätigungslink ist ungültig oder abgelaufen" });
+      }
+
+      const updated = await prisma.user.updateMany({
+        where: {
+          id: user.id,
+          emailVerificationTokenHash: tokenHash,
+          emailVerifiedAt: null
+        },
+        data: {
+          emailVerifiedAt: new Date(),
+          emailVerificationTokenHash: null,
+          emailVerificationExpiresAt: null
+        }
+      });
+      if (updated.count !== 1) {
+        return reply.status(400).send({ error: "Bestätigungslink ist ungültig oder abgelaufen" });
+      }
+
+      void sendAccountActivatedEmail(
+        user.email,
+        user.displayName,
+        buildLoginUrl(appUrl()),
+        app.log
+      ).catch((error: unknown) => {
+        app.log.error({ err: error }, "Could not send account activation email");
+      });
+
+      return reply.send({ message: "E-Mail-Adresse bestätigt. Dein Konto ist jetzt aktiviert." });
     }
   );
 
@@ -140,7 +277,7 @@ export async function authRoutes(app: FastifyInstance) {
         const user = await prisma.user.findFirst({
           where: { email: { equals: body.data.email, mode: "insensitive" } }
         });
-        if (user?.isActive) {
+        if (user?.isActive && user.emailVerifiedAt) {
           const token = createPasswordResetToken();
           await prisma.user.update({
             where: { id: user.id },
@@ -150,13 +287,12 @@ export async function authRoutes(app: FastifyInstance) {
             }
           });
 
-          const resetUrl = buildPasswordResetUrl(
-            process.env.APP_URL ?? "http://localhost:5173",
-            token
+          const resetUrl = buildPasswordResetUrl(appUrl(), token);
+          void sendPasswordResetEmail(user.email, user.displayName, resetUrl, app.log).catch(
+            (error: unknown) => {
+              app.log.error({ err: error }, "Could not send password reset email");
+            }
           );
-          void sendPasswordResetEmail(user.email, resetUrl, app.log).catch((error: unknown) => {
-            app.log.error({ err: error }, "Could not send password reset email");
-          });
         }
       }
 
@@ -179,7 +315,8 @@ export async function authRoutes(app: FastifyInstance) {
         where: {
           passwordResetTokenHash: tokenHash,
           passwordResetExpiresAt: { gt: new Date() },
-          isActive: true
+          isActive: true,
+          emailVerifiedAt: { not: null }
         },
         select: { id: true }
       });
@@ -245,7 +382,14 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await prisma.user.update({
       where: { id: sub },
       data: { displayName: body.data.displayName },
-      select: { id: true, email: true, displayName: true, role: true, createdAt: true }
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        emailVerifiedAt: true,
+        createdAt: true
+      }
     });
     return reply.send({ user });
   });
@@ -265,6 +409,7 @@ export async function authRoutes(app: FastifyInstance) {
         displayName: true,
         role: true,
         isActive: true,
+        emailVerifiedAt: true,
         createdAt: true,
         memberships: {
           include: { group: { select: { id: true, name: true } } }

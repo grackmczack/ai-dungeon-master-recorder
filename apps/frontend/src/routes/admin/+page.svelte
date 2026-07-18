@@ -283,9 +283,13 @@
                     </div>
                   </td>
                   <td class="px-5 py-3">
-                    <span class="text-xs px-2 py-1 rounded-full {user.isActive ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}">
-                      {user.isActive ? '● Aktiv' : '○ Deaktiviert'}
-                    </span>
+                    {#if !user.isActive}
+                      <span class="text-xs px-2 py-1 rounded-full bg-red-500/10 text-red-400">○ Deaktiviert</span>
+                    {:else if !user.emailVerifiedAt}
+                      <span class="text-xs px-2 py-1 rounded-full bg-amber-500/10 text-amber-300">◌ E-Mail offen</span>
+                    {:else}
+                      <span class="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400">● Aktiv</span>
+                    {/if}
                   </td>
                   <td class="px-5 py-3 text-gray-400">
                     {user.groupCount ?? 0} Gruppen · {user.campaignCount ?? 0} Kampagnen

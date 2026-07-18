@@ -11,6 +11,9 @@
   let showPassword = $state(false);
   let error = $state('');
   let loading = $state(false);
+  let emailNotVerified = $state(false);
+  let resendStatus = $state('');
+  let resending = $state(false);
   let errorElement = $state<HTMLDivElement>();
 
   function safeReturnTo() {
@@ -23,6 +26,8 @@
     e.preventDefault();
     loading = true;
     error = '';
+    emailNotVerified = false;
+    resendStatus = '';
     try {
       const { user } = await api.login(email, password);
       auth.setAuth(user);
@@ -31,10 +36,26 @@
       await goto(returnTo);
     } catch (e: any) {
       error = typeof e.error === 'string' ? e.error : 'Login fehlgeschlagen';
+      emailNotVerified = e.code === 'EMAIL_NOT_VERIFIED';
       await tick();
       errorElement?.focus();
     } finally {
       loading = false;
+    }
+  }
+
+  async function resendVerification() {
+    resending = true;
+    resendStatus = '';
+    try {
+      const result = await api.resendVerification(email);
+      resendStatus = result.message;
+    } catch (e: any) {
+      resendStatus = typeof e.error === 'string'
+        ? e.error
+        : 'Die Bestätigungsmail konnte nicht erneut angefordert werden.';
+    } finally {
+      resending = false;
     }
   }
 </script>
@@ -58,9 +79,28 @@
         </div>
       {/if}
 
+      {#if $page.url.searchParams.get('verified') === 'success'}
+        <div role="status" class="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-200 text-sm">
+          Deine E-Mail-Adresse ist bestätigt. Willkommen am Spieltisch – du kannst dich jetzt anmelden.
+        </div>
+      {/if}
+
       {#if error}
         <div bind:this={errorElement} tabindex="-1" role="alert"
           class="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+      {/if}
+
+      {#if emailNotVerified}
+        <button type="button" onclick={resendVerification} disabled={resending || !email}
+          class="w-full rounded-lg border border-brand-500/40 bg-brand-500/10 px-4 py-3 text-sm font-medium text-brand-200 hover:bg-brand-500/20 disabled:opacity-50">
+          {resending ? 'Wird gesendet...' : 'Bestätigungsmail erneut senden'}
+        </button>
+      {/if}
+
+      {#if resendStatus}
+        <div role="status" class="rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-200">
+          {resendStatus}
+        </div>
       {/if}
 
       <div class="space-y-2">

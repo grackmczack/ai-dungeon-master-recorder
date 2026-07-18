@@ -9,17 +9,20 @@ datasource db {
 }
 
 model User {
-  id                     String    @id @default(cuid())
-  email                  String    @unique
-  passwordHash           String
-  displayName            String
-  role                   UserRole  @default(DM)
-  isActive               Boolean   @default(true)
-  sessionVersion         Int       @default(0)
-  passwordResetTokenHash String?   @unique
-  passwordResetExpiresAt DateTime?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  id                         String    @id @default(cuid())
+  email                      String    @unique
+  passwordHash               String
+  displayName                String
+  role                       UserRole  @default(DM)
+  isActive                   Boolean   @default(true)
+  emailVerifiedAt            DateTime? @default(now())
+  emailVerificationTokenHash String?   @unique
+  emailVerificationExpiresAt DateTime?
+  sessionVersion             Int       @default(0)
+  passwordResetTokenHash     String?   @unique
+  passwordResetExpiresAt     DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   memberships  GroupMembership[]
   // Keys die dieser Admin an andere DMs verliehen hat
