@@ -129,7 +129,11 @@ export const campaignCommand: DiscordCommand = {
       const lines = configured.campaigns.map(
         (binding) =>
           `${binding.isActive ? "🟢" : "⚫"} **${binding.campaignName}**` +
-          ` · ${binding.voiceChannelId ? `<#${binding.voiceChannelId}>` : "kein Voice-Channel"}` +
+          ` · ${
+            binding.voiceChannelId
+              ? `<#${binding.voiceChannelId}>`
+              : "Voice wird beim nächsten /record festgelegt"
+          }` +
           ` · ${binding.summaryChannelId ? `Summary <#${binding.summaryChannelId}>` : "kein Summary-Kanal"}`
       );
       await interaction.reply({

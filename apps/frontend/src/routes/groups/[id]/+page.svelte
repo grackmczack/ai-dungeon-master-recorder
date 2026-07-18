@@ -79,7 +79,9 @@
   };
 
   function campaignView(campaign: any) {
-    const primaryBinding = campaign.bindings?.[0];
+    const primaryBinding = campaign.bindings?.find(
+      (binding: any) => binding.isActive && binding.installation.isActive
+    ) ?? campaign.bindings?.[0];
     return {
       ...campaign,
       campaigns: [campaign],
@@ -418,6 +420,7 @@
             <div role="status" class="inline-flex items-center gap-2 rounded-full border px-3 py-2 {binding.isActive && binding.installation.isActive ? 'border-green-500/30 bg-green-500/10' : 'border-amber-500/30 bg-amber-500/10'}">
               <span class="h-2.5 w-2.5 rounded-full {binding.isActive && binding.installation.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 'bg-amber-500'}" aria-hidden="true"></span>
               <span class="text-sm text-white">{binding.installation.guildName}</span>
+              <span class="text-xs {binding.isActive && binding.installation.isActive ? 'text-green-300' : 'text-amber-300'}">· {binding.isActive && binding.installation.isActive ? 'Verbunden' : 'Inaktiv'}</span>
               {#if binding.voiceChannelName}<span class="text-xs text-gray-400">· {binding.voiceChannelName}</span>{/if}
             </div>
           {/each}
@@ -485,8 +488,8 @@
               <div class="min-w-0">
                 <p class="truncate text-sm font-medium text-white">{binding.installation.guildName}</p>
                 <p class="mt-0.5 text-xs text-gray-500">
-                  {binding.voiceChannelName ? `Voice: ${binding.voiceChannelName}` : 'Voice-Channel noch nicht gesetzt'}
-                  {binding.summaryChannelName ? ` · Summary: ${binding.summaryChannelName}` : ''}
+                  {binding.voiceChannelName ? `Voice: ${binding.voiceChannelName}` : 'Voice wird beim nächsten /record automatisch festgelegt'}
+                  {binding.summaryChannelName ? ` · Summary: ${binding.summaryChannelName}` : binding.summaryChannelId ? ' · Summary-Kanal verbunden' : ''}
                 </p>
               </div>
               <div class="flex flex-wrap gap-2">

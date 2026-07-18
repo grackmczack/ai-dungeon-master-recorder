@@ -49,7 +49,11 @@ export function createStatusCommand(voiceRecorderService: VoiceRecorderService):
         for (const binding of campaignConfig.campaigns) {
           lines.push(
             `${binding.isActive ? "🟢" : "⚫"} ${binding.campaignName}` +
-              `${binding.voiceChannelId ? ` · <#${binding.voiceChannelId}>` : " · kein Voice-Channel"}` +
+              `${
+                binding.voiceChannelId
+                  ? ` · <#${binding.voiceChannelId}>`
+                  : " · Voice wird beim nächsten /record festgelegt"
+              }` +
               `${binding.summaryChannelId ? ` → <#${binding.summaryChannelId}>` : ""}`
           );
         }

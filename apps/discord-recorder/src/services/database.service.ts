@@ -180,7 +180,15 @@ export async function syncDiscordInstallation(guildId: string, guildName: string
 }
 
 export async function syncDiscordInstallations(
-  guilds: Array<{ guildId: string; guildName: string }>
+  guilds: Array<{
+    guildId: string;
+    guildName: string;
+    channels?: Array<{
+      channelId: string;
+      channelName: string;
+      kind: "VOICE" | "TEXT";
+    }>;
+  }>
 ): Promise<void> {
   await backendRequest("/internal/discord/installations", "PUT", { guilds });
 }

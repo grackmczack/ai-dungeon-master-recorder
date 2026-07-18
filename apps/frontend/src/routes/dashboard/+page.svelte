@@ -24,6 +24,12 @@
       : 'noch nicht gestartet';
   }
 
+  function liveBinding(campaign: Campaign): DiscordCampaignBinding | undefined {
+    return campaign.bindings?.find(
+      (binding) => binding.isActive && binding.installation.isActive
+    );
+  }
+
   onMount(async () => {
     api.getDiscordConfig()
       .then((config) => { discordInviteUrl = config.inviteUrl ?? ''; })
@@ -102,8 +108,12 @@
           <div class="relative flex h-full flex-col justify-between p-5">
             <div class="flex justify-between gap-2">
               <span class="rounded-full bg-black/50 px-2.5 py-1 text-xs text-gray-200 backdrop-blur">{campaign.role ?? 'PLAYER'}</span>
-              {#if campaign.bindings?.some((binding) => binding.isActive && binding.installation.isActive)}
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-green-950/70 px-2.5 py-1 text-xs text-green-300 backdrop-blur"><span class="h-2 w-2 rounded-full bg-green-400"></span> Discord</span>
+              {#if liveBinding(campaign)}
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-green-950/70 px-2.5 py-1 text-xs text-green-300 backdrop-blur"><span class="h-2 w-2 rounded-full bg-green-400"></span> Verbunden · {liveBinding(campaign)!.installation.guildName}</span>
+              {:else if (campaign.bindings?.length ?? 0) > 0}
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-950/70 px-2.5 py-1 text-xs text-amber-300 backdrop-blur"><span class="h-2 w-2 rounded-full bg-amber-400"></span> Discord inaktiv</span>
+              {:else}
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-xs text-gray-300 backdrop-blur"><span class="h-2 w-2 rounded-full bg-gray-500"></span> Nicht verbunden</span>
               {/if}
             </div>
             <div>

@@ -26,9 +26,20 @@ const BindingIdSchema = z
   .max(64)
   .regex(/^[A-Za-z0-9_-]+$/);
 const GuildInstallationSchema = z.object({ guildName: z.string().trim().min(1).max(100) });
+const DiscordChannelSchema = z.object({
+  channelId: DiscordIdSchema,
+  channelName: z.string().trim().min(1).max(100),
+  kind: z.enum(["VOICE", "TEXT"])
+});
 const GuildInstallationsSchema = z.object({
   guilds: z
-    .array(z.object({ guildId: DiscordIdSchema, guildName: z.string().trim().min(1).max(100) }))
+    .array(
+      z.object({
+        guildId: DiscordIdSchema,
+        guildName: z.string().trim().min(1).max(100),
+        channels: z.array(DiscordChannelSchema).max(1_000).optional().default([])
+      })
+    )
     .max(10_000)
 });
 const DiscordConnectLinkSchema = z.object({
@@ -257,6 +268,54 @@ export async function internalRoutes(app: FastifyInstance) {
         }
       })
     ]);
+
+    // IDs sind die stabile Zuordnung; Namen sind nur Anzeige-Metadaten und
+    // werden regelmäßig aus Discord aktualisiert. Bei genau einem vorhandenen
+    // Voice-Channel und genau einer Serverbindung ist auch eine alte, noch
+    // kanaloffene Migration eindeutig und kann sicher vervollständigt werden.
+    for (const guild of body.data.guilds) {
+      const installation = await prisma.discordInstallation.findUnique({
+        where: { discordGuildId: guild.guildId },
+        include: { bindings: { orderBy: { createdAt: "asc" } } }
+      });
+      if (!installation) continue;
+
+      const voiceChannels = guild.channels.filter((channel) => channel.kind === "VOICE");
+      const textChannels = guild.channels.filter((channel) => channel.kind === "TEXT");
+      const channelUpdates = [
+        ...voiceChannels.map((channel) =>
+          prisma.campaignDiscordBinding.updateMany({
+            where: {
+              discordInstallationId: installation.id,
+              voiceChannelId: channel.channelId
+            },
+            data: { voiceChannelName: channel.channelName }
+          })
+        ),
+        ...textChannels.map((channel) =>
+          prisma.campaignDiscordBinding.updateMany({
+            where: {
+              discordInstallationId: installation.id,
+              summaryChannelId: channel.channelId
+            },
+            data: { summaryChannelName: channel.channelName }
+          })
+        )
+      ];
+      if (channelUpdates.length > 0) await prisma.$transaction(channelUpdates);
+
+      const soleBinding = installation.bindings.length === 1 ? installation.bindings[0] : undefined;
+      const soleVoiceChannel = voiceChannels.length === 1 ? voiceChannels[0] : undefined;
+      if (soleBinding && !soleBinding.voiceChannelId && soleVoiceChannel) {
+        await prisma.campaignDiscordBinding.update({
+          where: { id: soleBinding.id },
+          data: {
+            voiceChannelId: soleVoiceChannel.channelId,
+            voiceChannelName: soleVoiceChannel.channelName
+          }
+        });
+      }
+    }
 
     return reply.send({ activeInstallations: guildIds.length });
   });

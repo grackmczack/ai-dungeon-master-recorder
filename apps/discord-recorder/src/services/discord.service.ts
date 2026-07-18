@@ -1,4 +1,5 @@
 import {
+  ChannelType,
   Client,
   Events,
   GatewayIntentBits,
@@ -73,9 +74,48 @@ export class DiscordService {
       console.log(`Discord bot online as ${client.user.tag}`);
       const syncAll = async () => {
         try {
-          await syncDiscordInstallations(
-            client.guilds.cache.map((guild) => ({ guildId: guild.id, guildName: guild.name }))
+          const guilds = await Promise.all(
+            client.guilds.cache.map(async (guild) => {
+              // Der REST-Fetch stellt sicher, dass auch nach einem frischen Bot-Start
+              // alle Kanalnamen vorliegen. Das Backend gleicht damit bestehende
+              // Kampagnenbindungen ab, ohne Discord-User zu speichern.
+              await guild.channels.fetch().catch((error) => {
+                console.warn(
+                  `[DISCORD] Kanäle von ${guild.name} (${guild.id}) konnten nicht vollständig geladen werden`,
+                  error
+                );
+              });
+              const channels: Array<{
+                channelId: string;
+                channelName: string;
+                kind: "VOICE" | "TEXT";
+              }> = [];
+              for (const channel of guild.channels.cache.values()) {
+                if (
+                  channel.type === ChannelType.GuildVoice ||
+                  channel.type === ChannelType.GuildStageVoice
+                ) {
+                  channels.push({
+                    channelId: channel.id,
+                    channelName: channel.name,
+                    kind: "VOICE"
+                  });
+                }
+                if (
+                  channel.type === ChannelType.GuildText ||
+                  channel.type === ChannelType.GuildAnnouncement
+                ) {
+                  channels.push({
+                    channelId: channel.id,
+                    channelName: channel.name,
+                    kind: "TEXT"
+                  });
+                }
+              }
+              return { guildId: guild.id, guildName: guild.name, channels };
+            })
           );
+          await syncDiscordInstallations(guilds);
           console.log(`[DISCORD] ${client.guilds.cache.size} Server-Installationen synchronisiert`);
         } catch (error) {
           console.error(
