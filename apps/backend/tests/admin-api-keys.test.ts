@@ -10,7 +10,6 @@ const source = {
   whisperProvider: "replicate",
   whisperApiKey: "r8_whisper",
   whisperEndpoint: null,
-  huggingfaceToken: null,
   replicateApiKey: "r8_images",
   llmProvider: "siliconflow",
   llmApiKey: "sk-siliconflow",
@@ -24,7 +23,6 @@ test("admin grants keep provider, model, endpoint and key together", () => {
   assert.deepEqual(profile.availability, {
     whisper: true,
     replicate: true,
-    huggingface: false,
     llm: true
   });
 

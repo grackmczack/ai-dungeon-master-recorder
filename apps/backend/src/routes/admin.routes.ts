@@ -96,7 +96,6 @@ export async function adminRoutes(app: FastifyInstance) {
           availableAdminKeys: adminProfile?.availability ?? {
             whisper: false,
             replicate: false,
-            huggingface: false,
             llm: false
           }
         };

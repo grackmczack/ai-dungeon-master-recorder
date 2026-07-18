@@ -198,18 +198,19 @@ export async function sessionsRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: "Not a member" });
 
     await Promise.all(
-      speakers.map((s) =>
-        prisma.speakerMap.upsert({
+      speakers.map((s) => {
+        const diarizationLabel = s.diarizationLabel?.trim() || null;
+        return prisma.speakerMap.upsert({
           where: { sessionId_discordUserId: { sessionId: id, discordUserId: s.discordUserId } },
           update: {
             characterName: s.characterName,
             playerName: s.playerName,
             discordName: s.discordName,
-            diarizationLabel: s.diarizationLabel
+            diarizationLabel
           },
-          create: { sessionId: id, ...s }
-        })
-      )
+          create: { sessionId: id, ...s, diarizationLabel }
+        });
+      })
     );
 
     return reply.send({ updated: speakers.length });

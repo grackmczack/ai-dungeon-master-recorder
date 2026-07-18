@@ -8,7 +8,7 @@ import {
 } from "discord.js";
 import type { DiscordCommand } from "../services/discord.service.js";
 import type { VoiceRecorderService } from "../services/voice-recorder.service.js";
-import { makeRecordingKey } from "../services/voice-recorder.service.js";
+import { makeRecordingKey, MAX_RECORDING_HOURS } from "../services/voice-recorder.service.js";
 import type { ChunkProcessorService } from "../services/chunk-processor.service.js";
 import {
   BackendRequestError,
@@ -190,7 +190,7 @@ export function createRecordCommand(
           `🔴 **Aufnahme gestartet!**\n` +
             `🗺️ **Kampagne:** ${campaignName}\n` +
             `👥 **Teilnehmer:** ${participantList || "werden beim Sprechen erkannt"}\n` +
-            `📦 Chunks alle 30 Min · Auto-Stop wenn alle weg · Max 4h\n` +
+            `📦 Chunks alle 30 Min · Auto-Stop wenn alle weg · Max ${MAX_RECORDING_HOURS}h\n` +
             `Stoppe mit \`/stop\`, wenn ihr fertig seid.`
         );
 

@@ -1,23 +1,10 @@
 import { readFileSync } from "node:fs";
-
-export interface TranscriptSegment {
-  speaker: string;
-  start: number;
-  end: number;
-  text: string;
-}
-
-export interface TranscriptResult {
-  segments: TranscriptSegment[];
-  language: string;
-  provider: string;
-}
+import type { TranscriptResult, TranscriptSegment, TranscriptWord } from "../types.js";
 
 export interface WhisperConfig {
   provider: "replicate" | "openai" | "selfhosted";
   apiKey?: string | undefined;
   endpoint?: string | undefined;
-  huggingfaceToken?: string | undefined;
 }
 
 // --- Replicate: File Upload + WhisperX ---
@@ -51,18 +38,13 @@ async function uploadToReplicate(filePath: string, apiKey: string): Promise<stri
 
 async function transcribeReplicate(
   filePath: string,
-  config: WhisperConfig,
-  allowFallback = true
+  config: WhisperConfig
 ): Promise<TranscriptResult> {
   const apiKey = config.apiKey ?? process.env.REPLICATE_API_KEY;
   if (!apiKey) throw new Error("REPLICATE_API_KEY missing");
 
   // Upload local file to Replicate storage → get public URL
   const audioUrl = await uploadToReplicate(filePath, apiKey);
-
-  // HuggingFace token für Diarization (optional, nur wenn allowFallback=true bedeutet erster Versuch)
-  const hfToken = config.huggingfaceToken ?? process.env.HUGGINGFACE_TOKEN ?? null;
-  const useDiarization = !!hfToken && allowFallback;
 
   // Start WhisperX prediction
   const startRes = await fetch("https://api.replicate.com/v1/predictions", {
@@ -79,14 +61,9 @@ async function transcribeReplicate(
         language: "de",
         task: "transcribe",
         align_output: true,
-        diarization: useDiarization,
-        ...(useDiarization
-          ? {
-              huggingface_access_token: hfToken,
-              min_speakers: 1,
-              max_speakers: 6
-            }
-          : {})
+        // Discord provides stable speaker identities and activity timestamps.
+        // Anonymous external diarization is deliberately disabled.
+        diarization: false
       }
     })
   });
@@ -111,13 +88,6 @@ async function transcribeReplicate(
 
   if (result.status === "failed") {
     const errMsg = JSON.stringify(result.error);
-    // Diarization-Fehler → nochmal ohne Diarization versuchen
-    if (useDiarization && allowFallback && errMsg.includes("GatedRepo")) {
-      console.warn(
-        "[REPLICATE] Diarization failed (HuggingFace access) — retrying without diarization"
-      );
-      return transcribeReplicate(filePath, config, false);
-    }
     throw new Error(`Replicate WhisperX failed: ${errMsg}`);
   }
   if (result.status !== "succeeded") {
@@ -127,6 +97,7 @@ async function transcribeReplicate(
   // Parse output — victor-upmeet/whisperx output format
   const output = result.output;
   let segments: TranscriptSegment[] = [];
+  let words: TranscriptWord[] = [];
 
   // Output kann direkt segments[] sein oder { segments: [] }
   const rawSegments = Array.isArray(output)
@@ -144,6 +115,22 @@ async function transcribeReplicate(
         text: (s.text ?? "").trim()
       }))
       .filter((s: TranscriptSegment) => s.text.length > 0);
+    words = rawSegments.flatMap((segment: any) =>
+      Array.isArray(segment.words)
+        ? segment.words
+            .map((word: any) => ({
+              word: String(word.word ?? word.text ?? ""),
+              start: Number(word.start ?? 0),
+              end: Number(word.end ?? word.start ?? 0)
+            }))
+            .filter(
+              (word: TranscriptWord) =>
+                word.word.trim().length > 0 &&
+                Number.isFinite(word.start) &&
+                Number.isFinite(word.end)
+            )
+        : []
+    );
   } else if (typeof output === "string") {
     segments = [{ speaker: "SPEAKER_00", start: 0, end: 0, text: output }];
   } else {
@@ -151,7 +138,12 @@ async function transcribeReplicate(
   }
 
   console.log(`[REPLICATE] Done: ${segments.length} segments`);
-  return { segments, language: output?.language ?? "de", provider: "replicate-whisperx" };
+  return {
+    segments,
+    ...(words.length > 0 ? { words } : {}),
+    language: output?.language ?? "de",
+    provider: "replicate-whisperx"
+  };
 }
 
 // --- OpenAI Whisper ---
@@ -171,6 +163,7 @@ async function transcribeOpenAI(
   form.append("language", "de");
   form.append("response_format", "verbose_json");
   form.append("timestamp_granularities[]", "segment");
+  form.append("timestamp_granularities[]", "word");
 
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
@@ -188,7 +181,23 @@ async function transcribeOpenAI(
     text: (s.text ?? "").trim()
   }));
 
-  return { segments, language: data.language ?? "de", provider: "openai-whisper" };
+  const words: TranscriptWord[] = (data.words ?? [])
+    .map((word: any) => ({
+      word: String(word.word ?? ""),
+      start: Number(word.start ?? 0),
+      end: Number(word.end ?? word.start ?? 0)
+    }))
+    .filter(
+      (word: TranscriptWord) =>
+        word.word.trim().length > 0 && Number.isFinite(word.start) && Number.isFinite(word.end)
+    );
+
+  return {
+    segments,
+    ...(words.length > 0 ? { words } : {}),
+    language: data.language ?? "de",
+    provider: "openai-whisper"
+  };
 }
 
 // --- Self-hosted (OpenAI-compatible) ---
@@ -222,7 +231,23 @@ async function transcribeSelfhosted(
     text: (s.text ?? "").trim()
   }));
 
-  return { segments, language: data.language ?? "de", provider: "selfhosted-whisper" };
+  const words: TranscriptWord[] = (data.words ?? [])
+    .map((word: any) => ({
+      word: String(word.word ?? ""),
+      start: Number(word.start ?? 0),
+      end: Number(word.end ?? word.start ?? 0)
+    }))
+    .filter(
+      (word: TranscriptWord) =>
+        word.word.trim().length > 0 && Number.isFinite(word.start) && Number.isFinite(word.end)
+    );
+
+  return {
+    segments,
+    ...(words.length > 0 ? { words } : {}),
+    language: data.language ?? "de",
+    provider: "selfhosted-whisper"
+  };
 }
 
 export async function transcribeAudio(

@@ -95,9 +95,15 @@ export interface Transcript {
   // rawJson kann direkt { segments } sein oder { chunks: [{ segments, chunkIndex, durationSeconds }] }
   rawJson: {
     segments?: TranscriptSegment[];
-    chunks?: Array<{ segments: TranscriptSegment[]; chunkIndex: number; durationSeconds: number }>;
+    chunks?: Array<{
+      segments: TranscriptSegment[];
+      chunkIndex: number;
+      durationSeconds: number;
+      speakerAttribution?: string;
+    }>;
     language?: string;
     provider?: string;
+    speakerAttribution?: string;
   };
   provider: string;
   language: string;

@@ -12,7 +12,6 @@
   let adminKeyAvailability = $state({
     whisper: false,
     replicate: false,
-    huggingface: false,
     llm: false
   });
   let form: any = $state({});
@@ -107,7 +106,7 @@
       usingAdminKeys = settings?.usingAdminKeys ?? false;
       adminKeyProviderName = settings?.adminKeyProviderName ?? '';
       adminKeyAvailability = settings?.adminKeyAvailability ?? {
-        whisper: false, replicate: false, huggingface: false, llm: false
+        whisper: false, replicate: false, llm: false
       };
       form = settings ? { ...settings, summaryLanguage: 'de' } : {
         whisperProvider: 'openai',
@@ -121,7 +120,6 @@
         llmCampaignContext: '',
         replicateApiKey: '',
         imageGenModel: 'black-forest-labs/flux-schnell',
-        huggingfaceToken: '',
         sessionImageProvider: 'replicate',
         sessionImageModel: 'qwen/qwen-image-edit-plus',
         summaryLanguage: 'de',
@@ -135,7 +133,6 @@
         llmProvider: 'anthropic', llmModel: 'claude-opus-4-8', llmApiKey: '', llmEndpoint: '',
         llmSystemPrompt: '', llmCampaignContext: '',
         replicateApiKey: '', imageGenModel: 'black-forest-labs/flux-schnell',
-        huggingfaceToken: '',
         sessionImageProvider: 'replicate', sessionImageModel: 'qwen/qwen-image-edit-plus',
         summaryLanguage: 'de', postSummaryChannelId: ''
       };
@@ -156,8 +153,9 @@
       if (isMaskedKey(payload.replicateApiKey)) delete payload.replicateApiKey;
       if (!payload.replicateApiKey?.trim()) delete payload.replicateApiKey;
       if (!payload.imageGenModel?.trim()) delete payload.imageGenModel;
-      if (isMaskedKey(payload.huggingfaceToken)) delete payload.huggingfaceToken;
-      if (!payload.huggingfaceToken?.trim()) delete payload.huggingfaceToken;
+      // Legacy pyannote tokens are no longer user-configurable. Discord supplies
+      // the speaker identity directly and the worker ignores this old field.
+      delete payload.huggingfaceToken;
       if (isMaskedKey(payload.llmApiKey)) delete payload.llmApiKey;
       // Clean optional fields — empty strings → null
       if (!payload.sessionImageProvider?.trim()) { payload.sessionImageProvider = null; }
@@ -218,7 +216,6 @@
             <span class={adminKeyAvailability.whisper ? 'text-green-400' : 'text-gray-600'}>● Transkription</span>
             <span class={adminKeyAvailability.replicate ? 'text-green-400' : 'text-gray-600'}>● Bildgenerierung</span>
             <span class={adminKeyAvailability.llm ? 'text-green-400' : 'text-gray-600'}>● Zusammenfassung</span>
-            <span class={adminKeyAvailability.huggingface ? 'text-green-400' : 'text-gray-600'}>● HuggingFace</span>
           </div>
         </div>
       </div>
@@ -289,14 +286,6 @@
             <p class="text-xs text-gray-600">Genutzt für Bildgenerierung (Hintergründe, Session-Bilder, NPC-Portraits). Wird auch für Replicate WhisperX verwendet falls als Whisper-Provider gewählt.</p>
           </div>
 
-          <!-- HuggingFace token -->
-          <div class="space-y-2">
-            <label for="huggingface-token" class="text-sm text-gray-400">HuggingFace Token</label>
-            <input id="huggingface-token" bind:value={form.huggingfaceToken} readonly={adminKeyAvailability.huggingface} type={isMaskedKey(form.huggingfaceToken) ? 'text' : 'password'} autocomplete="new-password"
-              class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand-500"
-              placeholder="hf_..." />
-            <p class="text-xs text-gray-600">Genutzt für Speaker-Diarization via pyannote. Auf huggingface.co/settings/tokens erstellen.</p>
-          </div>
         </div>
       </div>
 
@@ -375,37 +364,12 @@
 
       <!-- ─────────── Sprecher-Erkennung ─────────── -->
       <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-7 space-y-5">
-        <h2 class="font-semibold text-white flex items-center gap-2">🔊 Sprecher-Erkennung (HuggingFace)</h2>
-        <p class="text-xs text-gray-500">Der HuggingFace Token wird aus der »API Keys«-Sektion oben verwendet.</p>
-
-        <div class="pt-2 border-t border-surface-600">
-          <p class="text-xs text-gray-500 mb-3">Folgende Modelle müssen mit deinem Account freigeschaltet sein:</p>
-          <div class="space-y-2">
-            <a href="https://huggingface.co/pyannote/speaker-diarization-3.1" target="_blank" rel="noopener noreferrer"
-              class="flex items-center justify-between bg-surface-700 hover:bg-surface-600 border border-surface-600 hover:border-brand-500/40 rounded-lg px-4 py-3 transition group">
-              <div>
-                <p class="text-sm text-white font-medium">pyannote/speaker-diarization-3.1</p>
-                <p class="text-xs text-gray-500">Speaker-Diarization Modell</p>
-              </div>
-              <span class="text-xs text-brand-400 group-hover:text-brand-300 transition">Modell freischalten →</span>
-            </a>
-            <a href="https://huggingface.co/pyannote/segmentation-3.0" target="_blank" rel="noopener noreferrer"
-              class="flex items-center justify-between bg-surface-700 hover:bg-surface-600 border border-surface-600 hover:border-brand-500/40 rounded-lg px-4 py-3 transition group">
-              <div>
-                <p class="text-sm text-white font-medium">pyannote/segmentation-3.0</p>
-                <p class="text-xs text-gray-500">Segmentation Modell (Voraussetzung für Diarization)</p>
-              </div>
-              <span class="text-xs text-brand-400 group-hover:text-brand-300 transition">Modell freischalten →</span>
-            </a>
-            <a href="https://huggingface.co/pyannote/speaker-diarization-community-1" target="_blank" rel="noopener noreferrer"
-              class="flex items-center justify-between bg-surface-700 hover:bg-surface-600 border border-surface-600 hover:border-brand-500/40 rounded-lg px-4 py-3 transition group">
-              <div>
-                <p class="text-sm text-white font-medium">pyannote/speaker-diarization-community-1</p>
-                <p class="text-xs text-gray-500">Community Speaker-Diarization (Alternative)</p>
-              </div>
-              <span class="text-xs text-brand-400 group-hover:text-brand-300 transition">Modell freischalten →</span>
-            </a>
-          </div>
+        <h2 class="font-semibold text-white flex items-center gap-2">🔊 Automatische Sprecherzuordnung</h2>
+        <p class="text-sm text-gray-400 leading-relaxed">
+          DnD Recorder erkennt die Sprecher direkt über ihre Discord-Audiospur und gleicht diese mit den Wortzeitstempeln des Transkripts ab. Es ist kein HuggingFace-Token und keine manuelle Modellfreigabe nötig.
+        </p>
+        <div class="rounded-xl border border-green-500/20 bg-green-500/5 px-4 py-3 text-xs text-green-300">
+          Aktiv · Discord-Namen und hinterlegte Charaktere werden automatisch verknüpft.
         </div>
       </div>
 

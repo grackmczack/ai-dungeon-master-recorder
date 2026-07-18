@@ -4,7 +4,6 @@ export interface AdminKeySourceSettings {
   whisperProvider: string;
   whisperApiKey: string | null;
   whisperEndpoint: string | null;
-  huggingfaceToken: string | null;
   replicateApiKey: string | null;
   llmProvider: string;
   llmApiKey: string | null;
@@ -15,7 +14,6 @@ export interface AdminKeySourceSettings {
 export interface AdminKeyAvailability {
   whisper: boolean;
   replicate: boolean;
-  huggingface: boolean;
   llm: boolean;
 }
 
@@ -55,7 +53,7 @@ function defaultLlmModel(provider: string): string {
  */
 export function buildAdminKeyProfile(sources: AdminKeySourceSettings[]): AdminKeyProfile | null {
   const profile: AdminKeyProfile = {
-    availability: { whisper: false, replicate: false, huggingface: false, llm: false }
+    availability: { whisper: false, replicate: false, llm: false }
   };
 
   for (const source of sources) {
@@ -68,10 +66,6 @@ export function buildAdminKeyProfile(sources: AdminKeySourceSettings[]): AdminKe
     if (!profile.availability.replicate && present(source.replicateApiKey)) {
       profile.replicateApiKey = source.replicateApiKey.trim();
       profile.availability.replicate = true;
-    }
-    if (!profile.availability.huggingface && present(source.huggingfaceToken)) {
-      profile.huggingfaceToken = source.huggingfaceToken.trim();
-      profile.availability.huggingface = true;
     }
     if (!profile.availability.llm && present(source.llmApiKey)) {
       profile.llmProvider = source.llmProvider;
@@ -100,7 +94,6 @@ export function applyAdminKeyProfile<T extends Record<string, unknown>>(
     effective.whisperEndpoint = profile.whisperEndpoint;
   }
   if (profile.availability.replicate) effective.replicateApiKey = profile.replicateApiKey;
-  if (profile.availability.huggingface) effective.huggingfaceToken = profile.huggingfaceToken;
   if (profile.availability.llm) {
     effective.llmProvider = profile.llmProvider;
     effective.llmApiKey = profile.llmApiKey;
@@ -124,7 +117,6 @@ async function loadProfileForSuperAdmin(prisma: PrismaClient, superAdminId: stri
       whisperProvider: true,
       whisperApiKey: true,
       whisperEndpoint: true,
-      huggingfaceToken: true,
       replicateApiKey: true,
       llmProvider: true,
       llmApiKey: true,
@@ -187,7 +179,6 @@ export function stripGrantedFields(
     delete stripped.whisperEndpoint;
   }
   if (profile.availability.replicate) delete stripped.replicateApiKey;
-  if (profile.availability.huggingface) delete stripped.huggingfaceToken;
   if (profile.availability.llm) {
     delete stripped.llmProvider;
     delete stripped.llmApiKey;

@@ -11,7 +11,6 @@ const DEFAULT_SETTINGS = {
   whisperProvider: "openai",
   whisperApiKey: null,
   whisperEndpoint: null,
-  huggingfaceToken: null,
   replicateApiKey: null,
   imageGenModel: "black-forest-labs/flux-schnell",
   sessionImageProvider: "replicate",
@@ -29,7 +28,6 @@ const SettingsSchema = z.object({
   whisperProvider: z.enum(["openai", "replicate", "selfhosted"]).optional(),
   whisperApiKey: z.string().optional().nullable(),
   whisperEndpoint: z.string().optional().nullable(),
-  huggingfaceToken: z.string().optional().nullable(),
   replicateApiKey: z.string().optional().nullable(),
   imageGenModel: z.string().optional(),
   llmProvider: z.enum(["anthropic", "gemini", "openai", "siliconflow", "ollama"]).optional(),
@@ -74,10 +72,12 @@ export async function settingsRoutes(app: FastifyInstance) {
       key ? (key.length > 6 ? `${key.substring(0, 6)}***` : "***") : null;
 
     const effective = applyAdminKeyProfile(settings ?? DEFAULT_SETTINGS, adminProfile);
-    const masked = { ...effective };
+    // Keep the legacy DB column private. Discord voice activity now supplies
+    // stable speaker identities, so no tenant HuggingFace token is used.
+    const masked: Record<string, any> = { ...effective };
+    delete masked.huggingfaceToken;
     if (masked.whisperApiKey) masked.whisperApiKey = maskKey(masked.whisperApiKey);
     if (masked.replicateApiKey) masked.replicateApiKey = maskKey(masked.replicateApiKey);
-    if (masked.huggingfaceToken) masked.huggingfaceToken = maskKey(masked.huggingfaceToken);
     if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
     return reply.send({
       ...masked,
@@ -89,7 +89,6 @@ export async function settingsRoutes(app: FastifyInstance) {
       adminKeyAvailability: adminProfile?.availability ?? {
         whisper: false,
         replicate: false,
-        huggingface: false,
         llm: false
       }
     });
@@ -136,11 +135,6 @@ export async function settingsRoutes(app: FastifyInstance) {
       dataToUpdate.replicateApiKey.includes("***")
     )
       delete dataToUpdate.replicateApiKey;
-    if (
-      typeof dataToUpdate.huggingfaceToken === "string" &&
-      dataToUpdate.huggingfaceToken.includes("***")
-    )
-      delete dataToUpdate.huggingfaceToken;
     if (typeof dataToUpdate.llmApiKey === "string" && dataToUpdate.llmApiKey.includes("***"))
       delete dataToUpdate.llmApiKey;
 

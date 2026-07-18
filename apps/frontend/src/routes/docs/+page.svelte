@@ -199,7 +199,7 @@
   <li><strong>Session-Bild:</strong> Generierbares oder hochladbares Bild im 4:3-Format. Die Generator-Einstellungen lassen sich platzsparend aufklappen.</li>
   <li><strong>Summary-Tab:</strong> Chronik, NSCs, Quests, Beute, Orte, offene Fäden + eingebetteter MP3-Player.</li>
   <li><strong>Transkript-Tab:</strong> Vollständiges Transkript mit farbcodierten Sprechern und Timestamps.</li>
-  <li><strong>Sprecher-Tab:</strong> Diarization-Label-Zuordnung mit Transkript-Ausschnitten.</li>
+  <li><strong>Sprecher-Tab:</strong> Automatisch verknüpfte Discord-Sprecher sowie editierbare Charakter- und Spielernamen; ältere anonyme Labels bleiben zuordenbar.</li>
 </ul>
 
 <h3>Session-Paginierung</h3>
@@ -264,13 +264,14 @@
 
 <h3>Transkription</h3>
 <ul>
-  <li><strong>Replicate WhisperX:</strong> Standard. API-Key von replicate.com. Erkennt verschiedene Sprecher (Diarization).</li>
-  <li><strong>HuggingFace Token:</strong> Für Speaker-Diarization (pyannote-Modelle müssen auf hf.co akzeptiert sein).</li>
+  <li><strong>Replicate WhisperX:</strong> Standard. API-Key von replicate.com.</li>
   <li><strong>OpenAI Whisper:</strong> Alternative, braucht OpenAI API-Key.</li>
+  <li><strong>Sprecherzuordnung:</strong> Erfolgt automatisch anhand der getrennten Discord-Audiospuren und der Wortzeitstempel. Ein HuggingFace-Token ist nicht nötig.</li>
+  <li><strong>Lange Sessions:</strong> Aufnahmen werden in 30-Minuten-MP3-Chunks verarbeitet. Dadurch bleiben auch fünf- bis sechsstündige Spielabende stabil wiederholbar.</li>
 </ul>
 
 <h3>Vom Superadmin freigegebene Keys</h3>
-<p>Ein aktiver Grant übernimmt den Key immer zusammen mit dem passenden Provider, Modell und Endpoint. In den Feldern bleiben die ersten sechs Zeichen sichtbar. Die Anzeige nennt getrennt, ob Transkription, Bildgenerierung, Zusammenfassung und HuggingFace tatsächlich freigegeben sind.</p>
+<p>Ein aktiver Grant übernimmt den Key immer zusammen mit dem passenden Provider, Modell und Endpoint. In den Feldern bleiben die ersten sechs Zeichen sichtbar. Die Anzeige nennt getrennt, ob Transkription, Bildgenerierung und Zusammenfassung tatsächlich freigegeben sind.</p>
 <p>Wird der Grant entzogen, gelten ab der nächsten Verarbeitung oder Bildanfrage wieder die zuvor gespeicherten eigenen Kampagnen-Keys. Nicht freigegebene Key-Typen können DMs weiterhin selbst pflegen.</p>`
     },
     {
@@ -317,7 +318,7 @@
 <p>Stelle sicher, dass der Bot die Berechtigungen "Connect", "Speak" und "Use Voice Activity" auf deinem Server hat.</p>
 
 <h3>Die Transkription dauert sehr lange</h3>
-<p>WhisperX mit Speaker-Diarization ist rechenintensiv. Bei langen Sessions (2h+) kann die Verarbeitung 5–10 Minuten dauern. Bei Chunked Recording läuft die Transkription parallel zur Aufnahme — dann ist sie meist sofort nach /stop fertig.</p>
+<p>Mehrstündiges Audiomaterial benötigt je nach gewähltem Whisper-Provider einige Zeit. DnD Recorder verarbeitet 30-Minuten-Chunks nacheinander, sodass ein fehlgeschlagener Teil wiederholt werden kann und kein einzelner übergroßer Upload entsteht. Die Verarbeitung startet nach <code>/stop</code>.</p>
 
 <h3>Die Summary ist unvollständig oder wirr</h3>
 <p>Prüfe folgende Punkte:</p>

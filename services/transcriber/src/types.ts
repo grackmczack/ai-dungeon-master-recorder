@@ -5,7 +5,22 @@ export interface TranscriptSegment {
   text: string;
 }
 
+export interface TranscriptWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface TranscriptResult {
+  segments: TranscriptSegment[];
+  words?: TranscriptWord[];
+  language: string;
+  provider: string;
+  speakerAttribution?: "discord-word-timestamps" | "discord-segment-overlap" | "provider";
+}
+
 export interface BatchChunkMeta {
+  index?: number;
   filePath: string;
   filename: string;
   durationSeconds: number;
@@ -30,6 +45,6 @@ export interface TranscriptionJobData {
   chunkIndex?: number;
   isLastChunk?: boolean;
   totalChunks?: number;
-  // Batch mode: all chunks in one job (for Replicate/selfhosted concat)
+  // Batch mode: bounded audio chunks processed sequentially in one queue job.
   batchChunks?: BatchChunkMeta[];
 }

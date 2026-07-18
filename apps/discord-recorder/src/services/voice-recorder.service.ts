@@ -27,8 +27,12 @@ const WAV_HEADER_BYTES = 44;
 
 // Chunk alle 30 Minuten
 const CHUNK_INTERVAL_MS = 30 * 60 * 1000;
-// Failsafe: max 4h Aufnahme
-const MAX_RECORDING_MS = 4 * 60 * 60 * 1000;
+// Lange Spielabende bleiben erlaubt, ein konfigurierbarer Failsafe verhindert Endlosaufnahmen.
+const configuredMaxHours = Number(process.env.MAX_RECORDING_HOURS ?? 6);
+export const MAX_RECORDING_HOURS = Number.isFinite(configuredMaxHours)
+  ? Math.min(8, Math.max(1, configuredMaxHours))
+  : 6;
+const MAX_RECORDING_MS = MAX_RECORDING_HOURS * 60 * 60 * 1000;
 // Auto-Stop nach X Sekunden Stille (alle User weg)
 const SILENCE_BEFORE_STOP_MS = 30_000;
 
@@ -44,7 +48,15 @@ interface Chunk {
   pcmBytesWritten: number;
   startedAt: Date;
   index: number;
-  speakerLogs: Array<{ userId: string; start: number; end: number }>;
+  speakerLogs: SpeakerLog[];
+}
+
+interface SpeakerLog {
+  userId: string;
+  start: number;
+  end: number;
+  discordName?: string;
+  discordDisplayName?: string;
 }
 
 interface ActiveRecording {
@@ -300,7 +312,7 @@ export class VoiceRecorderService {
     // Alle aktuell Sprechenden im alten Chunk loggen und in den neuen Chunk uebernehmen
     const finalMs = (oldChunk.pcmBytesWritten / (SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE)) * 1000;
     for (const [userId, state] of recording.currentlySpeaking.entries()) {
-      oldChunk.speakerLogs.push({ userId, start: state.startMs, end: finalMs });
+      oldChunk.speakerLogs.push(this.createSpeakerLog(recording, userId, state.startMs, finalMs));
       // Reset state for new chunk to start at 0
       state.startMs = 0;
       state.lastSpokeMs = 0;
@@ -457,11 +469,9 @@ export class VoiceRecorderService {
     for (const [userId, state] of recording.currentlySpeaking.entries()) {
       if (!activeUsers.has(userId)) {
         if (currentMs - state.lastSpokeMs > 200) {
-          recording.currentChunk.speakerLogs.push({
-            userId,
-            start: state.startMs,
-            end: state.lastSpokeMs
-          });
+          recording.currentChunk.speakerLogs.push(
+            this.createSpeakerLog(recording, userId, state.startMs, state.lastSpokeMs)
+          );
           recording.currentlySpeaking.delete(userId);
         }
       }
@@ -480,6 +490,23 @@ export class VoiceRecorderService {
       await handle.close();
     }
   }
+
+  private createSpeakerLog(
+    recording: ActiveRecording,
+    userId: string,
+    start: number,
+    end: number
+  ): SpeakerLog {
+    const member = recording.client.guilds.cache.get(recording.guildId)?.members.cache.get(userId);
+    const user = member?.user ?? recording.client.users.cache.get(userId);
+    return {
+      userId,
+      start,
+      end,
+      ...(user?.username ? { discordName: user.username } : {}),
+      ...(member?.displayName ? { discordDisplayName: member.displayName } : {})
+    };
+  }
 }
 
 function mixFrames(frames: Buffer[]): Buffer {
@@ -489,7 +516,10 @@ function mixFrames(frames: Buffer[]): Buffer {
   for (let i = 0; i < FRAME_BYTES; i += BYTES_PER_SAMPLE) {
     let s = 0;
     for (const f of frames) s += f.readInt16LE(i);
-    mixed.writeInt16LE(Math.max(-32768, Math.min(32767, s)), i);
+    // Average simultaneous speakers instead of hard-clipping their summed
+    // waveforms. Cross-talk stays more intelligible for Whisper this way.
+    const normalized = Math.round(s / frames.length);
+    mixed.writeInt16LE(Math.max(-32768, Math.min(32767, normalized)), i);
   }
   return mixed;
 }

@@ -2,7 +2,6 @@ export interface SharedKeySettings {
   whisperProvider?: string | null;
   whisperApiKey?: string | null;
   whisperEndpoint?: string | null;
-  huggingfaceToken?: string | null;
   replicateApiKey?: string | null;
   llmProvider?: string | null;
   llmApiKey?: string | null;
@@ -41,9 +40,6 @@ export function buildGrantedKeyProfile(sources: SharedKeySettings[]): SharedKeyS
     if (!present(profile.replicateApiKey) && present(source.replicateApiKey)) {
       profile.replicateApiKey = source.replicateApiKey.trim();
     }
-    if (!present(profile.huggingfaceToken) && present(source.huggingfaceToken)) {
-      profile.huggingfaceToken = source.huggingfaceToken.trim();
-    }
     if (!present(profile.llmApiKey) && present(source.llmApiKey)) {
       profile.llmProvider = source.llmProvider;
       profile.llmApiKey = source.llmApiKey.trim();
@@ -70,7 +66,6 @@ export function applyGrantedKeyProfile<T extends SharedKeySettings>(
     effective.whisperEndpoint = profile.whisperEndpoint;
   }
   if (present(profile.replicateApiKey)) effective.replicateApiKey = profile.replicateApiKey;
-  if (present(profile.huggingfaceToken)) effective.huggingfaceToken = profile.huggingfaceToken;
   if (present(profile.llmApiKey)) {
     effective.llmProvider = profile.llmProvider;
     effective.llmApiKey = profile.llmApiKey;

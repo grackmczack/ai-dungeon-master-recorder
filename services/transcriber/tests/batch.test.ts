@@ -34,3 +34,24 @@ test("expands every queued recording chunk in order", () => {
   );
   assert.ok(jobs.every((job) => job.totalChunks === 3));
 });
+
+test("orders sessions with more than ten chunks numerically", () => {
+  const data: TranscriptionJobData = {
+    sessionId: "session-long",
+    guildId: "guild-1",
+    filePath: "/recordings/part0.mp3",
+    filename: "part0.mp3"
+  };
+  const chunks: BatchChunkMeta[] = [0, 1, 10, 11, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => ({
+    index,
+    filePath: `/recordings/part${index}.mp3`,
+    filename: `part${index}.mp3`,
+    durationSeconds: 1800,
+    wavPath: `/recordings/part${index}.wav`
+  }));
+
+  assert.deepEqual(
+    createChunkJobs(data, chunks).map((job) => job.filename),
+    Array.from({ length: 12 }, (_, index) => `part${index}.mp3`)
+  );
+});

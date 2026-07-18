@@ -28,6 +28,14 @@
   let speakerEdits = $state<Array<{ discordUserId: string; discordName: string; characterName: string; playerName: string; diarizationLabel: string }>>([]);
   let savingSpeakers = $state(false);
   let diarizationLabels: Array<{ label: string; count: number; sample: string }> = $state([]);
+  let directSpeakerAssignment = $derived.by(() => {
+    const currentSession: Session | null = session;
+    const rawJson = currentSession?.transcript?.rawJson;
+    return Boolean(
+      rawJson?.speakerAttribution?.startsWith('discord-') ||
+      rawJson?.chunks?.some(chunk => chunk.speakerAttribution?.startsWith('discord-'))
+    );
+  });
 
   // Titel-Edit state
   let editingTitle = $state(false);
@@ -612,7 +620,15 @@
     <!-- Speakers Tab -->
     {:else if activeTab === 'speakers'}
       <div class="space-y-5">
-        {#if diarizationLabels.length > 0}
+        {#if directSpeakerAssignment}
+          <div class="bg-green-500/5 rounded-2xl border border-green-500/20 p-5 flex items-start gap-3">
+            <span class="text-xl">✓</span>
+            <div>
+              <h3 class="font-semibold text-green-300">Discord-Sprecher automatisch verknüpft</h3>
+              <p class="text-xs text-gray-400 mt-1">Die Wortzeitstempel wurden direkt den aktiven Discord-Audioströmen zugeordnet. Du kannst unten weiterhin Charakter- und Spielernamen ergänzen.</p>
+            </div>
+          </div>
+        {:else if diarizationLabels.length > 0}
           <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6">
             <h3 class="font-semibold text-white mb-1">🎙️ Erkannte Sprecher im Transkript</h3>
             <p class="text-xs text-gray-500 mb-4">Die automatische Transkription erkennt anonyme Sprecher-Labels (z.B. "SPEAKER_00") — hier ein Ausschnitt aus dem, was jedes Label gesagt hat. Hilft bei der Zuordnung unten.</p>
@@ -631,8 +647,8 @@
         <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6">
           <div class="flex items-center justify-between mb-6">
             <div>
-              <h3 class="font-semibold text-white">Sprecher zuordnen</h3>
-              <p class="text-xs text-gray-500 mt-1">Ordne Discord-Usernamen, Charakternamen und das erkannte Transkript-Label einander zu</p>
+              <h3 class="font-semibold text-white">Sprecher verwalten</h3>
+              <p class="text-xs text-gray-500 mt-1">{directSpeakerAssignment ? 'Ergänze die automatisch erkannten Discord-Sprecher um Charakter- und Spielernamen.' : 'Ordne Discord-Usernamen, Charakternamen und das erkannte Transkript-Label einander zu.'}</p>
             </div>
             {#if !editingSpeakers}
               <button onclick={() => editingSpeakers = true}
@@ -647,24 +663,26 @@
           {:else}
             <div class="space-y-4">
               {#if editingSpeakers}
-                <div class="hidden sm:grid grid-cols-4 gap-3 text-xs text-gray-500 font-medium px-1">
+                <div class={`hidden sm:grid ${directSpeakerAssignment ? 'grid-cols-3' : 'grid-cols-4'} gap-3 text-xs text-gray-500 font-medium px-1`}>
                   <span>Discord-User</span>
-                  <span>Transkript-Label</span>
+                  {#if !directSpeakerAssignment}<span>Transkript-Label</span>{/if}
                   <span>Charaktername</span>
                   <span>Spielername</span>
                 </div>
               {/if}
               {#each speakerEdits as edit, i}
-                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-center border-b border-surface-600 pb-4 last:border-0">
+                <div class={`grid grid-cols-1 ${directSpeakerAssignment ? 'sm:grid-cols-3' : 'sm:grid-cols-4'} gap-3 items-center border-b border-surface-600 pb-4 last:border-0`}>
                   <div class="text-sm text-gray-400 font-medium truncate">{edit.discordName}</div>
                   {#if editingSpeakers}
-                    <select bind:value={speakerEdits[i].diarizationLabel} aria-label={`Transkript-Label für ${edit.discordName}`}
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
-                      <option value="">— kein Label —</option>
-                      {#each diarizationLabels as dl}
-                        <option value={dl.label}>{dl.label}</option>
-                      {/each}
-                    </select>
+                    {#if !directSpeakerAssignment}
+                      <select bind:value={speakerEdits[i].diarizationLabel} aria-label={`Transkript-Label für ${edit.discordName}`}
+                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                        <option value="">— kein Label —</option>
+                        {#each diarizationLabels as dl}
+                          <option value={dl.label}>{dl.label}</option>
+                        {/each}
+                      </select>
+                    {/if}
                     <input bind:value={speakerEdits[i].characterName} aria-label={`Charaktername für ${edit.discordName}`}
                       class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
                       placeholder="Charaktername" />
@@ -672,7 +690,7 @@
                       class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
                       placeholder="Spielername" />
                   {:else}
-                    <span class="text-sm font-mono text-gray-400">{edit.diarizationLabel || '—'}</span>
+                    {#if !directSpeakerAssignment}<span class="text-sm font-mono text-gray-400">{edit.diarizationLabel || '—'}</span>{/if}
                     <span class="text-sm text-white">{edit.characterName || '—'}</span>
                     <span class="text-sm text-gray-500">{edit.playerName || '—'}</span>
                   {/if}

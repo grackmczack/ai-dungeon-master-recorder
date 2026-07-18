@@ -252,9 +252,8 @@ model SpeakerMap {
   discordName      String
   characterName    String?
   playerName       String?
-  // Verknüpfung zum anonymen Diarization-Label aus dem Transkript (z.B. "SPEAKER_00").
-  // WhisperX liefert nur anonyme Sprecher-Labels, keine echten Discord-Namen —
-  // der DM ordnet hier manuell zu, welches Label zu welchem echten Teilnehmer gehört.
+  // Legacy-Verknüpfung zu anonymen Provider-Labels älterer Transkripte.
+  // Neue Discord-Aufnahmen speichern direkt discordUserId im Transkript.
   diarizationLabel String?
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -269,6 +268,7 @@ model CampaignSettings {
   whisperProvider      String  @default("openai")
   whisperApiKey        String?
   whisperEndpoint      String?
+  // Legacy-Feld; bleibt migrationskompatibel, wird für Discord-Aufnahmen nicht mehr verwendet.
   huggingfaceToken     String?
   replicateApiKey      String?
   imageGenModel        String  @default("black-forest-labs/flux-schnell")

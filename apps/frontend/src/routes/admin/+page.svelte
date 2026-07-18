@@ -142,8 +142,7 @@
     return [
       available.whisper && 'Transkription',
       available.replicate && 'Bilder',
-      available.llm && 'Zusammenfassung',
-      available.huggingface && 'HuggingFace'
+      available.llm && 'Zusammenfassung'
     ].filter(Boolean).join(', ');
   }
 

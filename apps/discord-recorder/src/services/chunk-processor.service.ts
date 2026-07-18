@@ -2,12 +2,13 @@
  * ChunkProcessorService
  * Verwaltet Chunks einer Aufnahme-Session:
  * - Konvertiert WAV → MP3 per Chunk (downsampled 16kHz mono 64kbps)
- * - Beim letzten Chunk: enqueued Batch-Job mit allen MP3-Chunks
- * - Worker entscheidet ob concat oder per-chunk (abhängig vom Provider)
+ * - Entfernt die sehr große WAV-Datei nach erfolgreicher MP3-Konvertierung
+ * - Beim letzten Chunk: enqueued ein Batch-Job alle MP3-Chunks in numerischer Reihenfolge
  */
 import { convertWavToMp3 } from "./converter.service.js";
 import { transcriptionQueue } from "./queue.service.js";
 import { createSessionRecord, markSessionRecordingComplete } from "./database.service.js";
+import { promises as fs } from "node:fs";
 
 interface ChunkInfo {
   filename: string;
@@ -32,6 +33,7 @@ interface SessionMeta {
 
 /** Metadaten eines konvertierten Chunks für den Batch-Job */
 interface ChunkJobMeta {
+  index: number;
   filePath: string;
   filename: string;
   durationSeconds: number;
@@ -95,19 +97,45 @@ export class ChunkProcessorService {
     let durationSeconds = 0;
 
     try {
-      const converted = await convertWavToMp3(chunk.filePath);
+      let converted: Awaited<ReturnType<typeof convertWavToMp3>> | null = null;
+      let conversionError: unknown;
+      for (let attempt = 1; attempt <= 3 && !converted; attempt++) {
+        try {
+          converted = await convertWavToMp3(chunk.filePath);
+        } catch (error) {
+          conversionError = error;
+          await fs.unlink(chunk.filePath.replace(/\.wav$/i, ".mp3")).catch(() => undefined);
+          console.warn(
+            `[CHUNK-PROCESSOR] Conversion attempt ${attempt}/3 failed for chunk ${chunk.index}`
+          );
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+          }
+        }
+      }
+      if (!converted) throw conversionError ?? new Error("Audio conversion failed");
       mp3Path = converted.mp3Path;
       mp3Filename = converted.mp3Filename;
       durationSeconds = converted.durationSeconds;
       console.log(
         `[CHUNK-PROCESSOR] Chunk ${chunk.index} converted: ${mp3Filename} (${Math.round(durationSeconds)}s, 16kHz mono 64kbps)`
       );
+      // Die Sprecher-Zeitspur liegt separat als JSON vor. Nach erfolgreicher
+      // Komprimierung wird die mehrere hundert MB große WAV-Datei nicht mehr
+      // für Recovery benötigt; der MP3-Chunk bleibt für Verarbeitung/Playback.
+      await fs.unlink(chunk.filePath).catch((error) => {
+        console.warn(`[CHUNK-PROCESSOR] WAV cleanup failed for ${chunk.filePath}:`, error);
+      });
     } catch (e) {
       console.error(`[CHUNK-PROCESSOR] Chunk ${chunk.index} conversion failed:`, e);
+      // Eine unkomprimierte 30-Minuten-WAV ist für externe APIs ungeeignet.
+      // Nach drei lokalen Versuchen bleibt die WAV zur Diagnose/Recovery liegen.
+      throw e;
     }
 
     const chunks = this.pendingChunks.get(recordingKey) ?? [];
     chunks.push({
+      index: chunk.index,
       filePath: mp3Path,
       filename: mp3Filename,
       durationSeconds,
@@ -117,7 +145,7 @@ export class ChunkProcessorService {
 
     if (isLast) {
       // Session beendet → ALLE Chunks als Batch-Job enqueuen
-      const allChunks = [...chunks].sort((a, b) => a.filename.localeCompare(b.filename));
+      const allChunks = [...chunks].sort((a, b) => a.index - b.index);
       const totalDuration = allChunks.reduce((sum, c) => sum + c.durationSeconds, 0);
 
       console.log(
@@ -143,6 +171,7 @@ export class ChunkProcessorService {
         discordChannelId: meta.discordChannelId,
         // Batch-spezifische Felder
         batchChunks: allChunks.map((c) => ({
+          index: c.index,
           filePath: c.filePath,
           filename: c.filename,
           durationSeconds: c.durationSeconds,

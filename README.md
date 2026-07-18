@@ -14,15 +14,16 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 - `/kampagne verbinden|aktivieren|deaktivieren|status` — Kampagnen und feste Voice-/Summary-Channels pro Discord-Server verwalten
 - `/summary-channel set|status|clear` — Summary-Channel einer Kampagne verwalten
 - **Auto-Stop** wenn alle User den Channel verlassen (30s Karenzzeit)
-- **Chunked Recording** — alle 30 Minuten wird ein Part geschrieben und parallel transkribiert, während weiteraufgenommen wird. Kein Speicherproblem bei stundenlangen Sessions
-- Max. 4 Stunden Failsafe-Timer
+- **Chunked Recording** — alle 30 Minuten wird ein kompakter MP3-Part geschrieben; nach `/stop` werden die Parts nacheinander verarbeitet. Kein einzelner riesiger Upload bei stundenlangen Sessions
+- Standardmäßig max. 6 Stunden Failsafe-Timer (über `MAX_RECORDING_HOURS`, 1–8h, konfigurierbar)
 - Mandantenfähig: mehrere Discord-Server pro DM und mehrere Kampagnen pro Server
 
 ### Transkription
-- **Replicate WhisperX** (victor-upmeet/whisperx) mit Speaker-Diarization
+- **Replicate WhisperX** (victor-upmeet/whisperx)
 - **OpenAI Whisper** als Alternative
 - **Self-hosted** (OpenAI-kompatibler Endpoint)
-- Speaker-Trennung: `SPEAKER_00`, `SPEAKER_01` etc. → im Web-Panel Charakternamen zuweisbar
+- Automatische Sprecherzuordnung über Discord-Audioaktivität und Wortzeitstempel; kein HuggingFace-Token nötig
+- Legacy-Transkripte mit `SPEAKER_00`, `SPEAKER_01` etc. bleiben manuell zuordenbar
 - Chunks werden mit korrektem Zeit-Offset zusammengeführt
 
 ### LLM-Zusammenfassung
@@ -44,7 +45,7 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 - **Session-Detail** — 3 Tabs:
   - 📖 Summary (Chronik, NSCs, Quests, Beute, Orte, Offene Fäden, verlinkte MP3-Aufnahmen) — Titel manuell änderbar oder wird vom LLM automatisch mitgeneriert
   - 📝 Transkript (farbig nach Sprecher, mit Timestamps)
-  - 👤 Sprecher — Diarization-Label (`SPEAKER_00` etc.) mit Text-Ausschnitt aus dem Transkript zur Orientierung, Zuordnung zu Discord-User/Charaktername/Spielername
+  - 👤 Sprecher — automatisch verknüpfte Discord-User sowie editierbare Charakter- und Spielernamen; Legacy-Labels bleiben zuordenbar
 - **Live-Status-Widget** (zeigt ob gerade aufgenommen/transkribiert wird)
 - **Einstellungen** — API-Keys, Provider-Wahl, System-Prompt, Kampagnen-Kontext
 
@@ -287,7 +288,6 @@ REDIS_PORT=6379
 PUBLIC_BASE_URL=https://dnd-recorder.de
 ANTHROPIC_API_KEY=       # Fallback wenn kein Key in DB-Settings
 REPLICATE_API_KEY=       # Für WhisperX
-HUGGINGFACE_TOKEN=       # Für Speaker-Diarization (pyannote)
 DISCORD_TOKEN=           # Für Discord-Notifications
 ```
 
@@ -297,15 +297,6 @@ POSTGRES_DB=ai_dungeon_master_recorder
 POSTGRES_USER=ai_dungeon
 POSTGRES_PASSWORD=
 ```
-
-### HuggingFace — Speaker-Diarization freischalten
-
-Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptiert werden:
-- https://huggingface.co/pyannote/speaker-diarization-3.1
-- https://huggingface.co/pyannote/segmentation-3.0
-- https://huggingface.co/pyannote/speaker-diarization-community-1
-
----
 
 ## API-Endpunkte (Backend)
 
@@ -430,7 +421,7 @@ Deployment-Notizen steht in [`ROADMAP.md`](./ROADMAP.md). Kurzüberblick:
 - [x] Chunked Recording (30-Min-Parts)
 - [x] Auto-Stop wenn alle User weg sind
 - [x] BullMQ Job-Queue (Redis)
-- [x] Replicate WhisperX mit Speaker-Diarization
+- [x] Replicate WhisperX und OpenAI Whisper mit direkter Discord-Sprecherzuordnung
 - [x] Multi-Provider LLM (Anthropic/Gemini/OpenAI/SiliconFlow/Ollama)
 - [x] Web-Panel (Login, Dashboard, Sessions, Transcript, Summary)
 - [x] Live-Status-Widget
@@ -444,7 +435,7 @@ Deployment-Notizen steht in [`ROADMAP.md`](./ROADMAP.md). Kurzüberblick:
 - [x] Kampagnen-Hintergrundbild mit Parallax-Effekt (Upload + Replicate-Generierung, GM-only)
 - [x] Session-Titel manuell änderbar + automatisch vom LLM mitgeneriert
 - [x] MP3-Aufnahmen im Summary verlinkt
-- [x] Sprecher-Zuordnung mit Diarization-Label + Transkript-Ausschnitt (Zwischenschritt, siehe ROADMAP.md für den geplanten vollautomatischen Fix)
+- [x] Vollautomatische Sprecher-Zuordnung über Discord-Audioaktivität + Wortzeitstempel; manueller Legacy-Fallback
 - [x] Session-Bilder via Replicate (Header-Kachel mit Upload/Generate/Remove; automatischer Prompt aus Summary-Daten)
 - [x] Session-Seite zeigt Kampagnen-Hintergrundbild (Parallax-Fixed) für konsistenten Look
 - [x] Session-Paginierung (10 pro Kampagne, "Mehr laden"-Button)

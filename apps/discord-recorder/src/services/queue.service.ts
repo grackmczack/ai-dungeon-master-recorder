@@ -2,6 +2,7 @@ import { Queue } from "bullmq";
 import { Redis as IORedis } from "ioredis";
 
 export interface BatchChunkMeta {
+  index: number;
   filePath: string;
   filename: string;
   durationSeconds: number;
@@ -22,11 +23,11 @@ export interface TranscriptionJobData {
   // Interne Optionen für eine manuelle Summary-Neugenerierung.
   summaryOnly?: boolean;
   skipNotification?: boolean;
-  // Per-chunk recording (legacy/OpenAI fallback)
+  // Per-chunk recording
   chunkIndex?: number;
   isLastChunk?: boolean;
   totalChunks?: number;
-  // Batch mode: all chunks in one job (for Replicate/selfhosted concat)
+  // Batch mode: all compact chunks in one queue job; worker processes them sequentially.
   batchChunks?: BatchChunkMeta[];
 }
 
