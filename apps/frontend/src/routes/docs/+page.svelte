@@ -110,6 +110,7 @@
   <li>✅ Slash-Commands nutzen</li>
 </ul>
 <p>Nach dem Einladen als Server-Admin <code>/status</code> ausführen. Ist der Server noch nicht zugeordnet, erscheint ausschließlich für den Admin ein 15 Minuten gültiger Einmal-Link. Nach der Zuordnung zeigt das Web-Panel ein grünes Statuslicht und den erkannten Discord-Servernamen. Ein Account kann mehrere Server verbinden.</p>
+<p><strong>Beta-Schutz:</strong> Installieren und <code>/status</code> sind ohne Web-Login möglich, eine Aufnahme jedoch nicht. <code>/record</code> wird erst freigeschaltet, wenn der Server mit einem bestätigten, aktiven und vom Oberen Artificer freigegebenen GM-Konto verbunden ist. Wird die Freigabe entzogen oder das Konto gesperrt, blockiert das Backend bereits die nächste Session.</p>
 
 <h3>Bot-Befehle</h3>
 <div class="overflow-x-auto">
@@ -290,6 +291,9 @@
 
 <h3>Neue Beta-Accounts freigeben</h3>
 <p>Öffentlich registrierte Accounts erscheinen zunächst mit „E-Mail offen“. Nach dem Double-Opt-in wechselt der Status zu „Freigabe offen“. Erst „Für Beta freischalten“ erlaubt den Login und versendet automatisch die Aktivierungsmail. Dieser Freigabestatus ist unabhängig von der späteren Accountsperre.</p>
+
+<h3>Discord-Installationen überwachen</h3>
+<p>Der Tab „Server“ erfasst den Bot unabhängig von einer Web-Anmeldung. Bot-Status und Web-Zugriff werden getrennt angezeigt: „Nicht beansprucht“ kennzeichnet eine aktive Geisterinstallation, weitere Stati zeigen offene E-Mail-Bestätigung, Beta-Freigabe oder einen gesperrten Account. Nur „Bereit“ darf neue Aufnahmen anlegen.</p>
 
 <h3>E-Mail-Bestätigung bei neuen Accounts</h3>
 <p>Öffentlich registrierte Accounts erscheinen bis zum Double-Opt-in mit dem Status „E-Mail offen“. Der Bestätigungslink ist 24 Stunden gültig und nur einmal nutzbar. Vom Superadmin direkt angelegte oder bearbeitete Accounts gelten als administrativ bestätigt.</p>

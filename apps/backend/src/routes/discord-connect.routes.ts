@@ -138,7 +138,31 @@ export async function discordConnectRoutes(app: FastifyInstance) {
 
         if (!targetCampaignId) {
           const source = link.installation.bindings[0]?.campaign;
-          if (!source) throw new DiscordConnectError("NO_CAMPAIGN_FOR_SERVER", 409);
+          if (!source) {
+            const connected = await tx.campaign.create({
+              data: {
+                name:
+                  body.data.newCampaignName ??
+                  body.data.newGroupName ??
+                  link.installation.guildName,
+                settings: { create: {} },
+                memberships: { create: { userId: sub, role: "GM" } },
+                bindings: {
+                  create: {
+                    discordInstallationId: link.discordInstallationId,
+                    isActive: true,
+                    isDefault: true
+                  }
+                }
+              }
+            });
+            return {
+              campaignId: connected.id,
+              campaignName: connected.name,
+              guildName: link.installation.guildName,
+              mergedSessions
+            };
+          }
           const connected = await tx.campaign.update({
             where: { id: source.id },
             data: {
@@ -172,6 +196,16 @@ export async function discordConnectRoutes(app: FastifyInstance) {
           where: { discordInstallationId: link.discordInstallationId },
           data: { campaignId: target.id }
         });
+        if (link.installation.bindings.length === 0) {
+          await tx.campaignDiscordBinding.create({
+            data: {
+              discordInstallationId: link.discordInstallationId,
+              campaignId: target.id,
+              isActive: true,
+              isDefault: true
+            }
+          });
+        }
 
         const sourceSettings = link.installation.bindings
           .map((binding) => binding.campaign.settings)

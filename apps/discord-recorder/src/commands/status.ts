@@ -6,8 +6,11 @@ import {
 } from "discord.js";
 import type { DiscordCommand } from "../services/discord.service.js";
 import type { VoiceRecorderService } from "../services/voice-recorder.service.js";
-import { getDiscordConnectLink } from "../services/database.service.js";
-import { getGuildCampaigns } from "../services/database.service.js";
+import {
+  discordAccessBlockedMessage,
+  getDiscordConnectLink,
+  getGuildCampaigns
+} from "../services/database.service.js";
 
 export function createStatusCommand(voiceRecorderService: VoiceRecorderService): DiscordCommand {
   return {
@@ -40,6 +43,13 @@ export function createStatusCommand(voiceRecorderService: VoiceRecorderService):
       const lines = [
         "**DnD Recorder** — Online",
         `📡 Latenz: ${interaction.client.ws.ping} ms`,
+        `🔐 Freigabe: ${
+          campaignConfig?.accessStatus === "READY"
+            ? "🟢 einsatzbereit"
+            : campaignConfig
+              ? `🟡 ${discordAccessBlockedMessage(campaignConfig.accessStatus)}`
+              : "Status konnte nicht geladen werden"
+        }`,
         `🔴 Aufnahme: ${recording ? `läuft in <#${recording.voiceChannelId}>` : "inaktiv"}`,
         `🎙️ Verarbeitung: ${waitingForGuild} wartend, ${activeForGuild} aktiv`
       ];
@@ -67,6 +77,8 @@ export function createStatusCommand(voiceRecorderService: VoiceRecorderService):
               `\n🔗 **Web-Panel noch nicht verbunden:** [Jetzt sicher verbinden](${link.connectUrl})`,
               "Der Link ist 15 Minuten gültig und nur für dich sichtbar."
             );
+          } else if (link.accessStatus !== "READY") {
+            lines.push(`\n🛡️ ${discordAccessBlockedMessage(link.accessStatus)}`);
           }
         } catch (error) {
           console.error(`[STATUS] Web-Verbindungslink für ${guildId} fehlgeschlagen`, error);

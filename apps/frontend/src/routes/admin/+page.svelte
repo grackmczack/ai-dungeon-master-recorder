@@ -9,6 +9,13 @@
   import { confirmAction } from '$lib/confirm.js';
   import type { User } from '$lib/types.js';
 
+  type InstallationAccessStatus =
+    | 'READY'
+    | 'UNCLAIMED'
+    | 'EMAIL_PENDING'
+    | 'APPROVAL_PENDING'
+    | 'ACCOUNT_BLOCKED';
+
   let users: any[] = $state([]);
   let grants: any[] = $state([]);
   let overview: any[] = $state([]);
@@ -19,6 +26,11 @@
   let currentUser: User | null = $state(null);
   const pendingApprovals = $derived(
     users.filter((user) => user.isActive && user.emailVerifiedAt && !user.approvedAt).length
+  );
+  const ghostInstallations = $derived(
+    installations.filter(
+      (installation) => installation.isActive && installation.accessStatus === 'UNCLAIMED'
+    )
   );
 
   // Create DM form
@@ -183,6 +195,36 @@
       if (messages.length) return messages.join(' ');
     }
     return fallback;
+  }
+
+  function accessStatusLabel(status: InstallationAccessStatus): string {
+    switch (status) {
+      case 'READY':
+        return '● Bereit';
+      case 'UNCLAIMED':
+        return '◌ Nicht beansprucht';
+      case 'EMAIL_PENDING':
+        return '✉ E-Mail offen';
+      case 'APPROVAL_PENDING':
+        return '⌛ Freigabe offen';
+      case 'ACCOUNT_BLOCKED':
+        return '○ Account gesperrt';
+    }
+  }
+
+  function accessStatusClass(status: InstallationAccessStatus): string {
+    switch (status) {
+      case 'READY':
+        return 'bg-green-500/10 text-green-400';
+      case 'UNCLAIMED':
+        return 'bg-amber-500/10 text-amber-300';
+      case 'EMAIL_PENDING':
+        return 'bg-sky-500/10 text-sky-300';
+      case 'APPROVAL_PENDING':
+        return 'bg-violet-500/10 text-violet-300';
+      case 'ACCOUNT_BLOCKED':
+        return 'bg-red-500/10 text-red-400';
+    }
   }
 </script>
 
@@ -420,55 +462,71 @@
       </div>
 
     {:else if activeTab === 'installations'}
-      <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-x-auto">
-        <table class="w-full min-w-[920px] text-sm">
-          <thead>
-            <tr class="border-b border-surface-700">
-              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Discord-Server</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Bot-Status</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Verknüpfte Kampagnen</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Kanäle</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Zuletzt gesehen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each installations as installation (installation.id)}
-              <tr class="border-b border-surface-700 last:border-0 align-top">
-                <td class="px-5 py-4">
-                  <p class="font-medium text-white">{installation.guildName}</p>
-                  <p class="text-xs text-gray-500 font-mono mt-1">{installation.discordGuildId}</p>
-                </td>
-                <td class="px-5 py-4">
-                  <span class="text-xs px-2 py-1 rounded-full {installation.isActive ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}">
-                    {installation.isActive ? '● Installiert' : '○ Entfernt'}
-                  </span>
-                  <p class="text-xs text-gray-600 mt-2">Seit {formatDateTime(installation.installedAt)}</p>
-                </td>
-                <td class="px-5 py-4">
-                  {#if installation.campaigns?.length}
-                    <div class="space-y-1">
-                      {#each installation.campaigns as campaign}
-                        <a href="/kampagnen/{campaign.id}" class="block text-brand-400 hover:text-brand-300">{campaign.name} <span class="text-xs text-gray-600">· {campaign.memberCount} Mitglieder</span></a>
-                      {/each}
-                    </div>
-                  {:else}
-                    <span class="text-gray-600 italic">Noch nicht verknüpft</span>
-                  {/if}
-                </td>
-                <td class="px-5 py-4 font-mono text-xs text-gray-400">
-                  {#if installation.campaigns?.length}
-                    {#each installation.campaigns as campaign}
-                      <p>{campaign.voiceChannelName ?? campaign.voiceChannelId ?? 'Voice offen'} → {campaign.summaryChannelName ?? campaign.summaryChannelId ?? 'Record-Kanal'}</p>
-                    {/each}
-                  {:else}Nicht gesetzt{/if}
-                </td>
-                <td class="px-5 py-4 text-gray-400">{formatDateTime(installation.lastSeenAt)}</td>
+      <div class="space-y-4">
+        {#if ghostInstallations.length > 0}
+          <div role="status" class="rounded-xl border border-amber-500/30 bg-amber-500/[.07] p-4">
+            <p class="font-semibold text-amber-200">👻 {ghostInstallations.length} {ghostInstallations.length === 1 ? 'aktive Installation ist' : 'aktive Installationen sind'} noch nicht beansprucht</p>
+            <p class="mt-1 text-sm text-gray-400">Der Bot ist dort installiert, aber noch mit keinem GM-Webkonto verknüpft. Der Einmal-Link aus <code>/status</code> oder <code>/record</code> schließt die Zuordnung ab.</p>
+          </div>
+        {/if}
+
+        <div class="bg-surface-800 rounded-2xl border border-surface-600 overflow-x-auto">
+          <table class="w-full min-w-[1100px] text-sm">
+            <thead>
+              <tr class="border-b border-surface-700">
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Discord-Server</th>
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Bot-Status</th>
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Web-Zugriff</th>
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Verknüpfte Kampagnen</th>
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Kanäle</th>
+                <th class="text-left px-5 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Zuletzt gesehen</th>
               </tr>
-            {:else}
-              <tr><td colspan="5" class="px-5 py-12 text-center text-gray-600">Noch keine Discord-Installationen erfasst</td></tr>
-            {/each}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {#each installations as installation (installation.id)}
+                <tr class="border-b border-surface-700 last:border-0 align-top">
+                  <td class="px-5 py-4">
+                    <p class="font-medium text-white">{installation.guildName}</p>
+                    <p class="text-xs text-gray-500 font-mono mt-1">{installation.discordGuildId}</p>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span class="text-xs px-2 py-1 rounded-full {installation.isActive ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}">
+                      {installation.isActive ? '● Installiert' : '○ Entfernt'}
+                    </span>
+                    <p class="text-xs text-gray-600 mt-2">Seit {formatDateTime(installation.installedAt)}</p>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span class="text-xs px-2 py-1 rounded-full {accessStatusClass(installation.accessStatus)}">
+                      {accessStatusLabel(installation.accessStatus)}
+                    </span>
+                    <p class="text-xs text-gray-600 mt-2">{installation.linkedAccountCount} {installation.linkedAccountCount === 1 ? 'Konto' : 'Konten'} verknüpft</p>
+                  </td>
+                  <td class="px-5 py-4">
+                    {#if installation.linkedAccountCount > 0 && installation.campaigns?.length}
+                      <div class="space-y-1">
+                        {#each installation.campaigns as campaign}
+                          <a href="/kampagnen/{campaign.id}" class="block text-brand-400 hover:text-brand-300">{campaign.name} <span class="text-xs text-gray-600">· {campaign.memberCount} Mitglieder</span></a>
+                        {/each}
+                      </div>
+                    {:else}
+                      <span class="text-gray-600 italic">Noch nicht verknüpft</span>
+                    {/if}
+                  </td>
+                  <td class="px-5 py-4 font-mono text-xs text-gray-400">
+                    {#if installation.linkedAccountCount > 0 && installation.campaigns?.length}
+                      {#each installation.campaigns as campaign}
+                        <p>{campaign.voiceChannelName ?? campaign.voiceChannelId ?? 'Voice offen'} → {campaign.summaryChannelName ?? campaign.summaryChannelId ?? 'Record-Kanal'}</p>
+                      {/each}
+                    {:else}Nicht gesetzt{/if}
+                  </td>
+                  <td class="px-5 py-4 text-gray-400">{formatDateTime(installation.lastSeenAt)}</td>
+                </tr>
+              {:else}
+                <tr><td colspan="6" class="px-5 py-12 text-center text-gray-600">Noch keine Discord-Installationen erfasst</td></tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       </div>
 
     {:else if activeTab === 'overview'}

@@ -9,6 +9,7 @@ import {
 import type { DiscordCommand } from "../services/discord.service.js";
 import {
   configureCampaignBinding,
+  discordAccessBlockedMessage,
   getGuildCampaigns,
   type GuildCampaignBinding
 } from "../services/database.service.js";
@@ -100,7 +101,15 @@ export const summaryChannelCommand: DiscordCommand = {
       return;
     }
 
-    const { campaigns } = await getGuildCampaigns(interaction.guildId);
+    const configured = await getGuildCampaigns(interaction.guildId);
+    if (configured.accessStatus !== "READY") {
+      await interaction.reply({
+        content: `🔒 ${discordAccessBlockedMessage(configured.accessStatus)} Nutze \`/status\` für die nächsten Schritte.`,
+        ephemeral: true
+      });
+      return;
+    }
+    const { campaigns } = configured;
     const selectedId = interaction.options.getString("kampagne");
     const member = interaction.member instanceof GuildMember ? interaction.member : null;
     const binding = resolveBinding(campaigns, selectedId, member?.voice.channelId ?? null);

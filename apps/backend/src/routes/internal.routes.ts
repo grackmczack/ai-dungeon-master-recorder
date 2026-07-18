@@ -13,6 +13,10 @@ import {
   discordLinkExpiresAt,
   hashDiscordLinkToken
 } from "../lib/discord-link.js";
+import {
+  authorizedGmMembershipWhere,
+  discordInstallationAccessStatus
+} from "../lib/discord-installation-access.js";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN;
 if (process.env.NODE_ENV === "production" && !INTERNAL_TOKEN) {
@@ -101,25 +105,29 @@ async function syncInstallation(guildId: string, guildName: string) {
   });
 }
 
-async function createDefaultCampaign(installation: { id: string; guildName: string }) {
-  return prisma.campaign.create({
-    data: {
-      name: installation.guildName,
-      description: "Automatisch vom Discord-Bot angelegt — bitte im Web-Panel ergänzen.",
-      settings: { create: {} },
-      bindings: {
-        create: {
-          discordInstallationId: installation.id,
+async function getInstallationAccessStatus(installationId: string) {
+  const memberships = await prisma.campaignMembership.findMany({
+    where: {
+      role: "GM",
+      leftAt: null,
+      userId: { not: null },
+      campaign: { bindings: { some: { discordInstallationId: installationId } } }
+    },
+    select: {
+      role: true,
+      leftAt: true,
+      user: {
+        select: {
+          role: true,
           isActive: true,
-          isDefault: true
+          emailVerifiedAt: true,
+          approvedAt: true
         }
       }
-    },
-    include: { bindings: true }
+    }
   });
+  return discordInstallationAccessStatus(memberships);
 }
-
-type ResolvedBinding = Awaited<ReturnType<typeof resolveBinding>>;
 
 async function resolveBinding(input: {
   installationId: string;
@@ -131,7 +139,10 @@ async function resolveBinding(input: {
     where: {
       discordInstallationId: input.installationId,
       isActive: true,
-      campaign: { isActive: true }
+      campaign: {
+        isActive: true,
+        memberships: { some: authorizedGmMembershipWhere }
+      }
     },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
     include: { campaign: true }
@@ -356,26 +367,22 @@ export async function internalRoutes(app: FastifyInstance) {
     const body = DiscordConnectLinkSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: "INVALID_LINK_REQUEST" });
     const installation = await syncInstallation(body.data.guildId, body.data.guildName);
-    let bindingCount = await prisma.campaignDiscordBinding.count({
+    const bindingCount = await prisma.campaignDiscordBinding.count({
       where: { discordInstallationId: installation.id }
     });
-    if (bindingCount === 0) {
-      await createDefaultCampaign(installation);
-      bindingCount = 1;
-    }
 
-    const activeWebMemberships = await prisma.campaignMembership.count({
-      where: {
-        userId: { not: null },
-        leftAt: null,
-        campaign: { bindings: { some: { discordInstallationId: installation.id } } }
-      }
-    });
-    if (activeWebMemberships > 0) {
+    const accessStatus = await getInstallationAccessStatus(installation.id);
+    if (accessStatus !== "UNCLAIMED") {
       await prisma.discordLinkToken.deleteMany({
         where: { discordInstallationId: installation.id }
       });
-      return reply.send({ linked: true, connectUrl: null, expiresAt: null, bindingCount });
+      return reply.send({
+        linked: true,
+        accessStatus,
+        connectUrl: null,
+        expiresAt: null,
+        bindingCount
+      });
     }
 
     const token = createDiscordLinkToken();
@@ -391,6 +398,7 @@ export async function internalRoutes(app: FastifyInstance) {
     });
     return reply.send({
       linked: false,
+      accessStatus,
       connectUrl: buildDiscordConnectUrl(process.env.APP_URL ?? "http://localhost:5173", token),
       expiresAt,
       bindingCount
@@ -405,6 +413,12 @@ export async function internalRoutes(app: FastifyInstance) {
       where: { discordGuildId: params.data.guildId },
       include: {
         bindings: {
+          where: {
+            campaign: {
+              isActive: true,
+              memberships: { some: authorizedGmMembershipWhere }
+            }
+          },
           include: { campaign: { select: { id: true, name: true, isActive: true } } },
           orderBy: [{ isActive: "desc" }, { isDefault: "desc" }, { createdAt: "asc" }]
         }
@@ -413,6 +427,7 @@ export async function internalRoutes(app: FastifyInstance) {
     return reply.send({
       guildId: params.data.guildId,
       guildName: installation?.guildName ?? params.data.guildId,
+      accessStatus: installation ? await getInstallationAccessStatus(installation.id) : "UNCLAIMED",
       campaigns: installation?.bindings.map(bindingDto) ?? []
     });
   });
@@ -429,7 +444,7 @@ export async function internalRoutes(app: FastifyInstance) {
       where: {
         id: body.data.campaignId,
         isActive: true,
-        memberships: { some: { role: "GM", leftAt: null } }
+        memberships: { some: authorizedGmMembershipWhere }
       }
     });
     if (!campaign) return reply.status(404).send({ error: "CAMPAIGN_NOT_AVAILABLE" });
@@ -494,7 +509,8 @@ export async function internalRoutes(app: FastifyInstance) {
     const binding = await prisma.campaignDiscordBinding.findFirst({
       where: {
         id: params.data.bindingId,
-        installation: { discordGuildId: params.data.guildId }
+        installation: { discordGuildId: params.data.guildId },
+        campaign: { memberships: { some: authorizedGmMembershipWhere } }
       },
       include: { campaign: { select: { name: true } } }
     });
@@ -529,26 +545,22 @@ export async function internalRoutes(app: FastifyInstance) {
 
     const guildName = body.guildName ?? `Discord Server ${body.guildId}`;
     const installation = await syncInstallation(body.guildId, guildName);
-    let resolution: ResolvedBinding;
+    const accessStatus = await getInstallationAccessStatus(installation.id);
+    if (accessStatus !== "READY") {
+      return reply.status(403).send({ error: "BOT_ACCESS_NOT_APPROVED", accessStatus });
+    }
     const existingBindingCount = await prisma.campaignDiscordBinding.count({
       where: { discordInstallationId: installation.id }
     });
     if (existingBindingCount === 0) {
-      const campaign = await createDefaultCampaign(installation);
-      resolution = await resolveBinding({
-        installationId: installation.id,
-        campaignId: campaign.id,
-        voiceChannelId: body.voiceChannelId,
-        voiceChannelName: body.voiceChannelName
-      });
-    } else {
-      resolution = await resolveBinding({
-        installationId: installation.id,
-        campaignId: body.campaignId,
-        voiceChannelId: body.voiceChannelId,
-        voiceChannelName: body.voiceChannelName
-      });
+      return reply.status(409).send({ error: "CAMPAIGN_SELECTION_REQUIRED", campaigns: [] });
     }
+    const resolution = await resolveBinding({
+      installationId: installation.id,
+      campaignId: body.campaignId,
+      voiceChannelId: body.voiceChannelId,
+      voiceChannelName: body.voiceChannelName
+    });
     if (!("binding" in resolution) || !resolution.binding) {
       return reply.status(409).send({
         error: resolution.error,

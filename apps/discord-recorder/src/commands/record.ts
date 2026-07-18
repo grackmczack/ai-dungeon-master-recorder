@@ -12,6 +12,7 @@ import { makeRecordingKey } from "../services/voice-recorder.service.js";
 import type { ChunkProcessorService } from "../services/chunk-processor.service.js";
 import {
   BackendRequestError,
+  discordAccessBlockedMessage,
   getDiscordConnectLink,
   getGuildCampaigns
 } from "../services/database.service.js";
@@ -75,6 +76,31 @@ export function createRecordCommand(
 
       try {
         const configured = await getGuildCampaigns(guildId);
+        if (configured.accessStatus !== "READY") {
+          const lines = [
+            `🔒 **Aufnahme noch nicht freigeschaltet**`,
+            discordAccessBlockedMessage(configured.accessStatus)
+          ];
+          if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            try {
+              const link = await getDiscordConnectLink(guildId, interaction.guild.name);
+              if (link.connectUrl) {
+                lines.push(
+                  `[Server jetzt mit dem Web-Panel verbinden](${link.connectUrl})`,
+                  "Der Link ist 15 Minuten gültig und nur für dich sichtbar. Anschließend muss das Konto für die Beta freigegeben sein."
+                );
+              }
+            } catch (error) {
+              console.error(`[RECORD] Web-Verbindungslink für ${guildId} fehlgeschlagen`, error);
+            }
+          } else if (configured.accessStatus === "UNCLAIMED") {
+            lines.push(
+              "Bitte eine Person mit **Server verwalten** bitten, `/status` aufzurufen und den Server zu verbinden."
+            );
+          }
+          await interaction.editReply(lines.join("\n"));
+          return;
+        }
         const activeBindings = configured.campaigns.filter((binding) => binding.isActive);
         const exactChannelBinding = activeBindings.find(
           (binding) => binding.voiceChannelId === voiceChannel.id
@@ -186,6 +212,12 @@ export function createRecordCommand(
       } catch (error) {
         chunkProcessor.cleanup(recordingKey);
         if (error instanceof BackendRequestError) {
+          if (error.errorCode === "BOT_ACCESS_NOT_APPROVED") {
+            await interaction.editReply(
+              "🔒 Die Freigabe des verbundenen DnD-Recorder-Kontos fehlt oder wurde entzogen. Es wurde keine Session angelegt."
+            );
+            return;
+          }
           if (error.errorCode === "CAMPAIGN_SELECTION_REQUIRED") {
             await interaction.editReply(
               "Mehrere Kampagnen kommen infrage. Bitte wähle eine Kampagne bei `/record`."

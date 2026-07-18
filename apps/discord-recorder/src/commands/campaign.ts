@@ -10,6 +10,7 @@ import {
 import type { DiscordCommand } from "../services/discord.service.js";
 import {
   configureCampaignBinding,
+  discordAccessBlockedMessage,
   getGuildCampaigns,
   setCampaignBindingState
 } from "../services/database.service.js";
@@ -124,6 +125,14 @@ export const campaignCommand: DiscordCommand = {
 
     const subcommand = interaction.options.getSubcommand();
     const configured = await getGuildCampaigns(interaction.guildId);
+
+    if (configured.accessStatus !== "READY") {
+      await interaction.reply({
+        content: `🔒 ${discordAccessBlockedMessage(configured.accessStatus)} Nutze \`/status\` für die nächsten Schritte.`,
+        ephemeral: true
+      });
+      return;
+    }
 
     if (subcommand === "status") {
       const lines = configured.campaigns.map(

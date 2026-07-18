@@ -35,9 +35,32 @@ export interface GuildCampaignBinding {
   isDefault: boolean;
 }
 
+export type DiscordInstallationAccessStatus =
+  | "READY"
+  | "UNCLAIMED"
+  | "EMAIL_PENDING"
+  | "APPROVAL_PENDING"
+  | "ACCOUNT_BLOCKED";
+
+export function discordAccessBlockedMessage(status: DiscordInstallationAccessStatus): string {
+  switch (status) {
+    case "UNCLAIMED":
+      return "Dieser Discord-Server ist noch nicht mit einem DnD-Recorder-Konto verbunden.";
+    case "EMAIL_PENDING":
+      return "Die E-Mail-Adresse des verbundenen DnD-Recorder-Kontos ist noch nicht bestätigt.";
+    case "APPROVAL_PENDING":
+      return "Das verbundene DnD-Recorder-Konto wartet noch auf die Freigabe durch den Oberen Artificer.";
+    case "ACCOUNT_BLOCKED":
+      return "Das verbundene DnD-Recorder-Konto ist derzeit gesperrt.";
+    case "READY":
+      return "DnD Recorder ist freigeschaltet.";
+  }
+}
+
 export interface GuildCampaigns {
   guildId: string;
   guildName: string;
+  accessStatus: DiscordInstallationAccessStatus;
   campaigns: GuildCampaignBinding[];
 }
 
@@ -199,6 +222,7 @@ export async function markDiscordInstallationRemoved(guildId: string): Promise<v
 
 export interface DiscordConnectLink {
   linked: boolean;
+  accessStatus: DiscordInstallationAccessStatus;
   connectUrl: string | null;
   expiresAt: string | null;
   bindingCount?: number;

@@ -6,6 +6,7 @@ import { getAdminKeyProfileForSuperAdmin } from "../lib/admin-api-keys.js";
 import { buildUserDeletionPlan, removeUserFiles } from "../lib/user-deletion.js";
 import { buildLoginUrl } from "../lib/email-verification.js";
 import { sendAccountActivatedEmail } from "../lib/mailer.js";
+import { discordInstallationAccessStatus } from "../lib/discord-installation-access.js";
 
 const CreateDMInput = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -364,7 +365,27 @@ export async function adminRoutes(app: FastifyInstance) {
         bindings: {
           include: {
             campaign: {
-              select: { id: true, name: true, _count: { select: { memberships: true } } }
+              select: {
+                id: true,
+                name: true,
+                _count: { select: { memberships: true } },
+                memberships: {
+                  where: { role: "GM", leftAt: null, userId: { not: null } },
+                  select: {
+                    role: true,
+                    leftAt: true,
+                    user: {
+                      select: {
+                        id: true,
+                        role: true,
+                        isActive: true,
+                        emailVerifiedAt: true,
+                        approvedAt: true
+                      }
+                    }
+                  }
+                }
+              }
             }
           },
           orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }]
@@ -374,6 +395,13 @@ export async function adminRoutes(app: FastifyInstance) {
 
     return reply.send(
       installations.map((installation) => {
+        const gmMemberships = installation.bindings.flatMap(
+          (binding) => binding.campaign.memberships
+        );
+        const linkedAccountIds = new Set(
+          gmMemberships.flatMap((membership) => (membership.user ? [membership.user.id] : []))
+        );
+
         return {
           id: installation.id,
           discordGuildId: installation.discordGuildId,
@@ -382,18 +410,22 @@ export async function adminRoutes(app: FastifyInstance) {
           installedAt: installation.installedAt,
           removedAt: installation.removedAt,
           lastSeenAt: installation.lastSeenAt,
-          campaigns: installation.bindings.map((binding) => ({
-            bindingId: binding.id,
-            id: binding.campaign.id,
-            name: binding.campaign.name,
-            memberCount: binding.campaign._count.memberships,
-            voiceChannelId: binding.voiceChannelId,
-            voiceChannelName: binding.voiceChannelName,
-            summaryChannelId: binding.summaryChannelId,
-            summaryChannelName: binding.summaryChannelName,
-            isActive: binding.isActive,
-            isDefault: binding.isDefault
-          }))
+          accessStatus: discordInstallationAccessStatus(gmMemberships),
+          linkedAccountCount: linkedAccountIds.size,
+          campaigns: installation.bindings
+            .filter((binding) => binding.campaign.memberships.some((membership) => membership.user))
+            .map((binding) => ({
+              bindingId: binding.id,
+              id: binding.campaign.id,
+              name: binding.campaign.name,
+              memberCount: binding.campaign._count.memberships,
+              voiceChannelId: binding.voiceChannelId,
+              voiceChannelName: binding.voiceChannelName,
+              summaryChannelId: binding.summaryChannelId,
+              summaryChannelName: binding.summaryChannelName,
+              isActive: binding.isActive,
+              isDefault: binding.isDefault
+            }))
         };
       })
     );

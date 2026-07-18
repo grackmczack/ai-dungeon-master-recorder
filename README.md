@@ -367,6 +367,7 @@ Für Speaker-Trennung müssen folgende Modelle auf HuggingFace einmalig akzeptie
 | POST | `/admin/users/:id/grant-keys` | Admin-API-Keys für DM freigeben |
 | DELETE | `/admin/users/:id/grant-keys` | Key-Grant entziehen |
 | GET | `/admin/overview` | DM-Übersicht mit Kampagnen und Discord-Bindings |
+| GET | `/admin/installations` | Discord-Installationen mit getrenntem Bot- und Web-Zugriffsstatus |
 
 ### Multi-User & Admin-System
 - **SUPER_ADMIN** verwaltet alle DMs, gibt öffentlich registrierte Accounts während der Beta nach bestätigter E-Mail manuell frei und kann Accounts später sperren, reaktivieren oder endgültig löschen. Eine Sperre widerruft sofort alle Sessions, lässt die Daten aber bestehen.
