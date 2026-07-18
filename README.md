@@ -67,7 +67,7 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 - Mailhosts dürfen bei Cloudflare nicht als Proxy betrieben werden; nur der Webhost wird proxied.
 - Ausgehende Transaktionsmails werden über die verifizierte Mailgun-Domain `dnd-recorder.de` versendet. Der bestehende Plesk-Mailserver bleibt ausschließlich für eingehende Nachrichten zuständig; die von Mailgun vorgeschlagenen MX-Einträge dürfen deshalb nicht übernommen werden.
 - Der SPF-Eintrag muss Plesk und Mailgun in genau einem TXT-Record autorisieren. Mailgun-DKIM verwendet einen eigenen Selector und kann parallel zu den Plesk-DKIM-Selectoren bestehen.
-- PostgreSQL und Redis verwenden explizite Docker-Volume-Namen. Dadurch bleiben die Daten beim Wechsel des Plesk-Verzeichnisses erhalten; `docker compose down -v` darf in Produktion trotzdem niemals verwendet werden.
+- Compose-Projekt, Netzwerk und persistente Volumes tragen explizite DnD-Recorder-Namen (`dnd-recorder`, `dnd_recorder_network`, `dnd_recorder_postgres_data`, `dnd_recorder_redis_data`). Dadurch bleiben sie von anderen Anwendungen getrennt und beim Wechsel des Plesk-Verzeichnisses stabil; `docker compose down -v` darf in Produktion trotzdem niemals verwendet werden.
 
 ---
 

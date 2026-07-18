@@ -1,3 +1,5 @@
+name: dnd-recorder
+
 services:
   discord-recorder:
     build:
@@ -111,13 +113,14 @@ services:
       - dnd-network
 
 volumes:
-  # Stable names keep production data attached when the Compose working
-  # directory or Plesk subscription changes.
+  # Project-specific stable names keep production data attached when the
+  # Compose working directory or Plesk subscription changes.
   postgres_data:
-    name: app_postgres_data
+    name: dnd_recorder_postgres_data
   redis_data:
-    name: app_redis_data
+    name: dnd_recorder_redis_data
 
 networks:
   dnd-network:
+    name: dnd_recorder_network
     driver: bridge
