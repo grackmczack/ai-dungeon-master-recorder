@@ -219,6 +219,10 @@ Gruppe→Kampagne-Hülle verlustfrei in direkte Kampagnen um. Bei einer bestehen
 Baseline als angewendet und spielt danach die echte Migration ein. Vor Produktiv-Deployments
 sollte trotzdem ein Datenbank-Backup erstellt werden.
 
+Eine anschließende Datenmigration markiert ausschließlich nicht-terminale Sessions als
+`FAILED`, die seit mehr als 24 Stunden unverändert sind. Dadurch blockieren verwaiste Alt-Jobs
+keine Löschvorgänge; laufende Aufnahmen und aktuelle Queue-Jobs bleiben unberührt.
+
 **Nach dem ersten Deployment der Multi-User-Features:**
 Der erste existierende User muss manuell zum SUPER_ADMIN befördert werden:
 ```bash
