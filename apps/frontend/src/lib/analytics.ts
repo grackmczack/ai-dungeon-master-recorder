@@ -99,6 +99,8 @@ const WEB_CONTAINER_ID =
   (import.meta.env.VITE_GTM_CONTAINER_ID as string | undefined)?.trim() ?? "";
 const SERVER_CONTAINER_URL =
   (import.meta.env.VITE_GTM_SERVER_URL as string | undefined)?.trim().replace(/\/$/, "") ?? "";
+const TAG_SERVING_PATH =
+  (import.meta.env.VITE_GTM_SERVING_PATH as string | undefined)?.trim().replace(/\/$/, "") ?? "";
 const SCRIPT_ID = "dnd-recorder-gtm";
 const ANALYTICS_IDENTITY_KEY = "dnd_analytics_identity";
 const ANALYTICS_REVOCATION_KEY = "dnd_analytics_revocation_pending";
@@ -178,7 +180,12 @@ function gtag(...args: unknown[]) {
 
 function hasValidConfiguration(): boolean {
   if (!browser) return false;
-  return isSafeTrackingConfiguration(WEB_CONTAINER_ID, SERVER_CONTAINER_URL, import.meta.env.DEV);
+  return isSafeTrackingConfiguration(
+    WEB_CONTAINER_ID,
+    SERVER_CONTAINER_URL,
+    TAG_SERVING_PATH,
+    import.meta.env.DEV
+  );
 }
 
 function setDefaultConsent() {
@@ -242,7 +249,7 @@ export async function loadTagManager(): Promise<boolean> {
     const script = document.createElement("script");
     script.id = SCRIPT_ID;
     script.async = true;
-    script.src = `${SERVER_CONTAINER_URL}/gtm.js?id=${encodeURIComponent(WEB_CONTAINER_ID)}`;
+    script.src = `${SERVER_CONTAINER_URL}${TAG_SERVING_PATH}/`;
     script.addEventListener("load", () => resolve(true), { once: true });
     script.addEventListener(
       "error",

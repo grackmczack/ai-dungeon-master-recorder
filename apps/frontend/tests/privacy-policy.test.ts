@@ -47,18 +47,33 @@ test("removes secret URL parts and normalizes object identifiers", () => {
   assert.equal(pageTypeForPath("/impressum"), "legal");
 });
 
-test("requires a valid web container ID and HTTPS tracking endpoint", () => {
+test("requires a valid web container ID, first-party endpoint and tag serving path", () => {
   assert.equal(
-    isSafeTrackingConfiguration("GTM-ABC123", "https://analytics.dnd-recorder.de"),
+    isSafeTrackingConfiguration("GTM-ABC123", "https://analytics.dnd-recorder.de", "/aB12cd34"),
     true
   );
-  assert.equal(isSafeTrackingConfiguration("G-ABC123", "https://analytics.dnd-recorder.de"), false);
   assert.equal(
-    isSafeTrackingConfiguration("GTM-ABC123", "http://analytics.dnd-recorder.de"),
+    isSafeTrackingConfiguration("G-ABC123", "https://analytics.dnd-recorder.de", "/aB12cd34"),
     false
   );
   assert.equal(
-    isSafeTrackingConfiguration("GTM-ABC123", "https://analytics.dnd-recorder.de.evil.test"),
+    isSafeTrackingConfiguration("GTM-ABC123", "https://analytics.dnd-recorder.de", "/bad/path"),
+    false
+  );
+  assert.equal(
+    isSafeTrackingConfiguration("GTM-ABC123", "http://analytics.dnd-recorder.de", "/aB12cd34"),
+    false
+  );
+  assert.equal(
+    isSafeTrackingConfiguration(
+      "GTM-ABC123",
+      "https://analytics.dnd-recorder.de.evil.test",
+      "/aB12cd34"
+    ),
+    false
+  );
+  assert.equal(
+    isSafeTrackingConfiguration("GTM-ABC123", "http://localhost:8081", "/aB12cd34", true),
     true
   );
 });

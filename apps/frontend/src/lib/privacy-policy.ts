@@ -96,12 +96,21 @@ export function journeyStageForPath(pathname: string): JourneyStage {
 export function isSafeTrackingConfiguration(
   webContainerId: string,
   serverContainerUrl: string,
+  tagServingPath: string,
   allowHttp = false
 ): boolean {
   if (!/^GTM-[A-Z0-9]+$/i.test(webContainerId)) return false;
+  if (!/^\/[A-Za-z0-9_-]{6,64}$/.test(tagServingPath)) return false;
   try {
     const url = new URL(serverContainerUrl);
-    return url.protocol === "https:" || (allowHttp && url.protocol === "http:");
+    if (url.username || url.password || url.search || url.hash || url.pathname !== "/")
+      return false;
+    if (url.protocol === "https:") return url.hostname === "analytics.dnd-recorder.de";
+    return (
+      allowHttp &&
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    );
   } catch {
     return false;
   }

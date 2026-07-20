@@ -110,6 +110,7 @@ services:
       args:
         VITE_GTM_CONTAINER_ID: ${VITE_GTM_CONTAINER_ID:-}
         VITE_GTM_SERVER_URL: ${VITE_GTM_SERVER_URL:-}
+        VITE_GTM_SERVING_PATH: ${VITE_GTM_SERVING_PATH:-}
     container_name: dnd-frontend
     restart: unless-stopped
     networks:

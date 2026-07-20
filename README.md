@@ -290,9 +290,10 @@ GA_API_SECRET=            # geheim; Lifecycle-Events gehen damit nur an Server-G
 ```env
 VITE_GTM_CONTAINER_ID=GTM-XXXXXXX
 VITE_GTM_SERVER_URL=https://analytics.dnd-recorder.de
+VITE_GTM_SERVING_PATH=/vom-web-container-client-erzeugter-pfad
 ```
 
-Ohne beide Werte bleibt Analytics vollständig deaktiviert. Consent, Rechtstexte und alle App-Funktionen arbeiten trotzdem. Einrichtung, Event-Allowlist und Prüfablauf stehen in [`docs/analytics-betrieb.md`](docs/analytics-betrieb.md); das Dateninventar in [`docs/datenschutz-inventar.md`](docs/datenschutz-inventar.md).
+Ohne alle drei Werte bleibt Analytics vollständig deaktiviert. Consent, Rechtstexte und alle App-Funktionen arbeiten trotzdem. Einrichtung, Event-Allowlist und Prüfablauf stehen in [`docs/analytics-betrieb.md`](docs/analytics-betrieb.md); das Dateninventar in [`docs/datenschutz-inventar.md`](docs/datenschutz-inventar.md).
 
 ### services/transcriber/.env
 ```env

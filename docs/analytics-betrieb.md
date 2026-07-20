@@ -27,6 +27,7 @@ Werbesignale sind immer abgelehnt. Browser und Backend sprechen nie direkt mit `
 ```dotenv
 VITE_GTM_CONTAINER_ID=GTM-XXXXXXX
 VITE_GTM_SERVER_URL=https://analytics.dnd-recorder.de
+VITE_GTM_SERVING_PATH=/vom-web-container-client-erzeugter-pfad
 ```
 
 Backend-Secrets in `apps/backend/.env`:
@@ -99,7 +100,8 @@ Die eigentlichen GTM-Container besitzen keinen Hostport. Nur der gehärtete Gate
 - Server Container URL: `https://analytics.dnd-recorder.de`
 - Preview Server URL: `https://analytics-preview.dnd-recorder.de`
 - GA4 Client aktivieren.
-- Google Tag Gateway/Dependency Serving so konfigurieren, dass `gtm.js` über die First-Party-Domain ausgeliefert wird.
+- Im Server-Container einen Client vom Typ **Google Tag Manager: Web Container** anlegen, die Web-Container-ID erlauben und den automatisch erzeugten, zufälligen **Tag serving path** unverändert als `VITE_GTM_SERVING_PATH` hinterlegen.
+- Google Tag Gateway/Dependency Serving so konfigurieren, dass `gtm.js` über genau diesen First-Party-Pfad ausgeliefert wird; der Pfad gehört nicht in `server_container_url`.
 - Einen GA4-Tag für die erlaubten Events anlegen; keine Werbe-, Remarketing- oder zusätzlichen Vendor-Tags.
 - Eingehende Ereignisse nur bei aktivem `analytics_storage` beziehungsweise für die consent-gebundene Backend-Outbox annehmen.
 - Freitext und nicht allowlistete Parameter verwerfen.
