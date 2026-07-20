@@ -8,6 +8,7 @@
   import Dialog from '$lib/components/Dialog.svelte';
   import { keyboardTabs } from '$lib/actions/tabs.js';
   import { confirmAction } from '$lib/confirm.js';
+  import { track } from '$lib/analytics.js';
 
   let group: any = $state(null);
   let loading = $state(true);
@@ -334,6 +335,13 @@
     deletingCampaign = true;
     try {
       await api.deleteCampaign(group.id);
+      track('campaign_deleted', {
+        page_type: 'app',
+        journey_stage: 'engagement',
+        feature_name: 'campaign',
+        method: 'web',
+        result: 'success'
+      });
       await goto('/dashboard');
     } catch (e: any) {
       error = e.error ?? 'Kampagne konnte nicht gelöscht werden';
@@ -346,6 +354,13 @@
     bindingBusy = installationId;
     try {
       await api.addCampaignDiscordBinding(group.id, installationId);
+      track('campaign_server_bound', {
+        page_type: 'app',
+        journey_stage: 'setup',
+        feature_name: 'campaign',
+        method: 'web',
+        result: 'success'
+      });
       await reloadCampaign();
     } finally {
       bindingBusy = '';
@@ -385,6 +400,21 @@
           (binding: any) => binding.installation.id === installation.id
         )
     );
+  }
+
+  function openWiki() {
+    activeView = 'wiki';
+    if (!wikiCampaignId && group?.campaigns?.length) {
+      wikiCampaignId = group.campaigns[0].id;
+      wikiCampaignName = group.campaigns[0].name;
+    }
+    track('wiki_viewed', {
+      page_type: 'app',
+      journey_stage: 'activation',
+      feature_name: 'wiki',
+      method: 'web',
+      result: 'success'
+    });
   }
 </script>
 
@@ -518,14 +548,7 @@
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'diary' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📖 Tagebuch
       </button>
-      <button id="group-tab-wiki" role="tab" aria-selected={activeView === 'wiki'} aria-controls="group-panel-wiki" tabindex={activeView === 'wiki' ? 0 : -1} onclick={() => {
-          activeView = 'wiki';
-          // Wähle erste Kampagne für Wiki-Ansicht
-          if (!wikiCampaignId && group?.campaigns?.length) {
-            wikiCampaignId = group.campaigns[0].id;
-            wikiCampaignName = group.campaigns[0].name;
-          }
-        }}
+      <button id="group-tab-wiki" role="tab" aria-selected={activeView === 'wiki'} aria-controls="group-panel-wiki" tabindex={activeView === 'wiki' ? 0 : -1} onclick={openWiki}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'wiki' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📜 Wiki
       </button>

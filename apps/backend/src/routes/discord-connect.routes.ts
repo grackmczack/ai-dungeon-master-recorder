@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { hashDiscordLinkToken } from "../lib/discord-link.js";
+import { enqueueAnalyticsEvent } from "../lib/analytics.js";
 
 const TokenSchema = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/) });
 const ClaimSchema = TokenSchema.extend({
@@ -229,8 +230,21 @@ export async function discordConnectRoutes(app: FastifyInstance) {
         };
       });
 
+      const analyticsEventQueued = await enqueueAnalyticsEvent(
+        sub,
+        "discord_connection_claimed",
+        `discord_connection_claimed:${result.campaignId}`,
+        {
+          journey_stage: "setup",
+          feature_name: "discord",
+          method: "discord",
+          result: "success"
+        }
+      );
+
       return reply.send({
         ...result,
+        analyticsEventQueued,
         // Übergang für alte Frontend-Builds.
         groupId: result.campaignId,
         groupName: result.campaignName

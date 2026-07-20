@@ -58,8 +58,10 @@ Der Bot nimmt Voice-Sessions auf, transkribiert sie mit WhisperX, generiert epis
 
 ### Infrastruktur
 - Docker Compose (7 Services: Bot, Backend, Transcriber, Frontend, Nginx, Postgres, Redis)
+- Separate, gehärtete Server-GTM-Compose-Datei für consent-gebundene First-Party-Analyse
 - Git-basiertes Deployment (`git pull && docker compose up -d --build`)
 - Produktionsdomain: `dnd-recorder.de`
+- Öffentliche Pflichtseiten: `/impressum` und `/datenschutz`; Consent-Präferenz ist jederzeit im globalen Footer änderbar
 
 ### Produktionsdomain und Plesk
 
@@ -278,7 +280,19 @@ SMTP_USER=postmaster@dnd-recorder.de
 SMTP_PASSWORD=
 SMTP_FROM=Artificer · DnD Recorder <Artificer@dnd-recorder.de>
 DISCORD_CLIENT_ID=        # identisch zur Discord-App; erzeugt den öffentlichen Invite-Link
+ANALYTICS_SERVER_URL=https://analytics.dnd-recorder.de
+GA_MEASUREMENT_ID=        # öffentlich, aber nur im Backend/Build konfigurieren
+GA_API_SECRET=            # geheim; Lifecycle-Events gehen damit nur an Server-GTM
 ```
+
+### Root `.env` (optionales Analytics-Build)
+
+```env
+VITE_GTM_CONTAINER_ID=GTM-XXXXXXX
+VITE_GTM_SERVER_URL=https://analytics.dnd-recorder.de
+```
+
+Ohne beide Werte bleibt Analytics vollständig deaktiviert. Consent, Rechtstexte und alle App-Funktionen arbeiten trotzdem. Einrichtung, Event-Allowlist und Prüfablauf stehen in [`docs/analytics-betrieb.md`](docs/analytics-betrieb.md); das Dateninventar in [`docs/datenschutz-inventar.md`](docs/datenschutz-inventar.md).
 
 ### services/transcriber/.env
 ```env
@@ -311,6 +325,8 @@ POSTGRES_PASSWORD=
 | POST | `/auth/change-password` | Eigenes Passwort ändern und andere Sitzungen widerrufen |
 | PATCH | `/auth/profile` | Eigenen Anzeigenamen ändern |
 | GET | `/auth/me` | Aktueller User |
+| POST | `/analytics/consent` | Eingeloggte, versionierte Analytics-Einwilligung pseudonym hinterlegen |
+| POST | `/analytics/consent/revoke` | Einwilligung mit lokalem Widerrufsgeheimnis zurückziehen |
 | GET | `/campaigns` | Eigene Kampagnen mit Session- und Serverstatus |
 | POST | `/campaigns` | Kampagne erstellen |
 | GET | `/campaigns/:id` | Kampagne mit Mitgliedern, Bindings und Sessions |

@@ -3,6 +3,7 @@
   import { beforeNavigate } from '$app/navigation';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import { track } from '$lib/analytics.js';
 
   let campaigns: any[] = $state([]);
   let selectedCampaignId = $state('');
@@ -164,6 +165,14 @@
       if (!payload.whisperEndpoint?.trim()) { payload.whisperEndpoint = null; }
       if (!payload.postSummaryChannelId?.trim()) { payload.postSummaryChannelId = null; }
       await api.updateSettings(selectedCampaignId, payload);
+      track('settings_saved', {
+        page_type: 'app',
+        journey_stage: 'setup',
+        feature_name: 'settings',
+        settings_area: 'all',
+        method: 'web',
+        result: 'success'
+      });
       savedSnapshot = JSON.stringify(form);
       saved = true;
       setTimeout(() => saved = false, 3000);

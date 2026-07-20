@@ -7,6 +7,7 @@
   import { toast } from '$lib/toast.js';
   import { confirmAction } from '$lib/confirm.js';
   import type { Session, TranscriptSegment, SpeakerMap } from '$lib/types.js';
+  import { track } from '$lib/analytics.js';
 
   let session: Session | null = $state(null);
   let loading = $state(true);
@@ -58,6 +59,15 @@
     try {
       const loaded = await api.getSession($page.params.id!);
       session = loaded;
+      if (loaded.summary) {
+        track('summary_viewed', {
+          page_type: 'app',
+          journey_stage: 'activation',
+          feature_name: 'summary',
+          method: 'web',
+          result: 'success'
+        });
+      }
       campaignBackgroundImageUrl = (loaded as any).campaignBackgroundImageUrl ?? null;
       // Pre-fill generate prompt from summary
       if ((loaded as any).summary?.sessionImagePrompt) {
@@ -113,6 +123,13 @@
       const { sessionImageUrl: url } = await api.generateSessionImage(session.id, prompt);
       session.sessionImageUrl = url;
       sessionImageVersion = Date.now();
+      track('session_image_generated', {
+        page_type: 'app',
+        journey_stage: 'engagement',
+        feature_name: 'session_image',
+        method: 'web',
+        result: 'success'
+      });
     } catch (e: any) {
       generateSessionImageError = e.error ?? 'Fehler bei der Bildgenerierung';
     } finally {
@@ -197,6 +214,13 @@
     savingSpeakers = true;
     try {
       await api.updateSpeakers(session.id, speakerEdits);
+      track('speaker_mapping_updated', {
+        page_type: 'app',
+        journey_stage: 'engagement',
+        feature_name: 'speaker_mapping',
+        method: 'web',
+        result: 'success'
+      });
       editingSpeakers = false;
       session = await api.getSession($page.params.id!);
       if ((session as any).summary?.sessionImagePrompt) {

@@ -1,5 +1,6 @@
 import { auth } from "./auth.js";
 import { browser } from "$app/environment";
+import { getAnalyticsRegistrationContext } from "./analytics.js";
 import type {
   AggregatedWiki,
   WikiNPC,
@@ -136,10 +137,15 @@ export const api = {
   register: (email: string, password: string, displayName: string) =>
     request<{ email: string; message: string }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password, displayName })
+      body: JSON.stringify({
+        email,
+        password,
+        displayName,
+        analytics: getAnalyticsRegistrationContext()
+      })
     }),
   verifyEmail: (token: string) =>
-    request<{ message: string }>("/auth/verify-email", {
+    request<{ message: string; analyticsEventQueued?: boolean }>("/auth/verify-email", {
       method: "POST",
       body: JSON.stringify({ token })
     }),
@@ -189,6 +195,7 @@ export const api = {
       campaignName: string;
       guildName: string;
       mergedSessions: number;
+      analyticsEventQueued?: boolean;
     }>("/discord-connect/claim", { method: "POST", body: JSON.stringify({ token, ...data }) }),
   getCampaign: (id: string) => request<any>(`/campaigns/${id}`),
   createCampaign: (

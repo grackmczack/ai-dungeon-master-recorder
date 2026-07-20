@@ -6,6 +6,7 @@
   import { auth } from '$lib/auth.js';
   import { api } from '$lib/api.js';
   import BrandHeader from '$lib/components/BrandHeader.svelte';
+  import { syncAnalyticsConsentToBackend, track } from '$lib/analytics.js';
 
   let email = $state('');
   let password = $state('');
@@ -32,6 +33,22 @@
     try {
       const { user } = await api.login(email, password);
       auth.setAuth(user);
+      await syncAnalyticsConsentToBackend(true);
+      track('login', {
+        page_type: 'auth',
+        journey_stage: 'engagement',
+        method: 'web',
+        result: 'success'
+      });
+      if (!localStorage.getItem('dnd_first_approved_login_tracked')) {
+        const tracked = track('first_approved_login', {
+          page_type: 'auth',
+          journey_stage: 'activation',
+          method: 'web',
+          result: 'success'
+        });
+        if (tracked) localStorage.setItem('dnd_first_approved_login_tracked', '1');
+      }
       const returnTo = safeReturnTo();
       sessionStorage.removeItem('postLoginReturnTo');
       await goto(returnTo);
@@ -55,6 +72,14 @@
     resendStatus = '';
     try {
       const result = await api.resendVerification(email);
+      track('email_verification_requested', {
+        page_type: 'auth',
+        journey_stage: 'registration',
+        cta_name: 'resend_verification',
+        feature_name: 'registration',
+        method: 'web',
+        result: 'success'
+      });
       resendStatus = result.message;
     } catch (e: any) {
       resendStatus = typeof e.error === 'string'

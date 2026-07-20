@@ -7,6 +7,10 @@
   import { api } from '$lib/api.js';
   import ToastRegion from '$lib/components/ToastRegion.svelte';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import ConsentManager from '$lib/components/ConsentManager.svelte';
+  import LegalFooter from '$lib/components/LegalFooter.svelte';
+  import { initializeConsent } from '$lib/consent.js';
+  import { deleteAnalyticsCookies, initializeAnalytics, queueAnalyticsRevocation, setAnalyticsConsent, syncAnalyticsConsentToBackend, track, trackPage } from '$lib/analytics.js';
 
   let { children } = $props();
 
@@ -20,7 +24,9 @@
     '/verify-email',
     '/forgot-password',
     '/reset-password',
-    '/docs'
+    '/docs',
+    '/impressum',
+    '/datenschutz'
   ];
 
   function isPublic(pathname: string) {
@@ -29,7 +35,7 @@
   }
 
   function isIndexable(pathname: string) {
-    return pathname === '/' || pathname === '/docs';
+    return pathname === '/' || pathname === '/docs' || pathname === '/impressum' || pathname === '/datenschutz';
   }
 
   function loginRedirectUrl() {
@@ -48,6 +54,13 @@
   }
 
   onMount(async () => {
+    initializeAnalytics();
+    const consent = initializeConsent();
+    if (!consent) queueAnalyticsRevocation();
+    await setAnalyticsConsent(consent?.analytics === true, consent?.source ?? 'SETTINGS');
+    await syncAnalyticsConsentToBackend(consent?.analytics === true);
+    if (consent?.analytics !== true) deleteAnalyticsCookies();
+    trackPage($page.url.pathname);
     api.getDiscordConfig()
       .then((config) => { discordInviteUrl = config.inviteUrl ?? ''; })
       .catch(() => { discordInviteUrl = ''; });
@@ -67,7 +80,30 @@
     }
   });
 
-  afterNavigate(async () => {
+  onMount(() => {
+    function handleTrackedLink(event: MouseEvent) {
+      const target = event.target instanceof Element ? event.target.closest('a') : null;
+      if (!(target instanceof HTMLAnchorElement)) return;
+      if (discordInviteUrl && target.href === new URL(discordInviteUrl, window.location.href).href) {
+        trackDiscordInvite();
+      }
+      const ctaName = target.dataset.analyticsCta;
+      if (ctaName === 'hero_register' || ctaName === 'final_register') {
+        track('cta_click', {
+          page_type: 'landing',
+          journey_stage: 'acquisition',
+          cta_name: ctaName,
+          feature_name: 'registration',
+          method: 'web'
+        });
+      }
+    }
+    document.addEventListener('click', handleTrackedLink);
+    return () => document.removeEventListener('click', handleTrackedLink);
+  });
+
+  afterNavigate(async ({ to }) => {
+    trackPage(to?.url.pathname ?? window.location.pathname);
     if (!$loading && !$user && !isPublic($page.url.pathname)) await goto(loginRedirectUrl());
   });
 
@@ -78,6 +114,16 @@
       auth.logout();
       await goto('/login');
     }
+  }
+
+  function trackDiscordInvite() {
+    track('discord_invite_click', {
+      page_type: 'app',
+      journey_stage: 'setup',
+      cta_name: 'bot_invite',
+      feature_name: 'discord',
+      method: 'discord'
+    });
   }
 </script>
 
@@ -139,3 +185,6 @@
 <main id="main-content" tabindex="-1" class="min-h-screen">
   {@render children()}
 </main>
+
+<LegalFooter />
+<ConsentManager />

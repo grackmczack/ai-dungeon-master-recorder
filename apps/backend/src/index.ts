@@ -19,6 +19,8 @@ import { wikiCrudRoutes } from "./routes/wiki-crud.routes.js";
 import { adminRoutes } from "./routes/admin.routes.js";
 import { publicRoutes } from "./routes/public.routes.js";
 import { discordConnectRoutes } from "./routes/discord-connect.routes.js";
+import { analyticsRoutes } from "./routes/analytics.routes.js";
+import { startAnalyticsOutboxProcessor } from "./lib/analytics.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -80,6 +82,7 @@ await authPlugin(app);
 // Routes
 await app.register(publicRoutes);
 await app.register(authRoutes);
+await app.register(analyticsRoutes);
 await app.register(discordConnectRoutes);
 await app.register(groupsRoutes);
 await app.register(sessionsRoutes);
@@ -97,5 +100,8 @@ await app.register(adminRoutes);
 app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString(), version: "0.2.0" }));
 
 const port = Number(process.env.PORT ?? 3001);
+let stopAnalyticsOutbox = () => {};
+app.addHook("onClose", async () => stopAnalyticsOutbox());
 await app.listen({ port, host: "0.0.0.0" });
+stopAnalyticsOutbox = startAnalyticsOutboxProcessor(app.log);
 console.log(`🚀 Backend listening on port ${port}`);

@@ -161,7 +161,7 @@
           <a href="/dashboard" class="inline-flex min-h-11 items-center rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-white hover:bg-white/5 sm:px-4">Dashboard</a>
         {:else}
           <a href="/login" class="inline-flex min-h-11 items-center px-2 py-2 text-sm font-medium text-gray-300 hover:text-white sm:px-3">Login</a>
-          <a href="/register" class="inline-flex min-h-11 items-center rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-950/40 hover:bg-brand-500 sm:px-4">Registrieren</a>
+          <a href="/register" data-analytics-cta="hero_register" class="inline-flex min-h-11 items-center rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-950/40 hover:bg-brand-500 sm:px-4">Registrieren</a>
         {/if}
       </div>
     </nav>
@@ -183,7 +183,7 @@
             Spiele den Dungeon Master – nicht den Protokollführer. Der DnD Recorder nimmt eure Session im Discord Voice-Channel auf, schreibt eine lesbare deutsche Zusammenfassung und verwandelt NPCs, Quests, Orte und Loot automatisch in ein Kampagnenwiki, das mit jedem Abenteuer wächst.
           </p>
           <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <a href={$user ? '/dashboard' : '/register'} class="inline-flex min-h-13 items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3.5 font-semibold text-white shadow-xl shadow-violet-950/50 transition hover:-translate-y-0.5 hover:bg-brand-500">
+            <a href={$user ? '/dashboard' : '/register'} data-analytics-cta={$user ? undefined : 'hero_register'} class="inline-flex min-h-13 items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3.5 font-semibold text-white shadow-xl shadow-violet-950/50 transition hover:-translate-y-0.5 hover:bg-brand-500">
               {$user ? 'Zum Kampagnen-Dashboard' : 'Chronik beginnen'} <span aria-hidden="true">→</span>
             </a>
             <a href="/login" class="inline-flex min-h-13 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 font-semibold text-white transition hover:border-white/25 hover:bg-white/10">
@@ -433,7 +433,7 @@
         <h2 id="final-cta-title" class="mt-3 text-3xl font-black tracking-tight text-white sm:text-5xl">Lass das Abenteuer Spuren hinterlassen</h2>
         <p class="mx-auto mt-5 max-w-2xl text-lg leading-8 text-gray-300">Deine Gruppe soll sich an Entscheidungen, Figuren und große Momente erinnern – nicht daran, wer diesmal Notizen machen musste. Beginne die erste Chronik mit dem DnD Recorder.</p>
         <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          <a href={$user ? '/dashboard' : '/register'} class="inline-flex min-h-13 items-center justify-center rounded-xl bg-brand-600 px-7 py-3.5 font-semibold text-white shadow-xl shadow-violet-950/50 hover:bg-brand-500">{$user ? 'Kampagnen öffnen' : 'Account erstellen'}</a>
+          <a href={$user ? '/dashboard' : '/register'} data-analytics-cta={$user ? undefined : 'final_register'} class="inline-flex min-h-13 items-center justify-center rounded-xl bg-brand-600 px-7 py-3.5 font-semibold text-white shadow-xl shadow-violet-950/50 hover:bg-brand-500">{$user ? 'Kampagnen öffnen' : 'Account erstellen'}</a>
           {#if discordInviteUrl}
             <a href={discordInviteUrl} target="_blank" rel="noreferrer" class="inline-flex min-h-13 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-7 py-3.5 font-semibold text-white hover:bg-white/10">Bot einladen</a>
           {:else}
@@ -444,20 +444,6 @@
     </section>
   </div>
 
-  <footer class="border-t border-white/10 bg-[#08080e]">
-    <div class="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-10 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-      <div>
-        <a href="/" class="inline-flex items-center gap-2 font-semibold text-white"><img src="/logo-d20.svg" width="28" height="28" alt="" aria-hidden="true" /> DnD Recorder</a>
-        <p class="mt-2 max-w-xl text-xs leading-5 text-gray-500">Unabhängiges Tool für Online-Rollenspielrunden. Dungeons &amp; Dragons und D&amp;D sind Marken ihrer jeweiligen Rechteinhaber; es besteht keine offizielle Verbindung.</p>
-      </div>
-      <nav aria-label="Fußnavigation" class="flex flex-wrap gap-x-5 gap-y-3 text-sm text-gray-400">
-        <a href="/docs" class="hover:text-white">Dokumentation</a>
-        <a href="/login" class="hover:text-white">Login</a>
-        <a href="/register" class="hover:text-white">Registrieren</a>
-        <a href="#faq" class="hover:text-white">FAQ</a>
-      </nav>
-    </div>
-  </footer>
 </div>
 
 <style>

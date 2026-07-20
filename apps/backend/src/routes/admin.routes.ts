@@ -7,6 +7,7 @@ import { buildUserDeletionPlan, removeUserFiles } from "../lib/user-deletion.js"
 import { buildLoginUrl } from "../lib/email-verification.js";
 import { sendAccountActivatedEmail } from "../lib/mailer.js";
 import { discordInstallationAccessStatus } from "../lib/discord-installation-access.js";
+import { enqueueAnalyticsEvent } from "../lib/analytics.js";
 
 const CreateDMInput = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -185,6 +186,17 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     if (newlyApproved) {
+      await enqueueAnalyticsEvent(
+        updated.id,
+        "account_approved",
+        `account_approved:${updated.id}`,
+        {
+          journey_stage: "approval",
+          feature_name: "registration",
+          method: "web",
+          result: "success"
+        }
+      );
       void sendAccountActivatedEmail(
         updated.email,
         updated.displayName,

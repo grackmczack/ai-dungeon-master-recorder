@@ -22,6 +22,18 @@ import {
 } from "../lib/mailer.js";
 import { FixedWindowRateLimiter, normalizedEmailFromBody, rateLimit } from "../lib/rate-limit.js";
 import { accountAccessState } from "../lib/account-access.js";
+import {
+  ANALYTICS_POLICY_VERSION,
+  enqueueAnalyticsEvent,
+  hashAnalyticsRevocationToken
+} from "../lib/analytics.js";
+
+const RegistrationAnalyticsSchema = z.object({
+  clientId: z.string().uuid(),
+  revocationToken: z.string().regex(/^[a-f0-9]{64}$/),
+  policyVersion: z.literal(ANALYTICS_POLICY_VERSION),
+  source: z.enum(["BANNER", "SETTINGS"])
+});
 
 const EmailSchema = z.string().trim().toLowerCase().email();
 const NewPasswordSchema = z.string().min(12).max(128);
@@ -29,7 +41,8 @@ const NewPasswordSchema = z.string().min(12).max(128);
 const RegisterSchema = z.object({
   email: EmailSchema,
   password: NewPasswordSchema,
-  displayName: z.string().trim().min(2).max(80)
+  displayName: z.string().trim().min(2).max(80),
+  analytics: RegistrationAnalyticsSchema.optional()
 });
 
 const LoginSchema = z.object({
@@ -101,7 +114,19 @@ export async function authRoutes(app: FastifyInstance) {
           emailVerifiedAt: null,
           approvedAt: null,
           emailVerificationTokenHash: hashEmailVerificationToken(verificationToken),
-          emailVerificationExpiresAt: emailVerificationExpiresAt()
+          emailVerificationExpiresAt: emailVerificationExpiresAt(),
+          ...(body.data.analytics && {
+            analyticsIdentity: {
+              create: {
+                clientId: body.data.analytics.clientId,
+                revocationTokenHash: hashAnalyticsRevocationToken(
+                  body.data.analytics.revocationToken
+                ),
+                policyVersion: body.data.analytics.policyVersion,
+                source: body.data.analytics.source
+              }
+            }
+          })
         }
       });
 
@@ -257,6 +282,18 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Bestätigungslink ist ungültig oder abgelaufen" });
       }
 
+      const analyticsEventQueued = await enqueueAnalyticsEvent(
+        user.id,
+        "email_verified",
+        `email_verified:${user.id}`,
+        {
+          journey_stage: "registration",
+          feature_name: "registration",
+          method: "web",
+          result: "success"
+        }
+      );
+
       void sendEmailConfirmedEmail(user.email, user.displayName, app.log).catch(
         (error: unknown) => {
           app.log.error({ err: error }, "Could not send email confirmation notice");
@@ -265,7 +302,8 @@ export async function authRoutes(app: FastifyInstance) {
 
       return reply.send({
         message:
-          "E-Mail-Adresse bestätigt. Dein Beta-Zugang wartet jetzt auf die manuelle Freigabe."
+          "E-Mail-Adresse bestätigt. Dein Beta-Zugang wartet jetzt auf die manuelle Freigabe.",
+        analyticsEventQueued
       });
     }
   );

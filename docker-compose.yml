@@ -107,6 +107,9 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
+      args:
+        VITE_GTM_CONTAINER_ID: ${VITE_GTM_CONTAINER_ID:-}
+        VITE_GTM_SERVER_URL: ${VITE_GTM_SERVER_URL:-}
     container_name: dnd-frontend
     restart: unless-stopped
     networks:

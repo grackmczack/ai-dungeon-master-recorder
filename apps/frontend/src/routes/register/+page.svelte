@@ -1,8 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import { tick } from 'svelte';
   import { api } from '$lib/api.js';
   import BrandHeader from '$lib/components/BrandHeader.svelte';
+  import { track, trackingErrorCode } from '$lib/analytics.js';
 
   let email = $state('');
   let password = $state('');
@@ -12,6 +14,27 @@
   let error = $state('');
   let loading = $state(false);
   let errorElement = $state<HTMLDivElement>();
+  let registrationStarted = false;
+
+  onMount(() => {
+    track('registration_view', {
+      page_type: 'auth',
+      journey_stage: 'registration',
+      feature_name: 'registration',
+      method: 'web'
+    });
+  });
+
+  function startRegistration() {
+    if (registrationStarted) return;
+    registrationStarted = true;
+    track('registration_start', {
+      page_type: 'auth',
+      journey_stage: 'registration',
+      feature_name: 'registration',
+      method: 'web'
+    });
+  }
 
   async function register(e: Event) {
     e.preventDefault();
@@ -26,11 +49,26 @@
     loading = true;
     try {
       const result = await api.register(email, password, displayName);
+      track('sign_up', {
+        page_type: 'auth',
+        journey_stage: 'registration',
+        feature_name: 'registration',
+        method: 'web',
+        result: 'success'
+      });
       sessionStorage.setItem('registrationEmail', result.email);
       password = '';
       passwordConfirmation = '';
       await goto('/registration-pending?stage=email');
     } catch (e: any) {
+      track('sign_up_error', {
+        page_type: 'auth',
+        journey_stage: 'registration',
+        feature_name: 'registration',
+        method: 'web',
+        result: 'failure',
+        error_code: trackingErrorCode(e)
+      });
       error = typeof e.error === 'string' ? e.error : 'Registrierung fehlgeschlagen';
       await tick();
       errorElement?.focus();
@@ -47,7 +85,7 @@
   <div class="w-full max-w-md">
     <BrandHeader subtitle="Konto erstellen" />
 
-    <form onsubmit={register} class="bg-surface-800 rounded-2xl p-6 sm:p-8 border border-surface-600 shadow-xl space-y-5">
+    <form onsubmit={register} oninput={startRegistration} class="bg-surface-800 rounded-2xl p-6 sm:p-8 border border-surface-600 shadow-xl space-y-5">
         <h2 class="text-xl font-semibold text-white">Registrieren</h2>
 
         <aside class="rounded-xl border border-brand-500/30 bg-brand-500/10 p-4" aria-labelledby="beta-notice-title">
@@ -109,6 +147,10 @@
           class="w-full min-h-12 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition">
           {loading ? 'Registrieren...' : 'Konto erstellen'}
         </button>
+
+        <p class="text-xs leading-5 text-gray-400">
+          Mit dem Erstellen des Kontos werden deine Angaben zur Bereitstellung des Beta-Zugangs verarbeitet. Optionale Analyse ist davon unabhängig und kann im Consent-Banner abgelehnt werden. Mehr dazu in der <a href="/datenschutz#registrierung" class="text-brand-300 underline hover:text-white">Datenschutzerklärung</a>.
+        </p>
 
         <p class="text-center text-sm text-gray-400">
           Bereits registriert? <a href="/login" class="text-brand-400 hover:underline">Anmelden</a>

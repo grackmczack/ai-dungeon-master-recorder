@@ -1,9 +1,32 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
+  import { track, type TrackingParameters } from '$lib/analytics.js';
 
   let activeSection = $state('basics');
   let discordInviteUrl = $state('');
+
+  const TRACKED_TOPICS: Record<string, NonNullable<TrackingParameters['topic_id']>> = {
+    basics: 'quickstart',
+    bot: 'commands',
+    workflow: 'sessions',
+    campaigns: 'campaigns',
+    members: 'campaigns',
+    settings: 'settings',
+    admin: 'privacy',
+    faq: 'privacy'
+  };
+
+  function selectSection(id: string) {
+    activeSection = id;
+    track('docs_topic_viewed', {
+      page_type: 'docs',
+      journey_stage: 'engagement',
+      topic_id: TRACKED_TOPICS[id] ?? 'quickstart',
+      method: 'web',
+      result: 'success'
+    });
+  }
 
   onMount(() => {
     api.getDiscordConfig()
@@ -42,7 +65,7 @@
         <h3 class="text-xs text-gray-500 uppercase tracking-wider mb-3 font-semibold px-2">Inhalt</h3>
         {#each sections as section}
           <button
-            onclick={() => activeSection = section.id}
+            onclick={() => selectSection(section.id)}
             class="w-full text-left px-3 py-2 rounded-lg text-sm transition {activeSection === section.id ? 'bg-brand-600/20 text-brand-400 font-medium' : 'text-gray-400 hover:text-white hover:bg-surface-700'}">
             {section.emoji} {section.title}
           </button>
@@ -53,7 +76,7 @@
     <!-- Mobile section selector -->
     <div class="lg:hidden w-full mb-6">
       <label for="docs-section" class="sr-only">Dokumentationsabschnitt</label>
-      <select id="docs-section" bind:value={activeSection}
+      <select id="docs-section" value={activeSection} onchange={(event) => selectSection(event.currentTarget.value)}
         class="w-full bg-surface-800 border border-surface-600 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500">
         {#each sections as section}
           <option value={section.id}>{section.title}</option>

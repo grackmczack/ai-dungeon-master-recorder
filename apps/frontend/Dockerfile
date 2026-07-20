@@ -10,6 +10,10 @@ RUN pnpm install --frozen-lockfile || pnpm install
 
 FROM base AS builder
 WORKDIR /app
+ARG VITE_GTM_CONTAINER_ID=""
+ARG VITE_GTM_SERVER_URL=""
+ENV VITE_GTM_CONTAINER_ID=${VITE_GTM_CONTAINER_ID}
+ENV VITE_GTM_SERVER_URL=${VITE_GTM_SERVER_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/frontend/node_modules ./apps/frontend/node_modules
 COPY . .

@@ -20,11 +20,81 @@ import {
 } from "./api-key-resolution.js";
 
 const prisma = new PrismaClient();
+const ANALYTICS_POLICY_VERSION = "2026-07-20";
 const connection = new IORedis({
   host: process.env.REDIS_HOST ?? "localhost",
   port: Number(process.env.REDIS_PORT ?? 6379),
   maxRetriesPerRequest: null
 });
+
+async function enqueueFirstSessionCompleted(campaignId: string): Promise<void> {
+  const completedSessions = await prisma.session.count({
+    where: { campaignId, status: "DONE" }
+  });
+  if (completedSessions !== 1) return;
+
+  const identities = await prisma.analyticsIdentity.findMany({
+    where: {
+      revokedAt: null,
+      policyVersion: ANALYTICS_POLICY_VERSION,
+      user: {
+        memberships: {
+          some: { campaignId, role: "GM", leftAt: null }
+        }
+      }
+    },
+    select: { id: true }
+  });
+  if (identities.length === 0) return;
+
+  await prisma.analyticsEventOutbox.createMany({
+    data: identities.map((identity) => ({
+      analyticsIdentityId: identity.id,
+      eventName: "first_session_completed",
+      deduplicationKey: `first_session_completed:${identity.id}`,
+      parameters: {
+        journey_stage: "activation",
+        feature_name: "recording",
+        method: "discord",
+        result: "success"
+      }
+    })),
+    skipDuplicates: true
+  });
+}
+
+async function enqueueSessionProcessingFailed(
+  campaignId: string,
+  sessionId: string
+): Promise<void> {
+  const identities = await prisma.analyticsIdentity.findMany({
+    where: {
+      revokedAt: null,
+      policyVersion: ANALYTICS_POLICY_VERSION,
+      user: {
+        memberships: {
+          some: { campaignId, role: "GM", leftAt: null }
+        }
+      }
+    },
+    select: { id: true }
+  });
+  if (identities.length === 0) return;
+  await prisma.analyticsEventOutbox.createMany({
+    data: identities.map((identity) => ({
+      analyticsIdentityId: identity.id,
+      eventName: "session_processing_failed",
+      deduplicationKey: `session_processing_failed:${sessionId}:${identity.id}`,
+      parameters: {
+        journey_stage: "activation",
+        feature_name: "recording",
+        method: "discord",
+        result: "failure"
+      }
+    })),
+    skipDuplicates: true
+  });
+}
 
 async function getSettings(campaignId: string | undefined) {
   if (!campaignId) return null;
@@ -620,6 +690,7 @@ async function handleSummarization(
   });
 
   await prisma.session.update({ where: { id: sessionId }, data: { status: "DONE" } });
+  await enqueueFirstSessionCompleted(session.campaignId);
 
   // Cleanup chunks after success
   const jobData = job.data as TranscriptionJobData;
@@ -733,6 +804,7 @@ worker.on("failed", async (job, err) => {
       await prisma.session
         .update({ where: { id: session.id }, data: { status: "FAILED" } })
         .catch(() => {});
+      await enqueueSessionProcessingFailed(session.campaignId, session.id).catch(() => {});
     }
   }
 });

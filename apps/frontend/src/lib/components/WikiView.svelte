@@ -4,6 +4,7 @@
   import { keyboardTabs } from '$lib/actions/tabs.js';
   import { toast } from '$lib/toast.js';
   import { confirmAction } from '$lib/confirm.js';
+  import { track, type TrackingParameters } from '$lib/analytics.js';
   import type { AggregatedWiki, WikiNPC, WikiQuest, WikiLocation, WikiThread, WikiLoot } from '$lib/types.js';
 
   let { campaignId, campaignName }: { campaignId: string; campaignName: string } = $props();
@@ -18,6 +19,14 @@
     description: string;
     status: string;
   };
+
+  function trackedEntityType(category: Category): NonNullable<TrackingParameters['entity_type']> {
+    if (category === 'npcs') return 'npc';
+    if (category === 'quests') return 'quest';
+    if (category === 'locations') return 'location';
+    if (category === 'threads') return 'thread';
+    return 'loot';
+  }
 
   let wiki: AggregatedWiki | null = $state(null);
   let loading = $state(true);
@@ -326,6 +335,14 @@
         if (id) await api.updateCampaignLoot(campaignId, id, data);
         else await api.createCampaignLoot(campaignId, data);
       }
+      track(id ? 'wiki_entity_updated' : 'wiki_entity_created', {
+        page_type: 'app',
+        journey_stage: 'engagement',
+        feature_name: 'wiki',
+        entity_type: trackedEntityType(category),
+        method: 'web',
+        result: 'success'
+      });
       cancelForm();
       await loadWiki();
     } catch (e: any) {
@@ -354,6 +371,14 @@
       else if (category === 'locations') await api.deleteCampaignLocation(campaignId, id);
       else if (category === 'threads') await api.deleteCampaignThread(campaignId, id);
       else await api.deleteCampaignLoot(campaignId, id);
+      track('wiki_entity_deleted', {
+        page_type: 'app',
+        journey_stage: 'engagement',
+        feature_name: 'wiki',
+        entity_type: trackedEntityType(category),
+        method: 'web',
+        result: 'success'
+      });
       await loadWiki();
     } catch (e: any) {
       toast.error(e.error ?? 'Löschen fehlgeschlagen');

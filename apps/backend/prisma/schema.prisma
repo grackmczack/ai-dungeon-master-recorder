@@ -30,6 +30,52 @@ model User {
   grantedKeys  AdminApiKeyGrant[]   @relation("GrantedBy")
   // Keys die diesem DM von einem Super-Admin verliehen wurden
   receivedKeys AdminApiKeyGrant[]   @relation("GrantedTo")
+  analyticsIdentity AnalyticsIdentity?
+}
+
+model AnalyticsIdentity {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  clientId            String
+  revocationTokenHash String
+  policyVersion       String
+  source              String
+  grantedAt           DateTime  @default(now())
+  revokedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events AnalyticsEventOutbox[]
+
+  @@index([clientId])
+  @@index([revokedAt])
+}
+
+model AnalyticsEventOutbox {
+  id               String                @id @default(cuid())
+  analyticsIdentityId String
+  eventName        String
+  parameters       Json                  @default("{}")
+  deduplicationKey String                @unique
+  status           AnalyticsOutboxStatus @default(PENDING)
+  attempts         Int                   @default(0)
+  nextAttemptAt    DateTime              @default(now())
+  sentAt           DateTime?
+  lastErrorCode    String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  analyticsIdentity AnalyticsIdentity @relation(fields: [analyticsIdentityId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([analyticsIdentityId])
+}
+
+enum AnalyticsOutboxStatus {
+  PENDING
+  SENT
+  FAILED
 }
 
 enum UserRole {

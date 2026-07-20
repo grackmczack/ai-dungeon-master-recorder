@@ -4,6 +4,7 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import BrandHeader from '$lib/components/BrandHeader.svelte';
+  import { track } from '$lib/analytics.js';
 
   let status = $state<'loading' | 'success' | 'error'>('loading');
   let message = $state('Deine E-Mail-Adresse wird bestätigt...');
@@ -21,6 +22,15 @@
 
     try {
       const result = await api.verifyEmail(token);
+      if (!result.analyticsEventQueued) {
+        track('email_verified', {
+          page_type: 'auth',
+          journey_stage: 'registration',
+          feature_name: 'registration',
+          method: 'web',
+          result: 'success'
+        });
+      }
       status = 'success';
       message = result.message;
       sessionStorage.setItem('registrationStage', 'approval');
@@ -39,6 +49,14 @@
     resendStatus = '';
     try {
       const result = await api.resendVerification(email);
+      track('email_verification_requested', {
+        page_type: 'auth',
+        journey_stage: 'registration',
+        cta_name: 'resend_verification',
+        feature_name: 'registration',
+        method: 'web',
+        result: 'success'
+      });
       resendStatus = result.message;
     } catch (e: any) {
       resendStatus = typeof e.error === 'string'

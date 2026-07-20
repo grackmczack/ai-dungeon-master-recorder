@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import BrandHeader from '$lib/components/BrandHeader.svelte';
+  import { track } from '$lib/analytics.js';
 
   let email = $state('');
   let resendStatus = $state('');
@@ -11,6 +12,15 @@
 
   onMount(() => {
     email = sessionStorage.getItem('registrationEmail') ?? '';
+    if (approvalPending) {
+      track('approval_pending_view', {
+        page_type: 'auth',
+        journey_stage: 'approval',
+        feature_name: 'registration',
+        result: 'pending',
+        method: 'web'
+      });
+    }
   });
 
   async function resendVerification(e: Event) {
@@ -21,6 +31,14 @@
     try {
       sessionStorage.setItem('registrationEmail', email);
       const result = await api.resendVerification(email);
+      track('email_verification_requested', {
+        page_type: 'auth',
+        journey_stage: 'registration',
+        cta_name: 'resend_verification',
+        feature_name: 'registration',
+        result: 'success',
+        method: 'web'
+      });
       resendStatus = result.message;
     } catch (error: any) {
       resendStatus = typeof error.error === 'string'

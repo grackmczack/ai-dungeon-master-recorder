@@ -4,6 +4,19 @@ Stand: 20. Juli 2026. Ziel ist eine datenschutzorientierte, messbare Customer Jo
 
 > Rechtlicher Hinweis: Die technische Umsetzung und individuell formulierte Textentwürfe können Rechtskonformität unterstützen, aber keine verbindliche Rechtsberatung oder Garantie der „Rechtssicherheit“ ersetzen. Impressum, Datenschutzerklärung, Consent-Texte, Anbieterstatus und internationale Datentransfers müssen vor Veröffentlichung durch eine im deutschen IT-/Datenschutzrecht qualifizierte Stelle geprüft und anschließend bei Änderungen aktuell gehalten werden.
 
+## Umsetzungsstand 20. Juli 2026
+
+- umgesetzt: öffentliche Routen `/impressum` und `/datenschutz` mit den bestätigten Minimalangaben für das private Beta-Projekt
+- umgesetzt: globaler Legal-Footer, Registrierungshinweis und jederzeit erreichbare Cookie-Einstellungen
+- umgesetzt: nativer, barrierearm bedienbarer Consent-Banner mit gleichwertiger Ablehnung/Zustimmung, sechsmonatiger Versionierung und Consent Mode v2 (Basic Mode)
+- umgesetzt: GTM/GA werden vor Opt-in und nach Ablehnung nicht geladen; Werbesignale bleiben immer verweigert; Widerruf löscht Analytics-Cookies und lädt die Seite sauber neu
+- umgesetzt: typisierte Event-/Parameter-Allowlist, normalisierte token- und ID-freie Pageviews sowie zentrale Registrierungs-, Setup-, Aktivierungs- und Engagementevents
+- umgesetzt: pseudonyme, versionierte `AnalyticsIdentity`, öffentlicher Widerrufsweg und consent-gebundene, idempotente Lifecycle-Outbox für asynchrone Ereignisse
+- umgesetzt: gehärtete Docker-/nginx-Vorbereitung für Web-/Server-GTM auf First-Party-Subdomains, CSP, Rate Limit, gekappte Payloadgröße und redigierte Client-IP
+- umgesetzt: Datenschutzinventar, Betriebs-/QA-Runbook und automatisierte Consent-/URL-Normalisierungstests
+- extern offen: Google-OAuth um Analytics-/Tag-Manager-Scopes erweitern, Google-ToS annehmen, GA4/GTM-Container veröffentlichen, DNS/Plesk/Let's Encrypt für die Tracking-Subdomains aktivieren und echte IDs/Secrets serverseitig hinterlegen
+- fachlich offen: Betreiberfreigabe sowie Prüfung der Texte, AV-Verträge, Providerfristen, Logrotation und Backupzyklen durch eine qualifizierte Datenschutz-/Rechtsstelle
+
 ## Ergebnis des Vorab-Audits
 
 Aktuell fehlen:

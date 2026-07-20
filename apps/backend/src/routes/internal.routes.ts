@@ -17,6 +17,7 @@ import {
   authorizedGmMembershipWhere,
   discordInstallationAccessStatus
 } from "../lib/discord-installation-access.js";
+import { enqueueCampaignAnalyticsEvent } from "../lib/analytics.js";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN;
 if (process.env.NODE_ENV === "production" && !INTERNAL_TOKEN) {
@@ -494,6 +495,17 @@ export async function internalRoutes(app: FastifyInstance) {
           },
           include: { campaign: { select: { name: true } } }
         });
+    await enqueueCampaignAnalyticsEvent(
+      campaign.id,
+      "campaign_channel_configured",
+      `campaign_channel_configured:${binding.id}:${binding.updatedAt.toISOString()}`,
+      {
+        journey_stage: "setup",
+        feature_name: "campaign",
+        method: "discord",
+        result: "success"
+      }
+    );
     return reply.send(bindingDto(binding));
   });
 
@@ -639,6 +651,31 @@ export async function internalRoutes(app: FastifyInstance) {
       return { session: createdSession, recording: createdRecording };
     });
 
+    await enqueueCampaignAnalyticsEvent(
+      campaign.id,
+      "recording_started",
+      `recording_started:${session.id}`,
+      {
+        journey_stage: "activation",
+        feature_name: "recording",
+        method: "discord",
+        result: "success"
+      }
+    );
+    if (session.sessionNumber === 1) {
+      await enqueueCampaignAnalyticsEvent(
+        campaign.id,
+        "first_recording_started",
+        `first_recording_started:${session.id}`,
+        {
+          journey_stage: "activation",
+          feature_name: "recording",
+          method: "discord",
+          result: "success"
+        }
+      );
+    }
+
     return reply.status(201).send({
       sessionId: session.id,
       recordingId: recording.id,
@@ -659,6 +696,23 @@ export async function internalRoutes(app: FastifyInstance) {
     });
     if (updated.count !== 1) {
       return reply.status(409).send({ error: "SESSION_NOT_RECORDING" });
+    }
+    const session = await prisma.session.findUnique({
+      where: { id: params.data.sessionId },
+      select: { campaignId: true }
+    });
+    if (session) {
+      await enqueueCampaignAnalyticsEvent(
+        session.campaignId,
+        "recording_completed",
+        `recording_completed:${params.data.sessionId}`,
+        {
+          journey_stage: "activation",
+          feature_name: "recording",
+          method: "discord",
+          result: "success"
+        }
+      );
     }
     return reply.send({ sessionId: params.data.sessionId, status: "PROCESSING" });
   });

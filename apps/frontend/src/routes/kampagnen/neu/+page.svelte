@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
+  import { track } from '$lib/analytics.js';
 
   let name = $state('');
   let description = $state('');
@@ -17,6 +18,13 @@
         name,
         description: description || undefined,
         setting: setting || undefined
+      });
+      track('campaign_created', {
+        page_type: 'app',
+        journey_stage: 'setup',
+        feature_name: 'campaign',
+        method: 'web',
+        result: 'success'
       });
       await goto(`/kampagnen/${campaign.id}`);
     } catch (e: any) {

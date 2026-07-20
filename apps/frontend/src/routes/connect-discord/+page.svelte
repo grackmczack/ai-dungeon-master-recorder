@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import { track } from '$lib/analytics.js';
 
   let loading = $state(true);
   let connecting = $state(false);
@@ -56,6 +57,38 @@
           ? { targetCampaignId: selectedCampaignId }
           : { newCampaignName: newCampaignName.trim() || preview.guildName }
       );
+      if (!result.analyticsEventQueued) {
+        track('discord_connection_claimed', {
+          page_type: 'app',
+          journey_stage: 'setup',
+          feature_name: 'discord',
+          method: 'discord',
+          result: 'success'
+        });
+      }
+      track('campaign_server_bound', {
+        page_type: 'app',
+        journey_stage: 'setup',
+        feature_name: 'campaign',
+        method: 'discord',
+        result: 'success'
+      });
+      track('discord_server_added', {
+        page_type: 'app',
+        journey_stage: 'setup',
+        feature_name: 'discord',
+        method: 'discord',
+        result: 'success'
+      });
+      if (mode === 'new') {
+        track('campaign_created', {
+          page_type: 'app',
+          journey_stage: 'setup',
+          feature_name: 'campaign',
+          method: 'discord',
+          result: 'success'
+        });
+      }
       sessionStorage.removeItem('postLoginReturnTo');
       await goto(`/kampagnen/${result.campaignId}?discord=connected`);
     } catch (e: any) {
