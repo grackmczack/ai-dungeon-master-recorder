@@ -67,7 +67,7 @@
   <p>Zwecke sind Reichweitenmessung, Ermittlung der Registrierungsconversion, Erkennen von Abbrüchen bei Einrichtung und Aktivierung sowie Verbesserung der Bedienbarkeit. Nicht übertragen werden Formwerte, E-Mail-Adressen, Namen, rohe Nutzer-, Discord-, Server-, Kanal-, Kampagnen- oder Session-IDs, Transkripte, Zusammenfassungen, Prompts, API-Schlüssel, Stacktraces oder URL-Parameter und -Fragmente.</p>
   <p>Consent Mode v2 startet mit <code>analytics_storage</code>, <code>ad_storage</code>, <code>ad_user_data</code> und <code>ad_personalization</code> im Zustand „denied“. GTM und GA werden erst nach Zustimmung geladen. Werbespeicherung und personalisierte Werbung bleiben immer deaktiviert. Eine Ablehnung hat keine funktionalen Nachteile.</p>
   <p>Nach der Einwilligung erzeugt der Browser eine zufällige Analyse-Client-ID und ein separates Widerrufsgeheimnis im Local Storage. Die Client-ID ist keine fachliche Konto-, Discord- oder Kampagnen-ID. Das Widerrufsgeheimnis wird serverseitig nur als kryptografischer Hash gespeichert. Bei Widerruf oder Ablauf der Consentversion werden diese lokalen Analysedaten entfernt und ausstehende serverseitige Ereignisse verworfen.</p>
-  <p>Empfänger ist Google Ireland Limited; eine technische Verarbeitung durch Google LLC in den USA kann stattfinden. Google LLC ist nach dem EU-US Data Privacy Framework zertifiziert; ergänzend können vertragliche Garantien eingesetzt werden. Die Aufbewahrung nutzerbezogener Ereignisdaten wird auf höchstens 14 Monate begrenzt. Analytics-Cookies wie <code>_ga</code> werden beim Widerruf soweit technisch erreichbar gelöscht.</p>
+  <p>Empfänger ist Google Ireland Limited; eine technische Verarbeitung durch Google LLC in den USA kann stattfinden. Google LLC ist nach dem EU-US Data Privacy Framework zertifiziert; ergänzend können vertragliche Garantien eingesetzt werden. Die Aufbewahrung nutzerbezogener Ereignisdaten wird auf höchstens 14 Monate begrenzt. Die Laufzeit von Analytics-Cookies wie <code>_ga</code> ist auf bis zu 6 Monate begrenzt; beim Widerruf werden sie soweit technisch erreichbar gelöscht.</p>
   <p><button type="button" onclick={openConsentSettings} class="rounded-lg border border-brand-500/50 bg-brand-500/10 px-4 py-2 font-semibold text-violet-100 hover:bg-brand-500/20">Cookie-Einstellungen öffnen</button></p>
 
   <h2>12. Empfänger</h2>
@@ -79,6 +79,7 @@
     <li>Audio, Transkript, Zusammenfassung und Sessionbilder: bis zur Löschung der Session, Kampagne oder des Kontos; einzelne Bilder können separat gelöscht werden.</li>
     <li>E-Mail-Verifizierungslinks: 24 Stunden; Passwort-Reset- und Discord-Verknüpfungstokens nur für ihre technisch festgelegte kurze Gültigkeit.</li>
     <li>Consent-Präferenz: bis zu 6 Monate oder bis zu einer früher erforderlichen erneuten Abfrage.</li>
+    <li>Analytics-Cookies: bis zu 6 Monate oder bis zu einem früheren Widerruf.</li>
     <li>Analytics-Ereignisdaten: höchstens 14 Monate, nur nach Einwilligung.</li>
     <li>Sicherheitsdaten: so kurz wie für Betrieb, Abwehr und Aufklärung erforderlich; bei konkreten Vorfällen bis zu deren Abschluss.</li>
   </ul>

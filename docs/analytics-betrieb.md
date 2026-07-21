@@ -1,6 +1,6 @@
 # Analytics- und Consent-Betrieb
 
-Stand: 20. Juli 2026
+Stand: 21. Juli 2026
 
 ## Architektur
 
@@ -25,7 +25,7 @@ Werbesignale sind immer abgelehnt. Browser und Backend sprechen nie direkt mit `
 Öffentliche Buildkonfiguration im Root-Compose-Environment:
 
 ```dotenv
-VITE_GTM_CONTAINER_ID=GTM-XXXXXXX
+VITE_GTM_CONTAINER_ID=GTM-W7N7J7JR
 VITE_GTM_SERVER_URL=https://analytics.dnd-recorder.de
 VITE_GTM_SERVING_PATH=/vom-web-container-client-erzeugter-pfad
 ```
@@ -34,7 +34,7 @@ Backend-Secrets in `apps/backend/.env`:
 
 ```dotenv
 ANALYTICS_SERVER_URL=https://analytics.dnd-recorder.de
-GA_MEASUREMENT_ID=G-XXXXXXXXXX
+GA_MEASUREMENT_ID=G-J3SR1MTC8J
 GA_API_SECRET=<Measurement-Protocol-Secret>
 ```
 
@@ -56,15 +56,27 @@ Das gemeinsame OAuth-Token benötigt zusätzlich zu den vorhandenen Workspace-Sc
 - `https://www.googleapis.com/auth/analytics.readonly`
 - `https://www.googleapis.com/auth/tagmanager`
 - `https://www.googleapis.com/auth/tagmanager.edit.containers`
+- `https://www.googleapis.com/auth/tagmanager.edit.containerversions`
+- `https://www.googleapis.com/auth/tagmanager.publish`
+- `https://www.googleapis.com/auth/tagmanager.delete.containers`
 
 Danach:
 
 1. vorhandenes GA-Konto nutzen oder Account-Ticket erstellen und Google-ToS als Betreiber im Browser annehmen;
 2. Property `DnD Recorder`, Zeitzone `Europe/Berlin`, Währung `EUR`;
 3. Webstream für `https://dnd-recorder.de`;
-4. GTM-Konto manuell erstellen, dann Webcontainer `DnD Recorder Web` und Servercontainer `DnD Recorder Server`;
+4. GTM-Konto `DnD Recorder` mit Webcontainer `GTM-W7N7J7JR` und Servercontainer `GTM-TQ8JNHQ9` verwenden;
 5. Google Signals, Ads-Verknüpfung/-Personalisierung und unnötige Datenfreigaben deaktivieren;
 6. Ereignisaufbewahrung begründet minimieren, höchstens 14 Monate.
+
+Aktueller Google-Stand:
+
+- GA4-Property `546354789`, Webstream `15291937208`, Measurement-ID `G-J3SR1MTC8J`;
+- Enhanced Measurement und Google Signals deaktiviert;
+- E-Mail- und Queryparameter-Redaktion aktiviert;
+- Key Events: `sign_up`, `email_verified`, `first_approved_login`, `discord_connection_claimed`, `first_session_completed`;
+- Webcontainer-Version 2 veröffentlicht: Consentpflicht, feste Event-/Parameter-Allowlist, keine automatischen Pageviews, keine Werbesignale, Cookie-Laufzeit höchstens 6 Monate;
+- Servercontainer-Arbeitsbereich `DnD Recorder Server – privacy setup` compilergeprüft, aber bis zur finalen Datenschutztransformation und First-Party-Auslieferung absichtlich unveröffentlicht.
 
 ## First-Party-Server deployen
 
@@ -104,7 +116,7 @@ Die eigentlichen GTM-Container besitzen keinen Hostport. Nur der gehärtete Gate
 - Google Tag Gateway/Dependency Serving so konfigurieren, dass `gtm.js` über genau diesen First-Party-Pfad ausgeliefert wird; der Pfad gehört nicht in `server_container_url`.
 - Einen GA4-Tag für die erlaubten Events anlegen; keine Werbe-, Remarketing- oder zusätzlichen Vendor-Tags.
 - Eingehende Ereignisse nur bei aktivem `analytics_storage` beziehungsweise für die consent-gebundene Backend-Outbox annehmen.
-- Freitext und nicht allowlistete Parameter verwerfen.
+- Vor Veröffentlichung die eingebaute Transformation **Allow parameters** auf den GA4-Tag anwenden und ausschließlich die für GA4 technisch notwendigen Felder sowie `page_path`, `page_location`, `page_type`, `journey_stage`, `cta_name`, `feature_name`, `provider_type`, `result`, `error_code`, `method`, `entity_type`, `settings_area` und `topic_id` zulassen. Freitext und alle übrigen Parameter verwerfen.
 
 ### Webcontainer
 
@@ -113,6 +125,7 @@ Die eigentlichen GTM-Container besitzen keinen Hostport. Nur der gehärtete Gate
 - Consent Checks für jeden Tag; `analytics_storage` erforderlich.
 - `ad_storage`, `ad_user_data` und `ad_personalization` nicht überschreiben und dauerhaft abgelehnt lassen.
 - Manuelle Pageviews verwenden; Enhanced Measurement für Pageviews deaktivieren, damit SPA-Navigation nicht doppelt zählt.
+- `cookie_expires=15552000` und `cookie_update=false` beibehalten; dadurch laufen die Analytics-Cookies spätestens nach 6 Monaten ab und werden nicht bei jedem Besuch verlängert.
 
 ## Event-Allowlist
 

@@ -117,7 +117,7 @@
             <div>
               <label for="analytics-consent" class="font-semibold text-white">Analyse</label>
               <p class="mt-1 text-sm leading-6 text-gray-300">Google Analytics 4 über Web- und serverseitigen Google Tag Manager für Reichweite, Registrierungsconversion, Einrichtungsabbrüche und Produktverbesserung.</p>
-              <p class="mt-2 text-xs leading-5 text-gray-400">Optionale lokale Client-ID und <code>_ga*</code>-Cookies; technisch bis zu 2 Jahre, durch unsere Consentversion spätestens nach 6 Monaten neu zu entscheiden und bei Widerruf/Ablauf soweit erreichbar gelöscht. Keine Formwerte, Namen, E-Mails, fachlichen IDs, Transkripte oder URL-Parameter. Möglicher USA-Bezug; Einzelheiten in der <a href="/datenschutz#analyse" class="text-brand-300 underline hover:text-white">Datenschutzerklärung</a>.</p>
+              <p class="mt-2 text-xs leading-5 text-gray-400">Optionale lokale Client-ID und <code>_ga*</code>-Cookies mit einer von uns auf bis zu 6 Monate begrenzten Laufzeit; bei Widerruf oder Ablauf werden sie soweit technisch erreichbar gelöscht. Keine Formwerte, Namen, E-Mails, fachlichen IDs, Transkripte oder URL-Parameter. Möglicher USA-Bezug; Einzelheiten in der <a href="/datenschutz#analyse" class="text-brand-300 underline hover:text-white">Datenschutzerklärung</a>.</p>
             </div>
             <input id="analytics-consent" type="checkbox" bind:checked={analyticsSelection} class="mt-1 h-6 w-6 shrink-0 accent-brand-500" />
           </div>
