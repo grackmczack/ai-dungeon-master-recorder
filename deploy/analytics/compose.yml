@@ -58,7 +58,7 @@ services:
         max-file: "3"
 
   analytics-gateway:
-    image: nginx:1.29-alpine
+    image: ${NGINX_IMAGE:?Set a digest-pinned NGINX_IMAGE in deploy/analytics/.env}
     restart: unless-stopped
     ports:
       - "127.0.0.1:8081:8080"

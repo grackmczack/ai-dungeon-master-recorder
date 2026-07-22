@@ -27,7 +27,7 @@ Werbesignale sind immer abgelehnt. Browser und Backend sprechen nie direkt mit `
 ```dotenv
 VITE_GTM_CONTAINER_ID=GTM-W7N7J7JR
 VITE_GTM_SERVER_URL=https://analytics.dnd-recorder.de
-VITE_GTM_SERVING_PATH=/vom-web-container-client-erzeugter-pfad
+VITE_GTM_SERVING_PATH=/CCo2D
 ```
 
 Backend-Secrets in `apps/backend/.env`:
@@ -42,6 +42,7 @@ Server-GTM-Secrets in `deploy/analytics/.env`:
 
 ```dotenv
 GTM_IMAGE=gcr.io/cloud-tagging-10302018/gtm-cloud-image@sha256:<verifizierter Digest>
+NGINX_IMAGE=nginx@sha256:<verifizierter Digest>
 GTM_CONTAINER_CONFIG=<Container Config aus dem Servercontainer>
 ```
 
@@ -76,17 +77,20 @@ Aktueller Google-Stand:
 - E-Mail- und Queryparameter-Redaktion aktiviert;
 - Key Events: `sign_up`, `email_verified`, `first_approved_login`, `discord_connection_claimed`, `first_session_completed`;
 - Webcontainer-Version 2 veröffentlicht: Consentpflicht, feste Event-/Parameter-Allowlist, keine automatischen Pageviews, keine Werbesignale, Cookie-Laufzeit höchstens 6 Monate;
-- Servercontainer-Arbeitsbereich `DnD Recorder Server – privacy setup` compilergeprüft, aber bis zur finalen Datenschutztransformation und First-Party-Auslieferung absichtlich unveröffentlicht.
+- Servercontainer-Version 2 veröffentlicht: Event-Allowlist, IP-Redaktion, browserverwaltete Consent-Cookies, First-Party-Webcontainer-Pfad `/CCo2D` und eine auf den GA4-Tag begrenzte Allow-parameters-Transformation;
+- `analytics.dnd-recorder.de` und `analytics-preview.dnd-recorder.de` sind DNS-only angebunden, TLS-gesichert und leiten ausschließlich an die lokal gebundenen Gatewayports weiter.
 
 ## First-Party-Server deployen
 
 1. In Cloudflare `analytics.dnd-recorder.de` und `analytics-preview.dnd-recorder.de` auf die Server-IP zeigen lassen; während der Zertifikatsausstellung DNS-only verwenden.
 2. Beide Subdomains in Plesk anlegen, Let's Encrypt aktivieren und die jeweilige Datei aus `deploy/plesk/` als `.htaccess` verwenden.
-3. Den stabilen Google-Container ziehen und den Digest ermitteln:
+3. Den stabilen Google-Container und das Gateway-nginx ziehen und beide Digests ermitteln:
 
    ```bash
    docker pull gcr.io/cloud-tagging-10302018/gtm-cloud-image:stable
    docker image inspect --format '{{index .RepoDigests 0}}' gcr.io/cloud-tagging-10302018/gtm-cloud-image:stable
+   docker pull nginx:1.29-alpine
+   docker image inspect --format '{{index .RepoDigests 0}}' nginx:1.29-alpine
    ```
 
 4. Digest und Server-Containerconfig in `deploy/analytics/.env` eintragen (Dateimodus 600).
