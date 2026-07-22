@@ -76,7 +76,7 @@ Aktueller Google-Stand:
 - E-Mail- und Queryparameter-Redaktion aktiviert;
 - Key Events: `sign_up`, `email_verified`, `first_approved_login`, `discord_connection_claimed`, `first_session_completed`;
 - Webcontainer-Version 2 veröffentlicht: Consentpflicht, feste Event-/Parameter-Allowlist, keine automatischen Pageviews, keine Werbesignale, Cookie-Laufzeit höchstens 6 Monate;
-- Servercontainer-Version 2 veröffentlicht: Event-Allowlist, IP-Redaktion, browserverwaltete Consent-Cookies, First-Party-Webcontainer-Pfad `/CCo2D` und eine auf den GA4-Tag begrenzte Allow-parameters-Transformation;
+- Servercontainer-Version 3 veröffentlicht: reine Browser-Event-Allowlist, IP-Redaktion, browserverwaltete Consent-Cookies, First-Party-Webcontainer-Pfad `/CCo2D` und eine auf den GA4-Tag begrenzte Allow-parameters-Transformation;
 - `analytics.dnd-recorder.de` und `analytics-preview.dnd-recorder.de` sind DNS-only angebunden, TLS-gesichert und leiten ausschließlich an die lokal gebundenen Gatewayports weiter.
 
 ## First-Party-Server deployen
