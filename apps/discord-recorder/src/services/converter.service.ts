@@ -36,8 +36,5 @@ export async function convertWavToMp3(wavPath: string): Promise<ConversionResult
     });
   });
 
-  // WAV NICHT loeschen — wird erst nach erfolgreicher Transkription+Summary bereinigt
-  // Dies ermoeglicht Crash-Recovery
-
   return { mp3Path, mp3Filename, durationSeconds };
 }

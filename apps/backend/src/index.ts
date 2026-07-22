@@ -11,11 +11,16 @@ import { groupsRoutes } from "./routes/groups.routes.js";
 import { sessionsRoutes } from "./routes/sessions.routes.js";
 import { settingsRoutes } from "./routes/settings.routes.js";
 import { campaignsRoutes } from "./routes/campaigns.routes.js";
+import { campaignBindingsRoutes } from "./routes/campaign-bindings.routes.js";
 import { internalRoutes } from "./routes/internal.routes.js";
 import { membersRoutes } from "./routes/members.routes.js";
 import { wikiRoutes } from "./routes/wiki.routes.js";
 import { wikiCrudRoutes } from "./routes/wiki-crud.routes.js";
 import { adminRoutes } from "./routes/admin.routes.js";
+import { publicRoutes } from "./routes/public.routes.js";
+import { discordConnectRoutes } from "./routes/discord-connect.routes.js";
+import { analyticsRoutes } from "./routes/analytics.routes.js";
+import { startAnalyticsOutboxProcessor } from "./lib/analytics.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -23,17 +28,24 @@ declare module "fastify" {
   }
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+const jwtSecret = process.env.JWT_SECRET;
+if (isProduction && !jwtSecret) {
+  throw new Error("JWT_SECRET is required in production");
+}
+
 const app = Fastify({
-  logger: { level: process.env.NODE_ENV === "production" ? "info" : "debug" }
+  logger: { level: process.env.NODE_ENV === "production" ? "info" : "debug" },
+  trustProxy: process.env.TRUST_PROXY === "true" || isProduction
 });
 
 await app.register(cors, {
-  origin: process.env.CORS_ORIGIN ?? true,
+  origin: process.env.CORS_ORIGIN?.split(",").map((origin) => origin.trim()) ?? false,
   credentials: true
 });
 
 await app.register(jwt, {
-  secret: process.env.JWT_SECRET ?? "dev_secret_change_me_in_production"
+  secret: jwtSecret ?? "development-only-secret"
 });
 
 await app.register(multipart, {
@@ -45,21 +57,10 @@ await app.register(multipart, {
   }
 });
 
-// Statisches Serving für hochgeladene Avatare + Charakterbögen (PDF)
-// Static file serving for all storage directories
+// Public image assets contain verified image bytes and fixed extensions.
 await app.register(fastifyStatic, {
   root: path.resolve(process.cwd(), "..", "..", "storage", "avatars"),
   prefix: "/uploads/avatars/",
-  decorateReply: false
-});
-await app.register(fastifyStatic, {
-  root: path.resolve(process.cwd(), "..", "..", "storage", "character-sheets"),
-  prefix: "/uploads/character-sheets/",
-  decorateReply: false
-});
-await app.register(fastifyStatic, {
-  root: path.resolve(process.cwd(), "..", "..", "storage", "recordings"),
-  prefix: "/uploads/recordings/",
   decorateReply: false
 });
 await app.register(fastifyStatic, {
@@ -74,14 +75,20 @@ await app.register(fastifyStatic, {
   decorateReply: false
 });
 
-await app.register(authPlugin);
+// Decorate the root instance so every subsequently registered route plugin
+// inherits the authentication hook through Fastify's encapsulation boundary.
+await authPlugin(app);
 
 // Routes
+await app.register(publicRoutes);
 await app.register(authRoutes);
+await app.register(analyticsRoutes);
+await app.register(discordConnectRoutes);
 await app.register(groupsRoutes);
 await app.register(sessionsRoutes);
 await app.register(settingsRoutes);
 await app.register(campaignsRoutes);
+await app.register(campaignBindingsRoutes);
 
 await app.register(internalRoutes);
 await app.register(membersRoutes);
@@ -90,8 +97,11 @@ await app.register(wikiCrudRoutes);
 await app.register(adminRoutes);
 
 // Health
-app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString(), version: "0.1.0" }));
+app.get("/health", async () => ({ status: "ok", ts: new Date().toISOString(), version: "0.2.0" }));
 
 const port = Number(process.env.PORT ?? 3001);
+let stopAnalyticsOutbox = () => {};
+app.addHook("onClose", async () => stopAnalyticsOutbox());
 await app.listen({ port, host: "0.0.0.0" });
+stopAnalyticsOutbox = startAnalyticsOutboxProcessor(app.log);
 console.log(`🚀 Backend listening on port ${port}`);

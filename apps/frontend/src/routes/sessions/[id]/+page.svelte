@@ -3,7 +3,11 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import { parallax, parallaxFixed } from '$lib/actions/parallax.js';
+  import { keyboardTabs } from '$lib/actions/tabs.js';
+  import { toast } from '$lib/toast.js';
+  import { confirmAction } from '$lib/confirm.js';
   import type { Session, TranscriptSegment, SpeakerMap } from '$lib/types.js';
+  import { track } from '$lib/analytics.js';
 
   let session: Session | null = $state(null);
   let loading = $state(true);
@@ -25,6 +29,14 @@
   let speakerEdits = $state<Array<{ discordUserId: string; discordName: string; characterName: string; playerName: string; diarizationLabel: string }>>([]);
   let savingSpeakers = $state(false);
   let diarizationLabels: Array<{ label: string; count: number; sample: string }> = $state([]);
+  let directSpeakerAssignment = $derived.by(() => {
+    const currentSession: Session | null = session;
+    const rawJson = currentSession?.transcript?.rawJson;
+    return Boolean(
+      rawJson?.speakerAttribution?.startsWith('discord-') ||
+      rawJson?.chunks?.some(chunk => chunk.speakerAttribution?.startsWith('discord-'))
+    );
+  });
 
   // Titel-Edit state
   let editingTitle = $state(false);
@@ -47,6 +59,15 @@
     try {
       const loaded = await api.getSession($page.params.id!);
       session = loaded;
+      if (loaded.summary) {
+        track('summary_viewed', {
+          page_type: 'app',
+          journey_stage: 'activation',
+          feature_name: 'summary',
+          method: 'web',
+          result: 'success'
+        });
+      }
       campaignBackgroundImageUrl = (loaded as any).campaignBackgroundImageUrl ?? null;
       // Pre-fill generate prompt from summary
       if ((loaded as any).summary?.sessionImagePrompt) {
@@ -77,14 +98,14 @@
       session.title = titleEdit;
       editingTitle = false;
     } catch (e: any) {
-      alert(e.error ?? 'Fehler beim Speichern des Titels');
+      toast.error(e.error ?? 'Fehler beim Speichern des Titels');
     } finally {
       savingTitle = false;
     }
   }
 
-  function recordingUrl(filename: string): string {
-    return `/api/uploads/recordings/${filename}`;
+  function recordingUrl(recordingId: string): string {
+    return `/api/sessions/${session?.id}/recordings/${recordingId}`;
   }
 
   function sessionImageUrl(): string | null {
@@ -102,6 +123,13 @@
       const { sessionImageUrl: url } = await api.generateSessionImage(session.id, prompt);
       session.sessionImageUrl = url;
       sessionImageVersion = Date.now();
+      track('session_image_generated', {
+        page_type: 'app',
+        journey_stage: 'engagement',
+        feature_name: 'session_image',
+        method: 'web',
+        result: 'success'
+      });
     } catch (e: any) {
       generateSessionImageError = e.error ?? 'Fehler bei der Bildgenerierung';
     } finally {
@@ -126,13 +154,18 @@
   }
 
   async function removeSessionImage() {
-    if (!session || !confirm('Session-Bild wirklich entfernen?')) return;
+    if (!session || !await confirmAction({
+      title: 'Session-Bild entfernen?',
+      message: 'Das aktuelle Session-Bild wird dauerhaft entfernt.',
+      confirmLabel: 'Bild entfernen',
+      danger: true
+    })) return;
     try {
       await api.removeSessionImage(session.id);
       session.sessionImageUrl = undefined;
       sessionImageVersion = 0;
     } catch (e: any) {
-      alert(e.error ?? 'Fehler beim Entfernen');
+      toast.error(e.error ?? 'Fehler beim Entfernen');
     }
   }
 
@@ -181,6 +214,13 @@
     savingSpeakers = true;
     try {
       await api.updateSpeakers(session.id, speakerEdits);
+      track('speaker_mapping_updated', {
+        page_type: 'app',
+        journey_stage: 'engagement',
+        feature_name: 'speaker_mapping',
+        method: 'web',
+        result: 'success'
+      });
       editingSpeakers = false;
       session = await api.getSession($page.params.id!);
       if ((session as any).summary?.sessionImagePrompt) {
@@ -188,7 +228,7 @@
       }
       campaignBackgroundImageUrl = (session as any).campaignBackgroundImageUrl ?? null;
     } catch (e: any) {
-      alert(e.error ?? 'Fehler beim Speichern');
+      toast.error(e.error ?? 'Fehler beim Speichern');
     } finally {
       savingSpeakers = false;
     }
@@ -230,7 +270,7 @@
       setWikiCreateStatus(key, 'saved');
     } catch (e: any) {
       setWikiCreateStatus(key, 'error');
-      alert(e.error ?? 'NSC konnte nicht ins Wiki übernommen werden');
+      toast.error(e.error ?? 'NSC konnte nicht ins Wiki übernommen werden');
     }
   }
 
@@ -247,7 +287,7 @@
       setWikiCreateStatus(key, 'saved');
     } catch (e: any) {
       setWikiCreateStatus(key, 'error');
-      alert(e.error ?? 'Quest konnte nicht ins Wiki übernommen werden');
+      toast.error(e.error ?? 'Quest konnte nicht ins Wiki übernommen werden');
     }
   }
 
@@ -263,7 +303,7 @@
       setWikiCreateStatus(key, 'saved');
     } catch (e: any) {
       setWikiCreateStatus(key, 'error');
-      alert(e.error ?? 'Ort konnte nicht ins Wiki übernommen werden');
+      toast.error(e.error ?? 'Ort konnte nicht ins Wiki übernommen werden');
     }
   }
 
@@ -287,6 +327,8 @@
   }
 </script>
 
+<svelte:head><title>{session?.title ?? 'Session'} — DnD Recorder</title></svelte:head>
+
 {#if campaignBackgroundImageUrl}
   <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
     <div class="absolute -inset-y-[40%] inset-x-0" use:parallaxFixed={0.5}>
@@ -296,8 +338,8 @@
   </div>
 {/if}
 
-<div class="max-w-5xl mx-auto px-6 py-10">
-  <a href="javascript:history.back()" class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-6 transition">← Zurück</a>
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+  <button type="button" onclick={() => history.back()} class="text-gray-500 hover:text-white text-sm flex items-center gap-2 mb-6 transition">← Zurück</button>
 
   {#if loading}
     <div class="animate-pulse space-y-6">
@@ -309,7 +351,7 @@
   {:else if session}
     <!-- Header -->
     <div class="mb-8">
-      <div class="flex items-start justify-between">
+      <div class="flex items-start justify-between gap-4">
         <div class="flex-1 min-w-0">
           {#if editingTitle}
             <div class="flex items-center gap-2">
@@ -326,7 +368,8 @@
               <h1 class="text-3xl font-bold text-white">
                 {session.title ?? `Session #${session.sessionNumber ?? '?'}`}
               </h1>
-              <button onclick={startEditTitle} class="text-gray-600 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition text-lg" title="Titel bearbeiten">
+              <button type="button" onclick={startEditTitle} aria-label="Titel bearbeiten"
+                class="text-gray-400 hover:text-brand-400 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition text-lg min-h-10 min-w-10" title="Titel bearbeiten">
                 ✏️
               </button>
             </div>
@@ -339,52 +382,64 @@
       </div>
     </div>
 
-    <!-- Session-Bild Header-Kachel (zwischen Tabs und Chronik) -->
+    <!-- Session-Bild Header-Kachel -->
     {#if sessionImageUrl()}
-      <div class="mb-6 relative overflow-hidden rounded-2xl h-64 group">
+      <div class="mb-6 relative overflow-hidden rounded-2xl aspect-[4/3] group">
         <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
-          <img src={sessionImageUrl()!} alt="" class="w-full h-full object-cover opacity-60" />
+          <img src={sessionImageUrl()!} alt={`Session-Bild zu ${session.title ?? `Session #${session.sessionNumber ?? '?'}`}`} class="w-full h-full object-cover opacity-60" />
         </div>
         <div class="absolute inset-0 bg-gradient-to-t from-surface-900 via-transparent to-surface-900/30 pointer-events-none"></div>
-        <!-- Remove button (GM only, hover) -->
-        <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition flex gap-2">
-          <button onclick={removeSessionImage}
+        <!-- Remove button (GM only) -->
+        <div class="absolute top-3 right-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition flex gap-2">
+          <button type="button" onclick={removeSessionImage}
             class="bg-red-900/80 hover:bg-red-800 text-red-300 text-xs px-3 py-1.5 rounded-lg backdrop-blur transition">
             ✕ Entfernen
           </button>
         </div>
       </div>
-    {:else if session.status === 'DONE'}
-      <!-- Noch kein Bild — Generate/Upload (GM only) -->
-      <div class="mb-6 bg-surface-800 rounded-2xl border border-surface-600 border-dashed p-6">
-        <p class="text-sm text-gray-400 mb-4">🎨 Session-Bild generieren — zeigt eine illustrierte Szene dieser Session als Header</p>
-        <div class="space-y-3">
+    {/if}
+
+    {#if session.status === 'DONE'}
+      <!-- Generate/regenerate/upload (GM only) -->
+      <details class="mb-6 bg-surface-800 rounded-2xl border border-surface-600">
+        <summary class="cursor-pointer px-5 py-4 text-sm font-medium text-gray-300 hover:text-white transition">
+          🎨 Session-Bild {sessionImageUrl() ? 'bearbeiten oder neu generieren' : 'generieren'}
+        </summary>
+        <div class="space-y-3 border-t border-surface-600 p-5">
+          <label for="session-image-prompt" class="sr-only">Prompt für das Session-Bild</label>
           <textarea
+            id="session-image-prompt"
             bind:value={generateSessionImagePrompt}
             rows="2"
             placeholder="Prompt für die Bildgenerierung..."
             class="w-full bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500 resize-none">
           </textarea>
-          <div class="flex items-center gap-3">
-            <button onclick={generateSessionImage} disabled={generatingSessionImage}
+          <div class="flex flex-wrap items-center gap-3">
+            <button type="button" onclick={generateSessionImage} disabled={generatingSessionImage || uploadingSessionImage}
               class="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
-              {generatingSessionImage ? 'Generiere...' : '🎨 Generieren'}
+              {generatingSessionImage ? 'Generiere...' : sessionImageUrl() ? '🎨 Neu generieren' : '🎨 Generieren'}
             </button>
             <label class="text-xs text-gray-500 hover:text-brand-400 cursor-pointer border border-surface-600 hover:border-brand-500/40 px-3 py-1.5 rounded-lg transition inline-block">
-              {uploadingSessionImage ? 'Lade hoch...' : '📁 Oder Bild hochladen'}
-              <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange={onSessionImageSelected} disabled={uploadingSessionImage} />
+              {uploadingSessionImage ? 'Lade hoch...' : sessionImageUrl() ? '📁 Bild ersetzen' : '📁 Oder Bild hochladen'}
+              <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange={onSessionImageSelected} disabled={uploadingSessionImage || generatingSessionImage} />
             </label>
           </div>
           {#if generateSessionImageError}<p class="text-red-400 text-xs">{generateSessionImageError}</p>{/if}
           {#if uploadSessionImageError}<p class="text-red-400 text-xs">{uploadSessionImageError}</p>{/if}
         </div>
-      </div>
+      </details>
     {/if}
 
     <!-- Tabs -->
-    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 w-fit border border-surface-600">
+    <div role="tablist" aria-label="Session-Inhalte" use:keyboardTabs
+      class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 max-w-full overflow-x-auto border border-surface-600">
       {#each [['summary', '✍️ Summary'], ['transcript', '📝 Transkript'], ['speakers', '👤 Sprecher']] as [tab, label]}
         <button
+          id={`session-tab-${tab}`}
+          role="tab"
+          aria-selected={activeTab === tab}
+          aria-controls={`session-panel-${tab}`}
+          tabindex={activeTab === tab ? 0 : -1}
           onclick={() => activeTab = tab as any}
           class="px-4 py-2 rounded-lg text-sm font-medium transition {activeTab === tab ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
           {label}
@@ -392,6 +447,7 @@
       {/each}
     </div>
 
+    <div role="tabpanel" id={`session-panel-${activeTab}`} aria-labelledby={`session-tab-${activeTab}`} tabindex="0">
     <!-- Summary Tab -->
     {#if activeTab === 'summary'}
       {#if !session.summary}
@@ -425,12 +481,12 @@
                           🔊 Part {i + 1}
                           {#if rec.durationSeconds}<span class="text-gray-500 font-normal">· {Math.round(rec.durationSeconds / 60)} min</span>{/if}
                         </span>
-                        <a href={recordingUrl(rec.filename)} download
+                        <a href={recordingUrl(rec.id)} download
                           class="text-xs text-brand-400 hover:text-white bg-surface-600 hover:bg-brand-600 px-3 py-1 rounded transition">
                           MP3 Download
                         </a>
                       </div>
-                      <audio controls src={recordingUrl(rec.filename)} preload="none"
+                      <audio controls src={recordingUrl(rec.id)} preload="none"
                         class="w-full h-8 [&::-webkit-media-controls-panel]:bg-surface-800 [&::-webkit-media-controls-current-time-display]:text-gray-200 [&::-webkit-media-controls-time-remaining-display]:text-gray-200">
                       </audio>
                     </div>
@@ -458,7 +514,7 @@
                         <button type="button" onclick={() => createWikiNPC(npc)}
                           disabled={wikiCreateStatus[createKey] === 'saving' || wikiCreateStatus[createKey] === 'saved'}
                           title="Als verknüpften Wiki-NSC anlegen"
-                          class="shrink-0 w-7 h-7 rounded-lg border border-surface-600 hover:border-yellow-500/50 text-gray-500 hover:text-yellow-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
+                          class="shrink-0 w-10 h-10 rounded-lg border border-surface-600 hover:border-yellow-500/50 text-gray-500 hover:text-yellow-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
                           {wikiCreateButtonLabel(createKey)}
                         </button>
                       </div>
@@ -489,7 +545,7 @@
                         <button type="button" onclick={() => createWikiQuest(quest)}
                           disabled={wikiCreateStatus[createKey] === 'saving' || wikiCreateStatus[createKey] === 'saved'}
                           title="Als verknüpfte Wiki-Quest anlegen"
-                          class="shrink-0 w-7 h-7 rounded-lg border border-surface-600 hover:border-blue-500/50 text-gray-500 hover:text-blue-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
+                          class="shrink-0 w-10 h-10 rounded-lg border border-surface-600 hover:border-blue-500/50 text-gray-500 hover:text-blue-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
                           {wikiCreateButtonLabel(createKey)}
                         </button>
                       </div>
@@ -531,7 +587,7 @@
                         <button type="button" onclick={() => createWikiLocation(loc)}
                           disabled={wikiCreateStatus[createKey] === 'saving' || wikiCreateStatus[createKey] === 'saved'}
                           title="Als verknüpften Wiki-Ort anlegen"
-                          class="shrink-0 w-7 h-7 rounded-lg border border-surface-600 hover:border-green-500/50 text-gray-500 hover:text-green-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
+                          class="shrink-0 w-10 h-10 rounded-lg border border-surface-600 hover:border-green-500/50 text-gray-500 hover:text-green-300 disabled:opacity-50 disabled:hover:text-gray-500 disabled:hover:border-surface-600 transition text-sm">
                           {wikiCreateButtonLabel(createKey)}
                         </button>
                       </div>
@@ -588,7 +644,15 @@
     <!-- Speakers Tab -->
     {:else if activeTab === 'speakers'}
       <div class="space-y-5">
-        {#if diarizationLabels.length > 0}
+        {#if directSpeakerAssignment}
+          <div class="bg-green-500/5 rounded-2xl border border-green-500/20 p-5 flex items-start gap-3">
+            <span class="text-xl">✓</span>
+            <div>
+              <h3 class="font-semibold text-green-300">Discord-Sprecher automatisch verknüpft</h3>
+              <p class="text-xs text-gray-400 mt-1">Die Wortzeitstempel wurden direkt den aktiven Discord-Audioströmen zugeordnet. Du kannst unten weiterhin Charakter- und Spielernamen ergänzen.</p>
+            </div>
+          </div>
+        {:else if diarizationLabels.length > 0}
           <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6">
             <h3 class="font-semibold text-white mb-1">🎙️ Erkannte Sprecher im Transkript</h3>
             <p class="text-xs text-gray-500 mb-4">Die automatische Transkription erkennt anonyme Sprecher-Labels (z.B. "SPEAKER_00") — hier ein Ausschnitt aus dem, was jedes Label gesagt hat. Hilft bei der Zuordnung unten.</p>
@@ -607,8 +671,8 @@
         <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6">
           <div class="flex items-center justify-between mb-6">
             <div>
-              <h3 class="font-semibold text-white">Sprecher zuordnen</h3>
-              <p class="text-xs text-gray-500 mt-1">Ordne Discord-Usernamen, Charakternamen und das erkannte Transkript-Label einander zu</p>
+              <h3 class="font-semibold text-white">Sprecher verwalten</h3>
+              <p class="text-xs text-gray-500 mt-1">{directSpeakerAssignment ? 'Ergänze die automatisch erkannten Discord-Sprecher um Charakter- und Spielernamen.' : 'Ordne Discord-Usernamen, Charakternamen und das erkannte Transkript-Label einander zu.'}</p>
             </div>
             {#if !editingSpeakers}
               <button onclick={() => editingSpeakers = true}
@@ -623,32 +687,34 @@
           {:else}
             <div class="space-y-4">
               {#if editingSpeakers}
-                <div class="grid grid-cols-4 gap-3 text-xs text-gray-500 font-medium px-1">
+                <div class={`hidden sm:grid ${directSpeakerAssignment ? 'grid-cols-3' : 'grid-cols-4'} gap-3 text-xs text-gray-500 font-medium px-1`}>
                   <span>Discord-User</span>
-                  <span>Transkript-Label</span>
+                  {#if !directSpeakerAssignment}<span>Transkript-Label</span>{/if}
                   <span>Charaktername</span>
                   <span>Spielername</span>
                 </div>
               {/if}
               {#each speakerEdits as edit, i}
-                <div class="grid grid-cols-4 gap-3 items-center">
+                <div class={`grid grid-cols-1 ${directSpeakerAssignment ? 'sm:grid-cols-3' : 'sm:grid-cols-4'} gap-3 items-center border-b border-surface-600 pb-4 last:border-0`}>
                   <div class="text-sm text-gray-400 font-medium truncate">{edit.discordName}</div>
                   {#if editingSpeakers}
-                    <select bind:value={speakerEdits[i].diarizationLabel}
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
-                      <option value="">— kein Label —</option>
-                      {#each diarizationLabels as dl}
-                        <option value={dl.label}>{dl.label}</option>
-                      {/each}
-                    </select>
-                    <input bind:value={speakerEdits[i].characterName}
+                    {#if !directSpeakerAssignment}
+                      <select bind:value={speakerEdits[i].diarizationLabel} aria-label={`Transkript-Label für ${edit.discordName}`}
+                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                        <option value="">— kein Label —</option>
+                        {#each diarizationLabels as dl}
+                          <option value={dl.label}>{dl.label}</option>
+                        {/each}
+                      </select>
+                    {/if}
+                    <input bind:value={speakerEdits[i].characterName} aria-label={`Charaktername für ${edit.discordName}`}
                       class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
                       placeholder="Charaktername" />
-                    <input bind:value={speakerEdits[i].playerName}
+                    <input bind:value={speakerEdits[i].playerName} aria-label={`Spielername für ${edit.discordName}`}
                       class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
                       placeholder="Spielername" />
                   {:else}
-                    <span class="text-sm font-mono text-gray-400">{edit.diarizationLabel || '—'}</span>
+                    {#if !directSpeakerAssignment}<span class="text-sm font-mono text-gray-400">{edit.diarizationLabel || '—'}</span>{/if}
                     <span class="text-sm text-white">{edit.characterName || '—'}</span>
                     <span class="text-sm text-gray-500">{edit.playerName || '—'}</span>
                   {/if}
@@ -672,5 +738,6 @@
         </div>
       </div>
     {/if}
+    </div>
   {/if}
 </div>

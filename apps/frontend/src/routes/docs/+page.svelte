@@ -1,24 +1,71 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { api } from '$lib/api.js';
+  import { track, type TrackingParameters } from '$lib/analytics.js';
+
   let activeSection = $state('basics');
+  let discordInviteUrl = $state('');
+
+  const TRACKED_TOPICS: Record<string, NonNullable<TrackingParameters['topic_id']>> = {
+    basics: 'quickstart',
+    bot: 'commands',
+    workflow: 'sessions',
+    campaigns: 'campaigns',
+    members: 'campaigns',
+    settings: 'settings',
+    admin: 'privacy',
+    faq: 'privacy'
+  };
+
+  function selectSection(id: string) {
+    activeSection = id;
+    track('docs_topic_viewed', {
+      page_type: 'docs',
+      journey_stage: 'engagement',
+      topic_id: TRACKED_TOPICS[id] ?? 'quickstart',
+      method: 'web',
+      result: 'success'
+    });
+  }
+
+  onMount(() => {
+    api.getDiscordConfig()
+      .then((config) => { discordInviteUrl = config.inviteUrl ?? ''; })
+      .catch(() => { discordInviteUrl = ''; });
+  });
 </script>
 
 <svelte:head>
-  <title>Dokumentation — D&D Recorder</title>
+  <title>Dokumentation: DnD Recorder Discord Bot einrichten</title>
+  <meta name="description" content="DnD Recorder Dokumentation: Discord Bot verbinden, D&amp;D Session aufnehmen, Kampagnen und Channels zuordnen sowie KI-Zusammenfassungen konfigurieren." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://dnd-recorder.de/docs" />
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-6 py-10">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
   <h1 class="text-3xl font-bold text-white mb-4">📖 Dokumentation</h1>
-  <p class="text-gray-400 mb-2">Alles was du über den D&D Bot wissen musst — vom Start bis zur epischen Zusammenfassung</p>
-  <p class="text-sm text-gray-600 mb-10">Wähle ein Thema aus der Sidebar oder dem Dropdown-Menü (mobil). Bei Fragen hilft dir der FAQ-Bereich weiter.</p>
+  <p class="text-gray-400 mb-2">Alles über den DnD Recorder Bot — vom Start bis zur epischen Zusammenfassung</p>
+  <div class="flex flex-wrap items-center gap-4 mb-10">
+    <p class="text-sm text-gray-600">Wähle ein Thema aus der Sidebar oder dem Dropdown-Menü (mobil). Bei Fragen hilft dir der FAQ-Bereich weiter.</p>
+    {#if discordInviteUrl}
+      <div class="flex flex-col items-start">
+        <a href={discordInviteUrl} target="_blank" rel="noreferrer"
+          class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 transition">
+          🤖 Bot zu Discord hinzufügen
+        </a>
+        <span class="mt-1 text-xs text-gray-600">Danach als Server-Admin <code>/status</code> ausführen</span>
+      </div>
+    {/if}
+  </div>
 
-  <div class="flex gap-12 border-l border-surface-600">
+  <div class="flex flex-col lg:flex-row gap-6 lg:gap-12 lg:border-l border-surface-600">
     <!-- Sidebar -->
     <nav class="w-64 shrink-0 hidden lg:block">
       <div class="bg-surface-800 rounded-xl border border-surface-600 p-4 sticky top-24 space-y-0.5">
         <h3 class="text-xs text-gray-500 uppercase tracking-wider mb-3 font-semibold px-2">Inhalt</h3>
         {#each sections as section}
           <button
-            onclick={() => activeSection = section.id}
+            onclick={() => selectSection(section.id)}
             class="w-full text-left px-3 py-2 rounded-lg text-sm transition {activeSection === section.id ? 'bg-brand-600/20 text-brand-400 font-medium' : 'text-gray-400 hover:text-white hover:bg-surface-700'}">
             {section.emoji} {section.title}
           </button>
@@ -28,7 +75,8 @@
 
     <!-- Mobile section selector -->
     <div class="lg:hidden w-full mb-6">
-      <select bind:value={activeSection}
+      <label for="docs-section" class="sr-only">Dokumentationsabschnitt</label>
+      <select id="docs-section" value={activeSection} onchange={(event) => selectSection(event.currentTarget.value)}
         class="w-full bg-surface-800 border border-surface-600 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500">
         {#each sections as section}
           <option value={section.id}>{section.title}</option>
@@ -41,7 +89,7 @@
       {#each sections.filter(s => s.id === activeSection) as section}
         <div class="prose prose-invert max-w-none">
           <h2 class="!text-2xl !font-bold !text-white !mb-2 !mt-8">{section.emoji} {section.title}</h2>
-          <div class="bg-surface-800 rounded-2xl border border-surface-600 p-10 space-y-6 text-gray-200 leading-relaxed">
+          <div class="bg-surface-800 rounded-2xl border border-surface-600 p-5 sm:p-10 space-y-6 text-gray-200 leading-relaxed">
             {@html section.content}
           </div>
         </div>
@@ -50,7 +98,7 @@
   </div>
 </div>
 
-<script lang="ts" context="module">
+<script lang="ts" module>
   const sections = [
     {
       id: 'basics',
@@ -60,14 +108,16 @@
 <h3>Willkommen bei deinem D&D Aufnahmesystem!</h3>
 <p>Dieser Bot nimmt deine D&D-Sessions automatisch auf, transkribiert sie mit KI und erstellt epische Zusammenfassungen — alles in einem schicken Web-Panel.</p>
 
-<h3>In 5 Minuten startklar</h3>
+<h3>In wenigen Minuten startklar</h3>
 <ol>
+  <li><strong>Account erstellen:</strong> Registriere dich im Web-Panel unter <code>/register</code> und bestätige deine E-Mail über den 24 Stunden gültigen Einmal-Link.</li>
+  <li><strong>Beta-Freigabe abwarten:</strong> Während der Beta prüft der Obere Artificer neue Accounts manuell. Nach der Freigabe erhältst du eine Aktivierungsmail und kannst dich anmelden.</li>
+  <li><strong>Kampagne erstellen:</strong> Lege deine Kampagne im Web-Panel an. Eine Discord-Server-ID musst du nicht eintragen.</li>
   <li><strong>Bot einladen:</strong> Lade den Bot über den Einladungslink in deinen Discord-Server ein.</li>
-  <li><strong>Account erstellen:</strong> Registriere dich im Web-Panel unter <code>/register</code> mit deiner E-Mail.</li>
-  <li><strong> Gruppe anlegen:</strong> Erstelle eine neue Gruppe für deine Spielrunde.</li>
-  <li><strong>Kampagne starten:</strong> Lege eine Kampagne innerhalb der Gruppe an.</li>
+  <li><strong>Server verbinden:</strong> Führe als Server-Admin <code>/status</code> aus, öffne den privaten Verbindungslink und wähle deine Web-Kampagne aus.</li>
+  <li><strong>Kanäle zuordnen:</strong> Verknüpfe mit <code>/kampagne verbinden</code> die Kampagne mit einem Voice-Channel und dem gewünschten Summary-Channel.</li>
   <li><strong>Einstellungen konfigurieren:</strong> Trage deine API-Keys für Transkription (Replicate) und Zusammenfassung (Anthropic/Gemini/OpenAI/SiliconFlow/Ollama) ein.</li>
-  <li><strong>Los geht's:</strong> Nutze <code>/record</code> in deinem Discord-Voice-Channel und der Bot startet die Aufnahme!</li>
+  <li><strong>Los geht's:</strong> Nutze <code>/record</code> im zugeordneten Voice-Channel. Bei einer mehrdeutigen Zuordnung kannst du die Kampagne direkt auswählen.</li>
 </ol>`
     },
     {
@@ -82,15 +132,24 @@
   <li>✅ Nachrichten senden</li>
   <li>✅ Slash-Commands nutzen</li>
 </ul>
+<p>Nach dem Einladen als Server-Admin <code>/status</code> ausführen. Ist der Server noch nicht zugeordnet, erscheint ausschließlich für den Admin ein 15 Minuten gültiger Einmal-Link. Nach der Zuordnung zeigt das Web-Panel ein grünes Statuslicht und den erkannten Discord-Servernamen. Ein Account kann mehrere Server verbinden.</p>
+<p><strong>Beta-Schutz:</strong> Installieren und <code>/status</code> sind ohne Web-Login möglich, eine Aufnahme jedoch nicht. <code>/record</code> wird erst freigeschaltet, wenn der Server mit einem bestätigten, aktiven und vom Oberen Artificer freigegebenen GM-Konto verbunden ist. Wird die Freigabe entzogen oder das Konto gesperrt, blockiert das Backend bereits die nächste Session.</p>
 
 <h3>Bot-Befehle</h3>
 <div class="overflow-x-auto">
 <table>
   <thead><tr><th>Befehl</th><th>Beschreibung</th></tr></thead>
   <tbody>
-    <tr><td><code>/record</code></td><td>Startet die Aufnahme im aktuellen Voice-Channel. Der Bot joint und beginnt die Aufnahme automatisch.</td></tr>
+    <tr><td><code>/record [kampagne]</code></td><td>Startet die Aufnahme im aktuellen Voice-Channel. Die optionale Auswahl löst mehrdeutige Zuordnungen auf.</td></tr>
     <tr><td><code>/stop</code></td><td>Stoppt die Aufnahme, konvertiert das Audio zu MP3 und startet die Transkription.</td></tr>
-    <tr><td><code>/status</code></td><td>Zeigt den aktuellen Status: ob gerade aufgenommen/transkribiert/summarized wird.</td></tr>
+    <tr><td><code>/status</code></td><td>Zeigt Aufnahme, verbundene Kampagnen und Kanalzuordnungen. Bei Bedarf erscheint ein privater Web-Link zur Server-Verknüpfung.</td></tr>
+    <tr><td><code>/kampagne verbinden</code></td><td>Ordnet eine Kampagne einem Voice-Channel und optional einem festen Summary-Channel zu.</td></tr>
+    <tr><td><code>/kampagne aktivieren</code></td><td>Aktiviert eine Kampagne als mögliche Aufnahmezuordnung auf diesem Server.</td></tr>
+    <tr><td><code>/kampagne deaktivieren</code></td><td>Deaktiviert die Kampagne für neue Aufnahmen, ohne Daten zu löschen.</td></tr>
+    <tr><td><code>/kampagne status</code></td><td>Listet alle Kampagnen- und Kanalzuordnungen des Servers.</td></tr>
+    <tr><td><code>/summary-channel set</code></td><td>Legt den Summary-Channel für die ausgewählte Kampagne fest.</td></tr>
+    <tr><td><code>/summary-channel status</code></td><td>Zeigt den Summary-Channel der ausgewählten Kampagne.</td></tr>
+    <tr><td><code>/summary-channel clear</code></td><td>Entfernt den festen Summary-Channel dieser Kampagne; danach wird der Startkanal verwendet.</td></tr>
   </tbody>
 </table>
 </div>
@@ -143,21 +202,27 @@
       title: 'Kampagnen & Sessions',
       content: `
 <h3>Kampagnen anlegen & verwalten</h3>
-<p>Im Dashboard findest du deine Gruppen. Jede Gruppe kann mehrere Kampagnen haben. Eine Kampagne enthält:</p>
+<p>Im Dashboard findest du direkt deine Kampagnen. Ein DM kann mehrere Kampagnen auf demselben oder auf verschiedenen Discord-Servern verwalten. Jede Kampagne enthält:</p>
 <ul>
   <li><strong>Name & Beschreibung:</strong> Titel und Setting deiner Kampagne.</li>
   <li><strong>Kampagnen-Kontext:</strong> Hintergrundwissen für das LLM — wird bei jeder Summary mitgegeben.</li>
-  <li><strong>Hintergrundbild:</strong> Ein generiertes oder hochgeladenes Bild, das als Parallax-Hintergrund auf der Kampagnen-Seite und in Sessions erscheint.</li>
-  <li><strong>Sessions:</strong> Alle Aufnahme-Sessions dieser Kampagne, chronologisch sortiert. Nach 10 Sessions erscheint ein "Mehr laden"-Button.</li>
+  <li><strong>Mitglieder:</strong> Spieler und Charaktere, die in dieser Kampagne teilnehmen.</li>
+  <li><strong>Server-Zuordnungen:</strong> Discord-Server, Voice-Channel und Summary-Channel der Kampagne.</li>
+  <li><strong>Hintergrundbild:</strong> Ein generiertes oder hochgeladenes Bild im übersichtlichen 4:3-Format.</li>
+  <li><strong>Sessions:</strong> Alle Aufnahme-Sessions dieser Kampagne, chronologisch sortiert. Sessions entstehen ausschließlich durch eine Bot-Aufnahme und können nicht manuell hinzugefügt werden.</li>
 </ul>
+
+<h3>Mehrere Kampagnen und Server</h3>
+<p>Eine Kampagne kann mit einem oder mehreren Discord-Servern verbunden werden. Auf demselben Server lassen sich mehrere Kampagnen durch unterschiedliche Voice- und Summary-Channels trennen.</p>
+<p>Bei <code>/record</code> gilt: Eine ausdrücklich gewählte Kampagne hat Vorrang, danach folgt die Zuordnung des aktuellen Voice-Channels. Ist nur eine Kampagne aktiv, wird diese verwendet. Bei mehreren verbleibenden Möglichkeiten fordert der Bot eine Auswahl an und ordnet niemals stillschweigend die zuletzt angelegte Kampagne zu.</p>
 
 <h3>Session-Detailseite</h3>
 <p>Klicke auf eine Session, um die Detailansicht zu öffnen:</p>
 <ul>
-  <li><strong>Session-Bild:</strong> Header-Kachel mit generierbarem/hochladbarem Bild — zeigt eine illustrierte Szene der Session.</li>
+  <li><strong>Session-Bild:</strong> Generierbares oder hochladbares Bild im 4:3-Format. Die Generator-Einstellungen lassen sich platzsparend aufklappen.</li>
   <li><strong>Summary-Tab:</strong> Chronik, NSCs, Quests, Beute, Orte, offene Fäden + eingebetteter MP3-Player.</li>
   <li><strong>Transkript-Tab:</strong> Vollständiges Transkript mit farbcodierten Sprechern und Timestamps.</li>
-  <li><strong>Sprecher-Tab:</strong> Diarization-Label-Zuordnung mit Transkript-Ausschnitten.</li>
+  <li><strong>Sprecher-Tab:</strong> Automatisch verknüpfte Discord-Sprecher sowie editierbare Charakter- und Spielernamen; ältere anonyme Labels bleiben zuordenbar.</li>
 </ul>
 
 <h3>Session-Paginierung</h3>
@@ -169,7 +234,7 @@
       title: 'Mitglieder verwalten',
       content: `
 <h3>Mitglieder anlegen (kein Login nötig)</h3>
-<p>Öffne deine Gruppe → Tab "Mitglieder". Dort kannst du direkt neue Mitglieder anlegen:</p>
+<p>Öffne deine Kampagne → Tab "Mitglieder". Dort kannst du direkt neue Mitglieder anlegen:</p>
 <ul>
   <li><strong>Discord-Name:</strong> Der Handle des Spielers auf Discord.</li>
   <li><strong>Charaktername:</strong> Name des Charakters in dieser Kampagne.</li>
@@ -185,15 +250,15 @@
   <li><strong>Entfernen:</strong> Soft-Delete — das Mitglied bleibt in der Historie erhalten.</li>
 </ul>
 
-<p><em>Hinweis:</em> Ein Discord-User kann in verschiedenen Kampagnen unterschiedliche Charaktere haben. Die Zuordnung liegt pro Gruppe, nicht global.</p>`
+<p><em>Hinweis:</em> Ein Discord-User kann in verschiedenen Kampagnen unterschiedliche Charaktere haben. Die Zuordnung liegt pro Kampagne, nicht global.</p>`
     },
     {
       id: 'settings',
       emoji: '⚙️',
       title: 'Einstellungen & API-Keys',
       content: `
-<h3>Gruppen-Einstellungen</h3>
-<p>Jede Gruppe hat eigene Einstellungen. Öffne sie über das Dropdown-Menü in der Gruppen-Ansicht.</p>
+<h3>Kampagnen-Einstellungen</h3>
+<p>Jede Kampagne hat eigene Einstellungen. Öffne sie über das Menü in der Kampagnen-Ansicht.</p>
 
 <h3>LLM-Provider</h3>
 <p>Wähle deinen KI-Anbieter für die Zusammenfassung:</p>
@@ -222,10 +287,50 @@
 
 <h3>Transkription</h3>
 <ul>
-  <li><strong>Replicate WhisperX:</strong> Standard. API-Key von replicate.com. Erkennt verschiedene Sprecher (Diarization).</li>
-  <li><strong>HuggingFace Token:</strong> Für Speaker-Diarization (pyannote-Modelle müssen auf hf.co akzeptiert sein).</li>
+  <li><strong>Replicate WhisperX:</strong> Standard. API-Key von replicate.com.</li>
   <li><strong>OpenAI Whisper:</strong> Alternative, braucht OpenAI API-Key.</li>
-</ul>`
+  <li><strong>Sprecherzuordnung:</strong> Erfolgt automatisch anhand der getrennten Discord-Audiospuren und der Wortzeitstempel. Ein HuggingFace-Token ist nicht nötig.</li>
+  <li><strong>Lange Sessions:</strong> Aufnahmen werden in 30-Minuten-MP3-Chunks verarbeitet. Dadurch bleiben auch fünf- bis sechsstündige Spielabende stabil wiederholbar.</li>
+</ul>
+
+<h3>Vom Superadmin freigegebene Keys</h3>
+<p>Ein aktiver Grant übernimmt den Key immer zusammen mit dem passenden Provider, Modell und Endpoint. In den Feldern bleiben die ersten sechs Zeichen sichtbar. Die Anzeige nennt getrennt, ob Transkription, Bildgenerierung und Zusammenfassung tatsächlich freigegeben sind.</p>
+<p>Wird der Grant entzogen, gelten ab der nächsten Verarbeitung oder Bildanfrage wieder die zuvor gespeicherten eigenen Kampagnen-Keys. Nicht freigegebene Key-Typen können DMs weiterhin selbst pflegen.</p>`
+    },
+    {
+      id: 'admin',
+      emoji: '🛡️',
+      title: 'Administration & Accounts',
+      content: `
+<h3>API-Keys freigeben und entziehen</h3>
+<p>Im Adminbereich unter „DMs“ schaltet „🔑 Keys“ die Freigabe für einen Account ein oder aus. Freigegeben werden nur Key-Typen, die beim Superadmin tatsächlich in den Einstellungen einer seiner Kampagnen hinterlegt sind. Die Liste am DM zeigt den verfügbaren Umfang.</p>
+<ul>
+  <li><strong>Freigeben:</strong> Transcriber, Zusammenfassungen und beide Bildgeneratoren nutzen das vollständige Admin-Profil.</li>
+  <li><strong>Entziehen:</strong> Neue Vorgänge nutzen sofort wieder die eigenen Kampagnen-Keys; laufende externe API-Aufrufe werden nicht nachträglich abgebrochen.</li>
+  <li><strong>Erneut freigeben:</strong> Ein zuvor entzogener Grant kann ohne neuen Account wieder aktiviert werden.</li>
+</ul>
+
+<h3>Account sperren oder aktivieren</h3>
+<p>„Account sperren“ beendet alle bestehenden Web-Sitzungen und verhindert sofort neue Logins sowie API-Zugriffe. Daten, Kampagnen und Sessions bleiben vollständig erhalten. Über „Account aktivieren“ kann der Zugang später wieder freigeschaltet werden.</p>
+
+<h3>Neue Beta-Accounts freigeben</h3>
+<p>Öffentlich registrierte Accounts erscheinen zunächst mit „E-Mail offen“. Nach dem Double-Opt-in wechselt der Status zu „Freigabe offen“. Erst „Für Beta freischalten“ erlaubt den Login und versendet automatisch die Aktivierungsmail. Dieser Freigabestatus ist unabhängig von der späteren Accountsperre.</p>
+
+<h3>Discord-Installationen überwachen</h3>
+<p>Der Tab „Server“ erfasst den Bot unabhängig von einer Web-Anmeldung. Bot-Status und Web-Zugriff werden getrennt angezeigt: „Nicht beansprucht“ kennzeichnet eine aktive Geisterinstallation, weitere Stati zeigen offene E-Mail-Bestätigung, Beta-Freigabe oder einen gesperrten Account. Nur „Bereit“ darf neue Aufnahmen anlegen.</p>
+
+<h3>E-Mail-Bestätigung bei neuen Accounts</h3>
+<p>Öffentlich registrierte Accounts erscheinen bis zum Double-Opt-in mit dem Status „E-Mail offen“. Der Bestätigungslink ist 24 Stunden gültig und nur einmal nutzbar. Vom Superadmin direkt angelegte oder bearbeitete Accounts gelten als administrativ bestätigt.</p>
+
+<h3>Account endgültig löschen</h3>
+<p>Vor dem Löschen zeigt ein Sicherheitsdialog die betroffenen Kampagnen, Sessions und Aufnahmen:</p>
+<ul>
+  <li>Account, Passwortdaten, Grants und alle Mitgliedschaften werden gelöscht.</li>
+  <li>Allein von diesem DM verwaltete Kampagnen werden samt Sessions, Aufnahmen und Uploads gelöscht.</li>
+  <li>Gemeinsam genutzte Kampagnen bleiben bestehen; dort wird nur die Mitgliedschaft des gelöschten Accounts entfernt.</li>
+  <li>Solange eine Session noch aufgenommen oder verarbeitet wird, ist die Löschung zum Schutz laufender Jobs gesperrt.</li>
+</ul>
+<p><strong>Achtung:</strong> Die endgültige Löschung kann nicht rückgängig gemacht werden.</p>`
     },
     {
       id: 'faq',
@@ -236,19 +341,28 @@
 <p>Stelle sicher, dass der Bot die Berechtigungen "Connect", "Speak" und "Use Voice Activity" auf deinem Server hat.</p>
 
 <h3>Die Transkription dauert sehr lange</h3>
-<p>WhisperX mit Speaker-Diarization ist rechenintensiv. Bei langen Sessions (2h+) kann die Verarbeitung 5–10 Minuten dauern. Bei Chunked Recording läuft die Transkription parallel zur Aufnahme — dann ist sie meist sofort nach /stop fertig.</p>
+<p>Mehrstündiges Audiomaterial benötigt je nach gewähltem Whisper-Provider einige Zeit. DnD Recorder verarbeitet 30-Minuten-Chunks nacheinander, sodass ein fehlgeschlagener Teil wiederholt werden kann und kein einzelner übergroßer Upload entsteht. Die Verarbeitung startet nach <code>/stop</code>.</p>
 
 <h3>Die Summary ist unvollständig oder wirr</h3>
-<p>Prüfe:
+<p>Prüfe folgende Punkte:</p>
 <ol>
   <li>Hast du einen guten Kampagnen-Kontext hinterlegt?</li>
   <li>Ist dein System-Prompt klar formuliert?</li>
   <li>Hast du die Sprecher korrekt zugeordnet? (Tab "Sprecher" in der Session)</li>
   <li>Welches LLM-Modell nutzt du? Claude Opus oder GPT-5.x liefern deutlich bessere Ergebnisse als kleinere Modelle.</li>
-</ol></p>
+</ol>
+
+<h3>Ich habe mein Passwort vergessen</h3>
+<p>Öffne auf der Anmeldeseite „Passwort vergessen?“. Du erhältst per E-Mail einen einmalig nutzbaren Link, der 30 Minuten gültig ist. Nach dem Zurücksetzen werden bestehende Sitzungen aus Sicherheitsgründen abgemeldet.</p>
+
+<h3>Meine Bestätigungsmail ist nicht angekommen</h3>
+<p>Prüfe zuerst den Spam-Ordner. Auf der Anmeldeseite kannst du nach einem Loginversuch mit korrektem Passwort einen neuen Link anfordern. Auch ein abgelaufener Bestätigungslink bietet diese Möglichkeit. Die Antwort bleibt aus Datenschutzgründen immer neutral.</p>
 
 <h3>Kann ich mehrere Kampagnen gleichzeitig laufen lassen?</h3>
-<p>Ja! Eine Gruppe kann beliebig viele Kampagnen haben. Der Bot nimmt immer im aktuellen Voice-Channel auf und ordnet die Session der aktiven Kampagne zu.</p>
+<p>Ja, auf verschiedenen Discord-Servern können Kampagnen gleichzeitig aufgenommen werden. Auf demselben Server ist wegen der Discord-Voice-Verbindung jeweils eine Aufnahme aktiv. Mehrere Kampagnen auf einem Server werden über Voice-Channels und die optionale Kampagnenauswahl getrennt.</p>
+
+<h3>Muss ich Discord-Server-IDs manuell eintragen?</h3>
+<p>Nein. Der Bot übermittelt die Server-ID und den Servernamen bei der Verknüpfung automatisch. Voice- und Summary-Channel ordnest du bequem über <code>/kampagne verbinden</code> zu.</p>
 
 <h3>Wo werden die Audio-Dateien gespeichert?</h3>
 <p>Die MP3-Chunks liegen im Docker-Volume <code>storage/recordings/</code> und sind über die Session-Detailseite als Download und eingebetteter Player verfügbar.</p>
@@ -257,7 +371,7 @@
 <p><strong>Chunked Recording rettet dich:</strong> Alle 30 Minuten wird ein Part gespeichert und parallel transkribiert. Selbst wenn der Server nach 2.5 Stunden crasht, hast du 5 Chunks à 30 Minuten gesichert.</p>
 
 <h3>Warum sehe ich kein Kampagnen-Hintergrundbild?</h3>
-<p>Das Bild ist nur für GMs sichtbar, die den Replicate-API-Key in den Gruppen-Einstellungen konfiguriert haben. Nach der ersten Generierung einmal Strg+F5 (Hard Refresh) drücken — Cloudflare kann die erste Antwort zwischenspeichern.</p>
+<p>Prüfe, ob in den Kampagnen-Einstellungen ein Replicate-API-Key konfiguriert oder durch den Superadmin freigegeben ist. Die Generator-Einstellungen befinden sich in einem aufklappbaren Bereich direkt am Bild.</p>
 
 <h3>Können meine Spieler das Web-Panel auch nutzen?</h3>
 <p>Aktuell (v1) ist das Panel nur für DMs. Multi-User mit Spieler-Logins und Leseberechtigung ist für v2 geplant.</p>`

@@ -1,0 +1,97 @@
+name: dnd-recorder-analytics
+
+services:
+  gtm-preview:
+    image: ${GTM_IMAGE:?Set a digest-pinned GTM_IMAGE in deploy/analytics/.env}
+    restart: unless-stopped
+    environment:
+      CONTAINER_CONFIG: ${GTM_CONTAINER_CONFIG:?Set GTM_CONTAINER_CONFIG in deploy/analytics/.env}
+      RUN_AS_PREVIEW_SERVER: "true"
+      PORT: "8080"
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+    networks:
+      - analytics-internal
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  gtm-server:
+    image: ${GTM_IMAGE:?Set a digest-pinned GTM_IMAGE in deploy/analytics/.env}
+    restart: unless-stopped
+    environment:
+      CONTAINER_CONFIG: ${GTM_CONTAINER_CONFIG:?Set GTM_CONTAINER_CONFIG in deploy/analytics/.env}
+      PREVIEW_SERVER_URL: https://analytics-preview.dnd-recorder.de
+      PORT: "8080"
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+    networks:
+      - analytics-internal
+    depends_on:
+      - gtm-preview
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  analytics-gateway:
+    image: ${NGINX_IMAGE:?Set a digest-pinned NGINX_IMAGE in deploy/analytics/.env}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8080"
+      - "127.0.0.1:8082:8082"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m,mode=0755
+      - /var/run:size=4m,mode=0755
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 128m
+    networks:
+      - analytics-internal
+    depends_on:
+      - gtm-server
+      - gtm-preview
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+
+networks:
+  analytics-internal:
+    name: dnd_recorder_analytics_internal
+    internal: false

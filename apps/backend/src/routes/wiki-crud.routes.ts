@@ -9,7 +9,7 @@ import { prisma } from "../db.js";
  * (NPCs, Quests, Locations, Threads, Loot) sowie das Verknüpfen mit Sessions.
  *
  * Alle Endpunkte sind JWT-geschützt und prüfen GM-Mitgliedschaft in der
- * Kampagnen-Gruppe. `source` ist immer 'manual' für über diese Routen
+ * Kampagne. `source` ist immer 'manual' für über diese Routen
  * erstellte Einträge.
  *
  * Zusätzlich gibt es Session-Level-Endpunkte (POST /sessions/:sessionId/*),
@@ -84,30 +84,42 @@ const linkSessionSchema = z.object({
 
 // ─── Helpers ───────────────────────────────────────────────
 
-/** Prüft ob User GM in der Kampagnen-Gruppe ist. */
-async function requireGmForCampaign(campaignId: string, userId: string): Promise<{ ok: boolean; status?: number; body?: unknown }> {
+/** Prüft, ob der User GM der Kampagne ist. */
+async function requireGmForCampaign(
+  campaignId: string,
+  userId: string
+): Promise<{ ok: boolean; status?: number; body?: unknown }> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    include: { group: { include: { memberships: { where: { userId, role: "GM", leftAt: null } } } } }
+    include: { memberships: { where: { userId, role: "GM", leftAt: null } } }
   });
   if (!campaign) return { ok: false, status: 404, body: { error: "Campaign not found" } };
-  if (!campaign.group.memberships.length) return { ok: false, status: 403, body: { error: "Only GMs can modify the wiki" } };
+  if (!campaign.memberships.length)
+    return { ok: false, status: 403, body: { error: "Only GMs can modify the wiki" } };
   return { ok: true };
 }
 
 /** Prüft GM-Mitgliedschaft anhand einer SessionId (löst die Kampagne dahinter auf). */
-async function requireGmForSession(sessionId: string, userId: string): Promise<{ ok: boolean; campaignId?: string; status?: number; body?: unknown }> {
+async function requireGmForSession(
+  sessionId: string,
+  userId: string
+): Promise<{ ok: boolean; campaignId?: string; status?: number; body?: unknown }> {
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
-    include: { campaign: { include: { group: { include: { memberships: { where: { userId, role: "GM", leftAt: null } } } } } } }
+    include: {
+      campaign: {
+        include: { memberships: { where: { userId, role: "GM", leftAt: null } } }
+      }
+    }
   });
   if (!session) return { ok: false, status: 404, body: { error: "Session not found" } };
-  if (!session.campaign.group.memberships.length) return { ok: false, status: 403, body: { error: "Only GMs can modify the wiki" } };
+  if (!session.campaign.memberships.length)
+    return { ok: false, status: 403, body: { error: "Only GMs can modify the wiki" } };
   return { ok: true, campaignId: session.campaignId };
 }
 
 export async function wikiCrudRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
+  app.addHook("preHandler", app.authenticate);
 
   // ════════════════════════════════════════════════════════════
   // NPCs
@@ -137,7 +149,10 @@ export async function wikiCrudRoutes(app: FastifyInstance) {
       });
       return reply.status(201).send(npc);
     } catch (err: any) {
-      if (err?.code === "P2002") return reply.status(409).send({ error: "An NPC with this name already exists in the campaign" });
+      if (err?.code === "P2002")
+        return reply
+          .status(409)
+          .send({ error: "An NPC with this name already exists in the campaign" });
       throw err;
     }
   });
@@ -313,7 +328,10 @@ export async function wikiCrudRoutes(app: FastifyInstance) {
       });
       return reply.status(201).send(location);
     } catch (err: any) {
-      if (err?.code === "P2002") return reply.status(409).send({ error: "A location with this name already exists in the campaign" });
+      if (err?.code === "P2002")
+        return reply
+          .status(409)
+          .send({ error: "A location with this name already exists in the campaign" });
       throw err;
     }
   });
@@ -332,7 +350,10 @@ export async function wikiCrudRoutes(app: FastifyInstance) {
     const existing = await prisma.campaignLocation.findFirst({ where: { id: locId, campaignId } });
     if (!existing) return reply.status(404).send({ error: "Location not found" });
 
-    const location = await prisma.campaignLocation.update({ where: { id: locId }, data: body.data });
+    const location = await prisma.campaignLocation.update({
+      where: { id: locId },
+      data: body.data
+    });
     return reply.send(location);
   });
 
@@ -552,7 +573,10 @@ export async function wikiCrudRoutes(app: FastifyInstance) {
       });
       return reply.status(201).send(npc);
     } catch (err: any) {
-      if (err?.code === "P2002") return reply.status(409).send({ error: "An NPC with this name already exists in the campaign" });
+      if (err?.code === "P2002")
+        return reply
+          .status(409)
+          .send({ error: "An NPC with this name already exists in the campaign" });
       throw err;
     }
   });
@@ -605,7 +629,10 @@ export async function wikiCrudRoutes(app: FastifyInstance) {
       });
       return reply.status(201).send(location);
     } catch (err: any) {
-      if (err?.code === "P2002") return reply.status(409).send({ error: "A location with this name already exists in the campaign" });
+      if (err?.code === "P2002")
+        return reply
+          .status(409)
+          .send({ error: "A location with this name already exists in the campaign" });
       throw err;
     }
   });

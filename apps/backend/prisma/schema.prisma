@@ -9,20 +9,73 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  displayName  String
-  role         UserRole @default(DM)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                         String    @id @default(cuid())
+  email                      String    @unique
+  passwordHash               String
+  displayName                String
+  role                       UserRole  @default(DM)
+  isActive                   Boolean   @default(true)
+  emailVerifiedAt            DateTime? @default(now())
+  approvedAt                 DateTime? @default(now())
+  emailVerificationTokenHash String?   @unique
+  emailVerificationExpiresAt DateTime?
+  sessionVersion             Int       @default(0)
+  passwordResetTokenHash     String?   @unique
+  passwordResetExpiresAt     DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
-  memberships GroupMembership[]
+  memberships  CampaignMembership[]
   // Keys die dieser Admin an andere DMs verliehen hat
-  grantedKeys AdminApiKeyGrant[] @relation("GrantedBy")
+  grantedKeys  AdminApiKeyGrant[]   @relation("GrantedBy")
   // Keys die diesem DM von einem Super-Admin verliehen wurden
-  receivedKeys AdminApiKeyGrant[] @relation("GrantedTo")
+  receivedKeys AdminApiKeyGrant[]   @relation("GrantedTo")
+  analyticsIdentity AnalyticsIdentity?
+}
+
+model AnalyticsIdentity {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  clientId            String
+  revocationTokenHash String
+  policyVersion       String
+  source              String
+  grantedAt           DateTime  @default(now())
+  revokedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events AnalyticsEventOutbox[]
+
+  @@index([clientId])
+  @@index([revokedAt])
+}
+
+model AnalyticsEventOutbox {
+  id               String                @id @default(cuid())
+  analyticsIdentityId String
+  eventName        String
+  parameters       Json                  @default("{}")
+  deduplicationKey String                @unique
+  status           AnalyticsOutboxStatus @default(PENDING)
+  attempts         Int                   @default(0)
+  nextAttemptAt    DateTime              @default(now())
+  sentAt           DateTime?
+  lastErrorCode    String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  analyticsIdentity AnalyticsIdentity @relation(fields: [analyticsIdentityId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([analyticsIdentityId])
+}
+
+enum AnalyticsOutboxStatus {
+  PENDING
+  SENT
+  FAILED
 }
 
 enum UserRole {
@@ -31,60 +84,75 @@ enum UserRole {
 }
 
 model AdminApiKeyGrant {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   superAdminId String
   dmId         String
-  grantedAt    DateTime @default(now())
+  grantedAt    DateTime  @default(now())
   revokedAt    DateTime?
 
-  superAdmin User @relation("GrantedBy", fields: [superAdminId], references: [id])
-  dm         User @relation("GrantedTo", fields: [dmId], references: [id])
+  superAdmin User @relation("GrantedBy", fields: [superAdminId], references: [id], onDelete: Cascade)
+  dm         User @relation("GrantedTo", fields: [dmId], references: [id], onDelete: Cascade)
 
   @@unique([superAdminId, dmId])
 }
 
-model Group {
-  id             String   @id @default(cuid())
-  name           String
-  discordGuildId String?  @unique
-  description    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+model DiscordLinkToken {
+  id                    String   @id @default(cuid())
+  discordInstallationId String   @unique
+  codeHash              String   @unique
+  expiresAt             DateTime
+  createdAt             DateTime @default(now())
 
-  memberships GroupMembership[]
-  campaigns   Campaign[]
-  settings    GroupSettings?
+  installation DiscordInstallation @relation(fields: [discordInstallationId], references: [id], onDelete: Cascade)
 }
 
-model GroupMembership {
-  id                String    @id @default(cuid())
+model DiscordInstallation {
+  id             String    @id @default(cuid())
+  discordGuildId String    @unique
+  guildName      String
+  isActive       Boolean   @default(true)
+  installedAt    DateTime  @default(now())
+  removedAt      DateTime?
+  lastSeenAt     DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  bindings  CampaignDiscordBinding[]
+  linkToken DiscordLinkToken?
+}
+
+model CampaignMembership {
+  id                 String    @id @default(cuid())
   // userId ist optional: Mitglieder sind in v1 reine Entitäten ohne eigenen Login.
   // Ein User-Account (userId gesetzt) ist nur für den DM/GM nötig, der sich einloggt.
-  userId            String?
-  groupId           String
-  role              Role      @default(PLAYER)
+  userId             String?
+  campaignId         String
+  role               Role      @default(PLAYER)
   // Discord-Handle des realen Spielers (z.B. "grackmczack"). Ein discordName kann
   // in verschiedenen Kampagnen unterschiedliche Charaktere haben — daher liegt
   // die Zuordnung pro Membership, nicht global am User.
-  discordName       String?
+  discordName        String?
   // Discord-Anzeigename / Server-Nickname des realen Spielers (z.B. "Rose").
   // discordName ist der eindeutige Username (z.B. "veganrevlady"), discordDisplayName
   // der (nicht eindeutige) Anzeigename. Das Matching zur SpeakerMap läuft über discordName.
   discordDisplayName String?
-  characterName     String?
-  // Freitext-Rolle innerhalb der Gruppe (z.B. "Tank", "Healer", "Scout") — nicht zu verwechseln mit Role (GM/PLAYER/OBSERVER)
-  partyRole         String?
-  avatarUrl         String?
-  characterSheetUrl String?
-  joinedAt          DateTime  @default(now())
-  leftAt            DateTime?
-  isPaused          Boolean   @default(false)
-  pausedAt          DateTime?
-  pauseNote         String?
-  notes             String?
+  characterName      String?
+  // Freitext-Rolle innerhalb der Kampagne (z.B. "Tank", "Healer", "Scout") — nicht zu verwechseln mit Role (GM/PLAYER/OBSERVER)
+  partyRole          String?
+  avatarUrl          String?
+  characterSheetUrl  String?
+  joinedAt           DateTime  @default(now())
+  leftAt             DateTime?
+  isPaused           Boolean   @default(false)
+  pausedAt           DateTime?
+  pauseNote          String?
+  notes              String?
 
-  user  User? @relation(fields: [userId], references: [id])
-  group Group @relation(fields: [groupId], references: [id])
+  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([userId])
 }
 
 enum Role {
@@ -95,7 +163,6 @@ enum Role {
 
 model Campaign {
   id                 String   @id @default(cuid())
-  groupId            String
   name               String
   description        String?
   setting            String?
@@ -106,40 +173,70 @@ model Campaign {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  group    Group     @relation(fields: [groupId], references: [id])
-  sessions Session[]
-  npcs     CampaignNPC[]
-  quests   CampaignQuest[]
-  locations CampaignLocation[]
-  threads  CampaignThread[]
-  loots    CampaignLoot[]
+  memberships CampaignMembership[]
+  settings    CampaignSettings?
+  bindings    CampaignDiscordBinding[]
+  sessions    Session[]
+  npcs        CampaignNPC[]
+  quests      CampaignQuest[]
+  locations   CampaignLocation[]
+  threads     CampaignThread[]
+  loots       CampaignLoot[]
+}
+
+model CampaignDiscordBinding {
+  id                    String   @id @default(cuid())
+  campaignId            String
+  discordInstallationId String
+  voiceChannelId        String?
+  voiceChannelName      String?
+  summaryChannelId      String?
+  summaryChannelName    String?
+  isActive              Boolean  @default(true)
+  isDefault             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  campaign     Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  installation DiscordInstallation @relation(fields: [discordInstallationId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+
+  @@unique([discordInstallationId, voiceChannelId])
+  @@index([campaignId])
+  @@index([discordInstallationId, isActive])
 }
 
 model Session {
-  id              String        @id @default(cuid())
-  campaignId      String
-  discordGuildId  String
-  sessionNumber   Int?
-  title           String?
-  sessionImageUrl String?
-  startedAt       DateTime      @default(now())
-  stoppedAt       DateTime?
-  status          SessionStatus @default(RECORDING)
-  activeMemberIds String[]      @default([])
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                    String        @id @default(cuid())
+  campaignId            String
+  discordGuildId        String
+  discordBindingId      String?
+  discordVoiceChannelId String?
+  discordTextChannelId  String?
+  sessionNumber         Int?
+  title                 String?
+  sessionImageUrl       String?
+  startedAt             DateTime      @default(now())
+  stoppedAt             DateTime?
+  status                SessionStatus @default(RECORDING)
+  activeMemberIds       String[]      @default([])
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
-  campaign    Campaign     @relation(fields: [campaignId], references: [id])
-  recordings  Recording[]
-  transcript  Transcript?
-  summary     Summary?
-  speakerMaps SpeakerMap[]
-  threadsOpened   CampaignThread[] @relation("ThreadOpenedIn")
-  threadsResolved CampaignThread[] @relation("ThreadResolvedIn")
-  questsOpened    CampaignQuest[]  @relation("QuestOpenedIn")
-  questsResolved  CampaignQuest[]  @relation("QuestResolvedIn")
-  npcsFirstSeen   CampaignNPC[]    @relation("NPCFirstSeen")
-  npcsLastSeen    CampaignNPC[]    @relation("NPCLastSeen")
+  campaign        Campaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  discordBinding  CampaignDiscordBinding? @relation(fields: [discordBindingId], references: [id], onDelete: SetNull)
+  recordings      Recording[]
+  transcript      Transcript?
+  summary         Summary?
+  speakerMaps     SpeakerMap[]
+  threadsOpened   CampaignThread[]        @relation("ThreadOpenedIn")
+  threadsResolved CampaignThread[]        @relation("ThreadResolvedIn")
+  questsOpened    CampaignQuest[]         @relation("QuestOpenedIn")
+  questsResolved  CampaignQuest[]         @relation("QuestResolvedIn")
+  npcsFirstSeen   CampaignNPC[]           @relation("NPCFirstSeen")
+  npcsLastSeen    CampaignNPC[]           @relation("NPCLastSeen")
+
+  @@index([discordBindingId])
 }
 
 enum SessionStatus {
@@ -161,7 +258,7 @@ model Recording {
   format          String   @default("mp3")
   createdAt       DateTime @default(now())
 
-  session Session @relation(fields: [sessionId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Transcript {
@@ -173,7 +270,7 @@ model Transcript {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  session Session @relation(fields: [sessionId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Summary {
@@ -191,7 +288,7 @@ model Summary {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  session Session @relation(fields: [sessionId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model SpeakerMap {
@@ -201,23 +298,23 @@ model SpeakerMap {
   discordName      String
   characterName    String?
   playerName       String?
-  // Verknüpfung zum anonymen Diarization-Label aus dem Transkript (z.B. "SPEAKER_00").
-  // WhisperX liefert nur anonyme Sprecher-Labels, keine echten Discord-Namen —
-  // der DM ordnet hier manuell zu, welches Label zu welchem echten Teilnehmer gehört.
+  // Legacy-Verknüpfung zu anonymen Provider-Labels älterer Transkripte.
+  // Neue Discord-Aufnahmen speichern direkt discordUserId im Transkript.
   diarizationLabel String?
 
-  session Session @relation(fields: [sessionId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, discordUserId])
   @@unique([sessionId, diarizationLabel])
 }
 
-model GroupSettings {
+model CampaignSettings {
   id                   String  @id @default(cuid())
-  groupId              String  @unique
+  campaignId           String  @unique
   whisperProvider      String  @default("openai")
   whisperApiKey        String?
   whisperEndpoint      String?
+  // Legacy-Feld; bleibt migrationskompatibel, wird für Discord-Aufnahmen nicht mehr verwendet.
   huggingfaceToken     String?
   replicateApiKey      String?
   imageGenModel        String  @default("black-forest-labs/flux-schnell")
@@ -230,9 +327,8 @@ model GroupSettings {
   summaryLanguage      String  @default("de")
   postSummaryChannelId String?
   llmSystemPrompt      String?
-  llmCampaignContext   String?
 
-  group Group @relation(fields: [groupId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 }
 
 // ─── Quest-Wiki ─────────────────────────────────────────────
@@ -245,14 +341,14 @@ model GroupSettings {
 model CampaignThread {
   id                  String       @id @default(cuid())
   campaignId          String
-  campaign            Campaign     @relation(fields: [campaignId], references: [id])
+  campaign            Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   title               String
   description         String?
   status              ThreadStatus @default(OPEN)
   openedInSessionId   String?
-  openedInSession     Session?     @relation("ThreadOpenedIn", fields: [openedInSessionId], references: [id])
+  openedInSession     Session?     @relation("ThreadOpenedIn", fields: [openedInSessionId], references: [id], onDelete: SetNull)
   resolvedInSessionId String?
-  resolvedInSession   Session?     @relation("ThreadResolvedIn", fields: [resolvedInSessionId], references: [id])
+  resolvedInSession   Session?     @relation("ThreadResolvedIn", fields: [resolvedInSessionId], references: [id], onDelete: SetNull)
   // Verknüpfte Fäden (z.B. ein Faden baut auf einem anderen auf)
   linkedThreadIds     String[]     @default([])
   // Sessions, in denen dieser Faden vorkommt
@@ -268,13 +364,13 @@ model CampaignThread {
 model CampaignNPC {
   id                 String    @id @default(cuid())
   campaignId         String
-  campaign           Campaign  @relation(fields: [campaignId], references: [id])
+  campaign           Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   name               String
   description        String?
   firstSeenSessionId String?
-  firstSeenSession   Session?  @relation("NPCFirstSeen", fields: [firstSeenSessionId], references: [id])
+  firstSeenSession   Session?  @relation("NPCFirstSeen", fields: [firstSeenSessionId], references: [id], onDelete: SetNull)
   lastSeenSessionId  String?
-  lastSeenSession    Session?  @relation("NPCLastSeen", fields: [lastSeenSessionId], references: [id])
+  lastSeenSession    Session?  @relation("NPCLastSeen", fields: [lastSeenSessionId], references: [id], onDelete: SetNull)
   status             NPCStatus @default(ACTIVE)
   // Sessions, in denen dieser NSC auftauchte
   sessionIds         String[]  @default([])
@@ -289,7 +385,7 @@ model CampaignNPC {
 model CampaignLocation {
   id          String   @id @default(cuid())
   campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   name        String
   description String?
   sessionIds  String[] @default([])
@@ -304,14 +400,14 @@ model CampaignLocation {
 model CampaignQuest {
   id                  String      @id @default(cuid())
   campaignId          String
-  campaign            Campaign    @relation(fields: [campaignId], references: [id])
+  campaign            Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   title               String
   description         String?
   status              QuestStatus @default(DISCOVERED)
   openedInSessionId   String?
-  openedInSession     Session?    @relation("QuestOpenedIn", fields: [openedInSessionId], references: [id])
+  openedInSession     Session?    @relation("QuestOpenedIn", fields: [openedInSessionId], references: [id], onDelete: SetNull)
   resolvedInSessionId String?
-  resolvedInSession   Session?    @relation("QuestResolvedIn", fields: [resolvedInSessionId], references: [id])
+  resolvedInSession   Session?    @relation("QuestResolvedIn", fields: [resolvedInSessionId], references: [id], onDelete: SetNull)
   rewardItems         String[]    @default([])
   sessionIds          String[]    @default([])
   source              String      @default("aggregated")
@@ -324,7 +420,7 @@ model CampaignQuest {
 model CampaignLoot {
   id          String   @id @default(cuid())
   campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   name        String
   description String?
   // Sessions, in denen diese Beute gefunden wurde

@@ -1,12 +1,33 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import {
+  applyAdminKeyProfile,
+  getGrantedAdminKeyProfile,
+  stripGrantedFields
+} from "../lib/admin-api-keys.js";
+
+const DEFAULT_SETTINGS = {
+  whisperProvider: "openai",
+  whisperApiKey: null,
+  whisperEndpoint: null,
+  replicateApiKey: null,
+  imageGenModel: "black-forest-labs/flux-schnell",
+  sessionImageProvider: "replicate",
+  sessionImageModel: "qwen/qwen-image-edit-plus",
+  llmProvider: "anthropic",
+  llmApiKey: null,
+  llmModel: "claude-opus-4-8",
+  llmEndpoint: null,
+  llmSystemPrompt: null,
+  summaryLanguage: "de",
+  postSummaryChannelId: null
+};
 
 const SettingsSchema = z.object({
   whisperProvider: z.enum(["openai", "replicate", "selfhosted"]).optional(),
   whisperApiKey: z.string().optional().nullable(),
   whisperEndpoint: z.string().optional().nullable(),
-  huggingfaceToken: z.string().optional().nullable(),
   replicateApiKey: z.string().optional().nullable(),
   imageGenModel: z.string().optional(),
   llmProvider: z.enum(["anthropic", "gemini", "openai", "siliconflow", "ollama"]).optional(),
@@ -15,60 +36,72 @@ const SettingsSchema = z.object({
   llmEndpoint: z.string().optional().nullable(),
   llmSystemPrompt: z.string().optional().nullable(),
   llmCampaignContext: z.string().optional().nullable(),
-  summaryLanguage: z.enum(["de", "en"]).optional(),
-  postSummaryChannelId: z.string().optional().nullable(),
+  summaryLanguage: z.literal("de").optional(),
+  postSummaryChannelId: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional()
+    .nullable(),
   sessionImageProvider: z.enum(["replicate"]).optional().nullable(),
-  sessionImageModel: z.string().optional().nullable()
+  sessionImageModel: z.string().optional().nullable(),
+  usingAdminKeys: z.boolean().optional(),
+  adminKeyProviderId: z.string().optional().nullable()
 });
 
 export async function settingsRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
+  app.addHook("preHandler", app.authenticate);
 
-  // GET /groups/:groupId/settings
-  app.get("/groups/:groupId/settings", async (req, reply) => {
-    const { groupId } = req.params as { groupId: string };
+  // GET /campaigns/:campaignId/settings
+  app.get("/campaigns/:campaignId/settings", async (req, reply) => {
+    const { campaignId } = req.params as { campaignId: string };
     const { sub } = req.user as { sub: string };
 
-    const membership = await prisma.groupMembership.findFirst({ where: { groupId, userId: sub, leftAt: null } });
-    if (!membership) return reply.status(403).send({ error: "Not a member" });
-
-    const settings = await prisma.groupSettings.findUnique({ where: { groupId } });
-
-    // Check if this DM has admin keys granted (by a SUPER_ADMIN)
-    const adminGrant = await prisma.adminApiKeyGrant.findFirst({
-      where: { dmId: sub, revokedAt: null },
-      select: { superAdminId: true }
+    const membership = await prisma.campaignMembership.findFirst({
+      where: { campaignId, userId: sub, role: "GM", leftAt: null }
     });
+    if (!membership) return reply.status(403).send({ error: "Only GMs can view settings" });
 
-    const maskKey = (key: string | null) => key ? (key.length > 7 ? `${key.substring(0, 7)}***` : "***") : null;
+    const [settings, campaign] = await Promise.all([
+      prisma.campaignSettings.findUnique({ where: { campaignId } }),
+      prisma.campaign.findUnique({ where: { id: campaignId }, select: { campaignContext: true } })
+    ]);
 
-    if (settings) {
-      // Build response based on whether we're using admin keys or own keys
-      const masked = { ...settings };
-      if (masked.whisperApiKey) masked.whisperApiKey = maskKey(masked.whisperApiKey);
-      if (masked.replicateApiKey) masked.replicateApiKey = maskKey(masked.replicateApiKey);
-      if (masked.huggingfaceToken) masked.huggingfaceToken = maskKey(masked.huggingfaceToken);
-      if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
+    const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
 
-      return reply.send({
-        ...masked,
-        usingAdminKeys: !!adminGrant,
-        adminKeyProviderId: adminGrant?.superAdminId ?? null
-      });
-    }
+    const maskKey = (key: string | null) =>
+      key ? (key.length > 6 ? `${key.substring(0, 6)}***` : "***") : null;
 
+    const effective = applyAdminKeyProfile(settings ?? DEFAULT_SETTINGS, adminProfile);
+    // Keep the legacy DB column private. Discord voice activity now supplies
+    // stable speaker identities, so no tenant HuggingFace token is used.
+    const masked: Record<string, any> = { ...effective };
+    delete masked.huggingfaceToken;
+    if (masked.whisperApiKey) masked.whisperApiKey = maskKey(masked.whisperApiKey);
+    if (masked.replicateApiKey) masked.replicateApiKey = maskKey(masked.replicateApiKey);
+    if (masked.llmApiKey) masked.llmApiKey = maskKey(masked.llmApiKey);
     return reply.send({
-      usingAdminKeys: !!adminGrant,
-      adminKeyProviderId: adminGrant?.superAdminId ?? null
+      ...masked,
+      llmCampaignContext: campaign?.campaignContext ?? null,
+      summaryLanguage: "de",
+      usingAdminKeys: !!adminProfile,
+      adminKeyProviderId: adminProfile?.superAdminId ?? null,
+      adminKeyProviderName: adminProfile?.superAdminName ?? null,
+      adminKeyAvailability: adminProfile?.availability ?? {
+        whisper: false,
+        replicate: false,
+        llm: false
+      }
     });
   });
 
-  // PUT /groups/:groupId/settings — only GMs
-  app.put("/groups/:groupId/settings", async (req, reply) => {
-    const { groupId } = req.params as { groupId: string };
+  // PUT /campaigns/:campaignId/settings — only GMs
+  app.put("/campaigns/:campaignId/settings", async (req, reply) => {
+    const { campaignId } = req.params as { campaignId: string };
     const { sub } = req.user as { sub: string };
 
-    const membership = await prisma.groupMembership.findFirst({ where: { groupId, userId: sub, role: "GM", leftAt: null } });
+    const membership = await prisma.campaignMembership.findFirst({
+      where: { campaignId, userId: sub, role: "GM", leftAt: null }
+    });
     if (!membership) return reply.status(403).send({ error: "Only GMs can change settings" });
 
     const body = SettingsSchema.safeParse(req.body);
@@ -76,17 +109,55 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     // Wenn der Key aus dem Frontend immer noch maskiert ankommt (z.B. "sk-ant-***"), speichern wir ihn nicht ab!
     // Dadurch wird der alte Key in der DB behalten, falls das Frontend nur andere Felder updated.
-    const dataToUpdate = { ...body.data };
-    if (dataToUpdate.whisperApiKey?.includes("***")) delete dataToUpdate.whisperApiKey;
-    if (dataToUpdate.replicateApiKey?.includes("***")) delete dataToUpdate.replicateApiKey;
-    if (dataToUpdate.huggingfaceToken?.includes("***")) delete dataToUpdate.huggingfaceToken;
-    if (dataToUpdate.llmApiKey?.includes("***")) delete dataToUpdate.llmApiKey;
+    const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
+    if (
+      body.data.usingAdminKeys &&
+      (!adminProfile || body.data.adminKeyProviderId !== adminProfile.superAdminId)
+    ) {
+      return reply.status(409).send({ error: "ADMIN_KEY_GRANT_CHANGED" });
+    }
 
-    const settings = await prisma.groupSettings.upsert({
-      where: { groupId },
-      update: dataToUpdate,
-      create: { groupId, ...body.data } // beim Create muesste der echte Key mitgeschickt werden
-    });
+    const {
+      usingAdminKeys: _usingAdminKeys,
+      adminKeyProviderId: _adminKeyProviderId,
+      llmCampaignContext,
+      ...settingsData
+    } = body.data;
+    let dataToUpdate: Record<string, unknown> = { ...settingsData };
+    dataToUpdate.summaryLanguage = "de";
+    if (
+      typeof dataToUpdate.whisperApiKey === "string" &&
+      dataToUpdate.whisperApiKey.includes("***")
+    )
+      delete dataToUpdate.whisperApiKey;
+    if (
+      typeof dataToUpdate.replicateApiKey === "string" &&
+      dataToUpdate.replicateApiKey.includes("***")
+    )
+      delete dataToUpdate.replicateApiKey;
+    if (typeof dataToUpdate.llmApiKey === "string" && dataToUpdate.llmApiKey.includes("***"))
+      delete dataToUpdate.llmApiKey;
+
+    // Freigegebene Credential-/Provider-Felder gehören dem Superadmin. Eigene
+    // bereits gespeicherte Werte des DMs bleiben unangetastet und greifen nach
+    // einem Entzug automatisch wieder.
+    dataToUpdate = stripGrantedFields(dataToUpdate, adminProfile);
+
+    const [settings] = await prisma.$transaction([
+      prisma.campaignSettings.upsert({
+        where: { campaignId },
+        update: dataToUpdate,
+        create: { campaignId, ...dataToUpdate }
+      }),
+      ...(llmCampaignContext !== undefined
+        ? [
+            prisma.campaign.update({
+              where: { id: campaignId },
+              data: { campaignContext: llmCampaignContext }
+            })
+          ]
+        : [])
+    ]);
 
     return reply.send({ updated: true, id: settings.id });
   });

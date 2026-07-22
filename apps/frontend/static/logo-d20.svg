@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">DnD Recorder</title>
+  <desc id="description">Ein violetter zwanzigseitiger Würfel mit goldener Audio-Wellenform</desc>
+  <defs>
+    <radialGradient id="background" cx="50%" cy="42%" r="68%">
+      <stop offset="0" stop-color="#1d1933" />
+      <stop offset="1" stop-color="#090914" />
+    </radialGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="52" fill="url(#background)" />
+
+  <path
+    d="M128 25 213 79 204 178 128 229 52 178 43 79Z"
+    fill="#151525"
+    stroke="#8b5cf6"
+    stroke-width="9"
+    stroke-linejoin="round"
+  />
+
+  <g fill="none" stroke="#8b5cf6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m128 25-39 67-46-13M128 25l39 67 46-13M43 79l23 83-14 16M213 79l-23 83 14 16" />
+    <path d="M89 92h78l23 70-62 42-62-42Z" />
+    <path d="m89 92 39 112 39-112M52 178l76 26 76-26M128 204v25" />
+  </g>
+
+  <path d="M89 92h78l-39 112Z" fill="#8b5cf6" opacity="0.09" />
+
+  <g fill="#fbbf24">
+    <rect x="94" y="119" width="9" height="28" rx="4.5" />
+    <rect x="108" y="106" width="9" height="54" rx="4.5" />
+    <rect x="123.5" y="96" width="9" height="74" rx="4.5" />
+    <rect x="139" y="110" width="9" height="46" rx="4.5" />
+    <rect x="153" y="121" width="9" height="24" rx="4.5" />
+  </g>
+</svg>

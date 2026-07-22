@@ -13,13 +13,14 @@ import { z } from "zod";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import { prisma } from "../db.js";
+import { isPdf, safeStorageFilename, verifyImage } from "../lib/uploads.js";
 
 const AVATAR_DIR = path.resolve(process.cwd(), "..", "..", "storage", "avatars");
 const SHEET_DIR = path.resolve(process.cwd(), "..", "..", "storage", "character-sheets");
 
 const ALLOWED_AVATAR_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
-const ALLOWED_SHEET_MIME = new Set(["application/pdf"]);
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
 
 const CreateMemberSchema = z.object({
@@ -40,33 +41,35 @@ const UpdateMemberSchema = z.object({
   notes: z.string().optional().nullable()
 });
 
-async function requireGm(groupId: string, userId: string) {
-  return prisma.groupMembership.findFirst({
-    where: { groupId, userId, role: "GM", leftAt: null }
+async function requireGm(campaignId: string, userId: string) {
+  return prisma.campaignMembership.findFirst({
+    where: { campaignId, userId, role: "GM", leftAt: null }
   });
 }
 
-async function requireMember(groupId: string, userId: string) {
-  return prisma.groupMembership.findFirst({
-    where: { groupId, userId, leftAt: null }
+async function requireMember(campaignId: string, userId: string) {
+  return prisma.campaignMembership.findFirst({
+    where: { campaignId, userId, leftAt: null }
   });
+}
+
+async function findCampaignMember(campaignId: string, memberId: string) {
+  return prisma.campaignMembership.findFirst({ where: { id: memberId, campaignId } });
 }
 
 export async function membersRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (req) => {
-    await req.jwtVerify();
-  });
+  app.addHook("preHandler", app.authenticate);
 
-  // GET /groups/:groupId/members — alle Mitglieder inkl. Historie
-  app.get("/groups/:groupId/members", async (req, reply) => {
-    const { groupId } = req.params as { groupId: string };
+  // GET /campaigns/:campaignId/members — alle Mitglieder inkl. Historie
+  app.get("/campaigns/:campaignId/members", async (req, reply) => {
+    const { campaignId } = req.params as { campaignId: string };
     const { sub } = req.user as { sub: string };
 
-    const myMembership = await requireMember(groupId, sub);
+    const myMembership = await requireMember(campaignId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Not a member" });
 
-    const members = await prisma.groupMembership.findMany({
-      where: { groupId },
+    const members = await prisma.campaignMembership.findMany({
+      where: { campaignId },
       include: { user: { select: { id: true, email: true, displayName: true } } },
       orderBy: { joinedAt: "asc" }
     });
@@ -74,19 +77,19 @@ export async function membersRoutes(app: FastifyInstance) {
     return reply.send(members);
   });
 
-  // POST /groups/:groupId/members — Mitglied direkt anlegen (kein Login/Email nötig)
-  app.post("/groups/:groupId/members", async (req, reply) => {
-    const { groupId } = req.params as { groupId: string };
+  // POST /campaigns/:campaignId/members — Mitglied direkt anlegen (kein Login/Email nötig)
+  app.post("/campaigns/:campaignId/members", async (req, reply) => {
+    const { campaignId } = req.params as { campaignId: string };
     const { sub } = req.user as { sub: string };
     const body = CreateMemberSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
 
-    const myMembership = await requireGm(groupId, sub);
+    const myMembership = await requireGm(campaignId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can add members" });
 
-    const member = await prisma.groupMembership.create({
+    const member = await prisma.campaignMembership.create({
       data: {
-        groupId,
+        campaignId,
         role: body.data.role,
         discordName: body.data.discordName,
         discordDisplayName: body.data.discordDisplayName,
@@ -100,17 +103,20 @@ export async function membersRoutes(app: FastifyInstance) {
     return reply.status(201).send(member);
   });
 
-  // PATCH /groups/:groupId/members/:memberId — Mitglied bearbeiten (alle Felder)
-  app.patch("/groups/:groupId/members/:memberId", async (req, reply) => {
-    const { groupId, memberId } = req.params as { groupId: string; memberId: string };
+  // PATCH /campaigns/:campaignId/members/:memberId — Mitglied bearbeiten (alle Felder)
+  app.patch("/campaigns/:campaignId/members/:memberId", async (req, reply) => {
+    const { campaignId, memberId } = req.params as { campaignId: string; memberId: string };
     const { sub } = req.user as { sub: string };
     const body = UpdateMemberSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
 
-    const myMembership = await requireGm(groupId, sub);
+    const myMembership = await requireGm(campaignId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can edit members" });
 
-    const updated = await prisma.groupMembership.update({
+    const target = await findCampaignMember(campaignId, memberId);
+    if (!target) return reply.status(404).send({ error: "Member not found" });
+
+    const updated = await prisma.campaignMembership.update({
       where: { id: memberId },
       data: body.data,
       include: { user: { select: { id: true, email: true, displayName: true } } }
@@ -119,16 +125,18 @@ export async function membersRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  // POST /groups/:groupId/members/:memberId/pause — Mitglied pausieren
-  app.post("/groups/:groupId/members/:memberId/pause", async (req, reply) => {
-    const { groupId, memberId } = req.params as { groupId: string; memberId: string };
+  app.post("/campaigns/:campaignId/members/:memberId/pause", async (req, reply) => {
+    const { campaignId, memberId } = req.params as { campaignId: string; memberId: string };
     const { sub } = req.user as { sub: string };
     const { note } = req.body as { note?: string };
 
-    const myMembership = await requireGm(groupId, sub);
+    const myMembership = await requireGm(campaignId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can pause members" });
 
-    const updated = await prisma.groupMembership.update({
+    const target = await findCampaignMember(campaignId, memberId);
+    if (!target) return reply.status(404).send({ error: "Member not found" });
+
+    const updated = await prisma.campaignMembership.update({
       where: { id: memberId },
       data: { isPaused: true, pausedAt: new Date(), pauseNote: note ?? null }
     });
@@ -136,15 +144,17 @@ export async function membersRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  // POST /groups/:groupId/members/:memberId/resume — Pause aufheben
-  app.post("/groups/:groupId/members/:memberId/resume", async (req, reply) => {
-    const { groupId, memberId } = req.params as { groupId: string; memberId: string };
+  app.post("/campaigns/:campaignId/members/:memberId/resume", async (req, reply) => {
+    const { campaignId, memberId } = req.params as { campaignId: string; memberId: string };
     const { sub } = req.user as { sub: string };
 
-    const myMembership = await requireGm(groupId, sub);
+    const myMembership = await requireGm(campaignId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can resume members" });
 
-    const updated = await prisma.groupMembership.update({
+    const target = await findCampaignMember(campaignId, memberId);
+    if (!target) return reply.status(404).send({ error: "Member not found" });
+
+    const updated = await prisma.campaignMembership.update({
       where: { id: memberId },
       data: { isPaused: false, pausedAt: null, pauseNote: null }
     });
@@ -152,15 +162,17 @@ export async function membersRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  // DELETE /groups/:groupId/members/:memberId — Mitglied entfernen (leftAt setzen, kein DELETE)
-  app.delete("/groups/:groupId/members/:memberId", async (req, reply) => {
-    const { groupId, memberId } = req.params as { groupId: string; memberId: string };
+  app.delete("/campaigns/:campaignId/members/:memberId", async (req, reply) => {
+    const { campaignId, memberId } = req.params as { campaignId: string; memberId: string };
     const { sub } = req.user as { sub: string };
 
-    const myMembership = await requireGm(groupId, sub);
+    const myMembership = await requireGm(campaignId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can remove members" });
 
-    const updated = await prisma.groupMembership.update({
+    const target = await findCampaignMember(campaignId, memberId);
+    if (!target) return reply.status(404).send({ error: "Member not found" });
+
+    const updated = await prisma.campaignMembership.update({
       where: { id: memberId },
       data: { leftAt: new Date(), isPaused: false }
     });
@@ -168,26 +180,23 @@ export async function membersRoutes(app: FastifyInstance) {
     return reply.send({ removed: true, id: updated.id, leftAt: updated.leftAt });
   });
 
-  // POST /groups/:groupId/members/:memberId/avatar — Avatar/Gesichtsbild hochladen
-  app.post("/groups/:groupId/members/:memberId/avatar", async (req, reply) => {
-    const { groupId, memberId } = req.params as { groupId: string; memberId: string };
+  app.post("/campaigns/:campaignId/members/:memberId/avatar", async (req, reply) => {
+    const { campaignId, memberId } = req.params as { campaignId: string; memberId: string };
     const { sub } = req.user as { sub: string };
 
-    const myMembership = await requireGm(groupId, sub);
+    const myMembership = await requireGm(campaignId, sub);
     if (!myMembership) return reply.status(403).send({ error: "Only GMs can upload avatars" });
 
-    const member = await prisma.groupMembership.findFirst({ where: { id: memberId, groupId } });
+    const member = await findCampaignMember(campaignId, memberId);
     if (!member) return reply.status(404).send({ error: "Member not found" });
 
     const data = await req.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
     if (!data) return reply.status(400).send({ error: "No file uploaded" });
-    if (!ALLOWED_AVATAR_MIME.has(data.mimetype)) {
-      return reply.status(400).send({ error: "Only png/jpeg/webp/gif allowed" });
-    }
-
     const buffer = await data.toBuffer();
-    const ext = path.extname(data.filename) || ".png";
-    const fileName = `${memberId}-${randomUUID()}${ext}`;
+    const image = verifyImage(buffer, ALLOWED_AVATAR_MIME);
+    if (!image)
+      return reply.status(400).send({ error: "Only valid png/jpeg/webp/gif images allowed" });
+    const fileName = `${memberId}-${randomUUID()}${image.extension}`;
 
     await mkdir(AVATAR_DIR, { recursive: true });
     await writeFile(path.join(AVATAR_DIR, fileName), buffer);
@@ -199,7 +208,7 @@ export async function membersRoutes(app: FastifyInstance) {
     }
 
     const avatarUrl = `/uploads/avatars/${fileName}`;
-    const updated = await prisma.groupMembership.update({
+    const updated = await prisma.campaignMembership.update({
       where: { id: memberId },
       data: { avatarUrl }
     });
@@ -207,24 +216,21 @@ export async function membersRoutes(app: FastifyInstance) {
     return reply.send({ avatarUrl: updated.avatarUrl });
   });
 
-  // POST /groups/:groupId/members/:memberId/character-sheet — Charakterbogen (PDF) hochladen
-  app.post("/groups/:groupId/members/:memberId/character-sheet", async (req, reply) => {
-    const { groupId, memberId } = req.params as { groupId: string; memberId: string };
+  app.post("/campaigns/:campaignId/members/:memberId/character-sheet", async (req, reply) => {
+    const { campaignId, memberId } = req.params as { campaignId: string; memberId: string };
     const { sub } = req.user as { sub: string };
 
-    const myMembership = await requireGm(groupId, sub);
-    if (!myMembership) return reply.status(403).send({ error: "Only GMs can upload character sheets" });
+    const myMembership = await requireGm(campaignId, sub);
+    if (!myMembership)
+      return reply.status(403).send({ error: "Only GMs can upload character sheets" });
 
-    const member = await prisma.groupMembership.findFirst({ where: { id: memberId, groupId } });
+    const member = await findCampaignMember(campaignId, memberId);
     if (!member) return reply.status(404).send({ error: "Member not found" });
 
     const data = await req.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
     if (!data) return reply.status(400).send({ error: "No file uploaded" });
-    if (!ALLOWED_SHEET_MIME.has(data.mimetype)) {
-      return reply.status(400).send({ error: "Only PDF allowed" });
-    }
-
     const buffer = await data.toBuffer();
+    if (!isPdf(buffer)) return reply.status(400).send({ error: "Only valid PDF files allowed" });
     const fileName = `${memberId}-${randomUUID()}.pdf`;
 
     await mkdir(SHEET_DIR, { recursive: true });
@@ -236,11 +242,32 @@ export async function membersRoutes(app: FastifyInstance) {
     }
 
     const characterSheetUrl = `/uploads/character-sheets/${fileName}`;
-    const updated = await prisma.groupMembership.update({
+    const updated = await prisma.campaignMembership.update({
       where: { id: memberId },
       data: { characterSheetUrl }
     });
 
     return reply.send({ characterSheetUrl: updated.characterSheetUrl });
+  });
+
+  app.get("/campaigns/:campaignId/members/:memberId/character-sheet", async (req, reply) => {
+    const { campaignId, memberId } = req.params as { campaignId: string; memberId: string };
+    const { sub } = req.user as { sub: string };
+
+    if (!(await requireMember(campaignId, sub))) {
+      return reply.status(403).send({ error: "Not a member" });
+    }
+
+    const member = await findCampaignMember(campaignId, memberId);
+    if (!member?.characterSheetUrl)
+      return reply.status(404).send({ error: "Character sheet not found" });
+
+    const filename = safeStorageFilename(path.basename(member.characterSheetUrl));
+    if (!filename) return reply.status(404).send({ error: "Character sheet not found" });
+
+    reply.header("Content-Type", "application/pdf");
+    reply.header("Content-Disposition", `inline; filename="${memberId}-character-sheet.pdf"`);
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(createReadStream(path.join(SHEET_DIR, filename)));
   });
 }

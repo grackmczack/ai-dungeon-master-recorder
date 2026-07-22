@@ -6,20 +6,27 @@ export function createStopCommand(voiceRecorderService: VoiceRecorderService): D
   return {
     data: new SlashCommandBuilder()
       .setName("stop")
-      .setDescription("Stop the current recording session."),
+      .setDescription("Stoppt die aktuell laufende Session-Aufnahme."),
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       const guildId = interaction.guildId;
       if (!guildId) {
-        await interaction.reply({ content: "This command can only be used in a Discord server.", ephemeral: true });
+        await interaction.reply({
+          content: "Dieser Befehl kann nur auf einem Discord-Server verwendet werden.",
+          ephemeral: true
+        });
         return;
       }
 
       await interaction.deferReply();
 
       try {
-        await voiceRecorderService.stop(guildId);
-        await interaction.editReply("✅ **Aufnahme gestoppt.** Transkription läuft — du bekommst eine Nachricht wenn die Summary fertig ist.");
+        const recordingKey = voiceRecorderService.getActiveRecordingKey(guildId);
+        if (!recordingKey) throw new Error("NO_RECORDING_ACTIVE");
+        await voiceRecorderService.stop(recordingKey);
+        await interaction.editReply(
+          "✅ **Aufnahme gestoppt.** Transkription läuft — du bekommst eine Nachricht, wenn die Zusammenfassung fertig ist."
+        );
       } catch (error) {
         if (error instanceof Error && error.message === "NO_RECORDING_ACTIVE") {
           await interaction.editReply("Keine aktive Aufnahme in diesem Server.");

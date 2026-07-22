@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /docs
+Disallow: /api/
+Disallow: /account
+Disallow: /admin
+Disallow: /connect-discord
+Disallow: /dashboard
+Disallow: /groups/
+Disallow: /kampagnen/
+Disallow: /sessions/
+Disallow: /settings
+
+Sitemap: https://dnd-recorder.de/sitemap.xml

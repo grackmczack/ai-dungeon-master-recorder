@@ -3,21 +3,30 @@
  * Kein discord.js nötig — reines fetch.
  */
 import type { SummaryResult } from "./providers/llm.js";
+import { publicUrl } from "./public-url.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 
 function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): object {
   const chapterTitle = summary.title?.trim();
   const title = chapterTitle
-    ? (sessionNumber ? `📖 Session #${sessionNumber}: ${chapterTitle}` : `📖 ${chapterTitle}`)
-    : (sessionNumber ? `📖 Session #${sessionNumber} — Chronik` : "📖 Session abgeschlossen");
+    ? sessionNumber
+      ? `📖 Session #${sessionNumber}: ${chapterTitle}`
+      : `📖 ${chapterTitle}`
+    : sessionNumber
+      ? `📖 Session #${sessionNumber} — Chronik`
+      : "📖 Session abgeschlossen";
 
   const fields: object[] = [];
 
   if (summary.npcs.length > 0) {
     fields.push({
       name: "🧙 NSCs",
-      value: summary.npcs.slice(0, 5).map(n => `**${n.name}** — ${n.description}`).join("\n").slice(0, 1024),
+      value: summary.npcs
+        .slice(0, 5)
+        .map((n) => `**${n.name}** — ${n.description}`)
+        .join("\n")
+        .slice(0, 1024),
       inline: false
     });
   }
@@ -26,9 +35,11 @@ function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): obje
     const questMap: Record<string, string> = { new: "🆕", ongoing: "⚔️", completed: "✅" };
     fields.push({
       name: "⚔️ Quests",
-      value: summary.quests.slice(0, 5).map(q =>
-        `${questMap[q.status] ?? "•"} **${q.title}**${q.notes ? ` — ${q.notes}` : ""}`
-      ).join("\n").slice(0, 1024),
+      value: summary.quests
+        .slice(0, 5)
+        .map((q) => `${questMap[q.status] ?? "•"} **${q.title}**${q.notes ? ` — ${q.notes}` : ""}`)
+        .join("\n")
+        .slice(0, 1024),
       inline: false
     });
   }
@@ -36,7 +47,11 @@ function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): obje
   if (summary.loot.length > 0) {
     fields.push({
       name: "💰 Beute",
-      value: summary.loot.slice(0, 8).map(l => `• ${l.item}${l.foundBy ? ` *(${l.foundBy})*` : ""}`).join("\n").slice(0, 1024),
+      value: summary.loot
+        .slice(0, 8)
+        .map((l) => `• ${l.item}${l.foundBy ? ` *(${l.foundBy})*` : ""}`)
+        .join("\n")
+        .slice(0, 1024),
       inline: true
     });
   }
@@ -44,7 +59,11 @@ function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): obje
   if (summary.locations.length > 0) {
     fields.push({
       name: "🗺️ Orte",
-      value: summary.locations.slice(0, 5).map(l => `• **${l.name}**`).join("\n").slice(0, 1024),
+      value: summary.locations
+        .slice(0, 5)
+        .map((l) => `• **${l.name}**`)
+        .join("\n")
+        .slice(0, 1024),
       inline: true
     });
   }
@@ -52,7 +71,11 @@ function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): obje
   if (summary.openThreads.length > 0) {
     fields.push({
       name: "🔮 Offene Fäden",
-      value: summary.openThreads.slice(0, 5).map(t => `› ${t}`).join("\n").slice(0, 1024),
+      value: summary.openThreads
+        .slice(0, 5)
+        .map((t) => `› ${t}`)
+        .join("\n")
+        .slice(0, 1024),
       inline: false
     });
   }
@@ -63,7 +86,8 @@ function buildSummaryEmbed(summary: SummaryResult, sessionNumber?: number): obje
     color: 0x7c3aed, // brand purple
     fields,
     footer: {
-      text: `Generiert von ${summary.provider}/${summary.model} · AI Dungeon Master Recorder`
+      text: `Generiert von ${summary.provider}/${summary.model} · DnD Recorder`,
+      icon_url: publicUrl("/logo-d20.png")
     },
     timestamp: new Date().toISOString()
   };

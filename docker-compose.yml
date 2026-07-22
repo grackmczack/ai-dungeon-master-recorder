@@ -1,3 +1,5 @@
+name: dnd-recorder
+
 services:
   discord-recorder:
     build:
@@ -23,8 +25,8 @@ services:
     restart: unless-stopped
     env_file:
       - apps/backend/.env
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     volumes:
       - ./storage/recordings:/app/storage/recordings
       - ./storage/avatars:/app/storage/avatars
@@ -105,15 +107,26 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
+      args:
+        VITE_GTM_CONTAINER_ID: ${VITE_GTM_CONTAINER_ID:-}
+        VITE_GTM_SERVER_URL: ${VITE_GTM_SERVER_URL:-}
+        VITE_GTM_SERVING_PATH: ${VITE_GTM_SERVING_PATH:-}
     container_name: dnd-frontend
     restart: unless-stopped
     networks:
       - dnd-network
 
 volumes:
+  # Project-specific external volumes keep production data independent from
+  # the Compose lifecycle and attached across deployment-directory changes.
   postgres_data:
+    name: dnd_recorder_postgres_data
+    external: true
   redis_data:
+    name: dnd_recorder_redis_data
+    external: true
 
 networks:
   dnd-network:
+    name: dnd_recorder_network
     driver: bridge

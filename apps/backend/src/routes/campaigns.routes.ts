@@ -4,14 +4,31 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { getGrantedAdminKeyProfile } from "../lib/admin-api-keys.js";
+import { verifyImage } from "../lib/uploads.js";
 
 const BACKGROUND_DIR = path.resolve(process.cwd(), "..", "..", "storage", "campaign-backgrounds");
+const SESSION_IMAGE_DIR = path.resolve(process.cwd(), "..", "..", "storage", "session-images");
+const RECORDING_DIR = path.resolve(process.cwd(), "..", "..", "storage", "recordings");
+const AVATAR_DIR = path.resolve(process.cwd(), "..", "..", "storage", "avatars");
+const SHEET_DIR = path.resolve(process.cwd(), "..", "..", "storage", "character-sheets");
 const ALLOWED_BACKGROUND_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_BACKGROUND_BYTES = 20 * 1024 * 1024; // 20 MB — Hintergrundbilder sind meist größer/hochauflösender
 const DEFAULT_IMAGE_MODEL = "black-forest-labs/flux-schnell";
 
 const GenerateBackgroundSchema = z.object({
   prompt: z.string().optional()
+});
+const UpdateCampaignSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(2_000).nullable().optional(),
+    setting: z.string().trim().max(200).nullable().optional(),
+    isActive: z.boolean().optional()
+  })
+  .strict();
+const CampaignContextSchema = z.object({
+  campaignContext: z.string().max(100_000)
 });
 
 type ReplicatePrediction = {
@@ -30,7 +47,9 @@ function sleep(ms: number) {
 
 function extractOutputUrl(output: unknown): string | null {
   if (typeof output === "string") {
-    return output.startsWith("http://") || output.startsWith("https://") || output.startsWith("data:")
+    return output.startsWith("http://") ||
+      output.startsWith("https://") ||
+      output.startsWith("data:")
       ? output
       : null;
   }
@@ -68,25 +87,25 @@ async function readErrorBody(res: Response) {
 }
 
 export async function campaignsRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (req) => { await req.jwtVerify(); });
+  app.addHook("preHandler", app.authenticate);
 
   // PUT /campaigns/:id/context
   app.put("/campaigns/:id/context", async (req, reply) => {
     const { id } = req.params as { id: string };
     const { sub } = req.user as { sub: string };
-    const { campaignContext } = req.body as { campaignContext: string };
+    const body = CampaignContextSchema.safeParse(req.body);
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
 
-    // Prüfen ob User Mitglied der Gruppe ist
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+      include: { memberships: { where: { userId: sub, leftAt: null } } }
     });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!campaign.memberships.length) return reply.status(403).send({ error: "Not a member" });
 
     const updated = await prisma.campaign.update({
       where: { id },
-      data: { campaignContext, updatedAt: new Date() }
+      data: { campaignContext: body.data.campaignContext, updatedAt: new Date() }
     });
 
     return reply.send({ updated: true, id: updated.id });
@@ -96,16 +115,17 @@ export async function campaignsRoutes(app: FastifyInstance) {
   app.patch("/campaigns/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const { sub } = req.user as { sub: string };
-    const body = req.body as { name?: string; description?: string; setting?: string; isActive?: boolean };
+    const body = UpdateCampaignSchema.safeParse(req.body);
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
 
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { group: { include: { memberships: { where: { userId: sub, role: "GM", leftAt: null } } } } }
+      include: { memberships: { where: { userId: sub, role: "GM", leftAt: null } } }
     });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Only GMs can edit" });
+    if (!campaign.memberships.length) return reply.status(403).send({ error: "Only GMs can edit" });
 
-    const updated = await prisma.campaign.update({ where: { id }, data: body });
+    const updated = await prisma.campaign.update({ where: { id }, data: body.data });
     return reply.send(updated);
   });
 
@@ -116,20 +136,18 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { group: { include: { memberships: { where: { userId: sub, role: "GM", leftAt: null } } } } }
+      include: { memberships: { where: { userId: sub, role: "GM", leftAt: null } } }
     });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Only GMs can upload a background image" });
+    if (!campaign.memberships.length)
+      return reply.status(403).send({ error: "Only GMs can upload a background image" });
 
     const data = await req.file({ limits: { fileSize: MAX_BACKGROUND_BYTES } });
     if (!data) return reply.status(400).send({ error: "No file uploaded" });
-    if (!ALLOWED_BACKGROUND_MIME.has(data.mimetype)) {
-      return reply.status(400).send({ error: "Only png/jpeg/webp allowed" });
-    }
-
     const buffer = await data.toBuffer();
-    const ext = path.extname(data.filename) || ".png";
-    const fileName = `${id}-${randomUUID()}${ext}`;
+    const image = verifyImage(buffer, ALLOWED_BACKGROUND_MIME);
+    if (!image) return reply.status(400).send({ error: "Only valid png/jpeg/webp images allowed" });
+    const fileName = `${id}-${randomUUID()}${image.extension}`;
 
     await mkdir(BACKGROUND_DIR, { recursive: true });
     await writeFile(path.join(BACKGROUND_DIR, fileName), buffer);
@@ -156,30 +174,31 @@ export async function campaignsRoutes(app: FastifyInstance) {
     const campaign = await prisma.campaign.findUnique({
       where: { id },
       include: {
-        group: {
-          include: {
-            memberships: { where: { userId: sub, role: "GM", leftAt: null } },
-            settings: true
-          }
-        }
+        memberships: { where: { userId: sub, role: "GM", leftAt: null } },
+        settings: true
       }
     });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Only GMs can generate a background image" });
+    if (!campaign.memberships.length)
+      return reply.status(403).send({ error: "Only GMs can generate a background image" });
 
     const body = GenerateBackgroundSchema.safeParse(req.body ?? {});
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() });
 
-    const replicateApiKey = campaign.group.settings?.replicateApiKey?.trim();
+    const adminProfile = await getGrantedAdminKeyProfile(prisma, sub);
+    const replicateApiKey =
+      adminProfile?.replicateApiKey?.trim() ?? campaign.settings?.replicateApiKey?.trim();
     if (!replicateApiKey) {
-      return reply.status(400).send({ error: "No Replicate API key configured for this group" });
+      return reply.status(400).send({ error: "No Replicate API key configured for this campaign" });
     }
 
-    const imageGenModel = campaign.group.settings?.imageGenModel?.trim() || DEFAULT_IMAGE_MODEL;
-    const prompt = body.data.prompt?.trim() || `Epic fantasy campaign background for "${campaign.name}"${campaign.setting ? ` in ${campaign.setting}` : ""}. Cinematic, dramatic lighting, wide horizontal composition, richly detailed tabletop RPG artwork, no text.`;
+    const imageGenModel = campaign.settings?.imageGenModel?.trim() || DEFAULT_IMAGE_MODEL;
+    const prompt =
+      body.data.prompt?.trim() ||
+      `Epic fantasy campaign artwork for "${campaign.name}"${campaign.setting ? ` in ${campaign.setting}` : ""}. Cinematic, dramatic lighting, balanced 4:3 composition, richly detailed tabletop RPG artwork, no text.`;
     const predictionUrl = `https://api.replicate.com/v1/models/${imageGenModel}/predictions`;
 
-        const createRes = await fetch(predictionUrl, {
+    const createRes = await fetch(predictionUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${replicateApiKey}`,
@@ -188,7 +207,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
       body: JSON.stringify({
         input: {
           prompt,
-          aspect_ratio: "21:9",
+          aspect_ratio: "4:3",
           output_format: "webp"
         }
       })
@@ -196,27 +215,38 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     if (!createRes.ok) {
       const details = await readErrorBody(createRes);
-      return reply.status(502).send({ error: `Replicate request failed: ${details || createRes.statusText}` });
+      return reply
+        .status(502)
+        .send({ error: `Replicate request failed: ${details || createRes.statusText}` });
     }
 
     let prediction = (await createRes.json()) as ReplicatePrediction;
     let attempts = 0;
     const maxAttempts = 150;
 
-    while (prediction.status === "starting" || prediction.status === "processing" || prediction.status === "queued") {
+    while (
+      prediction.status === "starting" ||
+      prediction.status === "processing" ||
+      prediction.status === "queued"
+    ) {
       if (attempts++ >= maxAttempts) {
         return reply.status(504).send({ error: "Replicate prediction timed out" });
       }
 
       await sleep(2000);
 
-      const pollRes = await fetch(prediction.urls?.get ?? `https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: { Authorization: `Bearer ${replicateApiKey}` }
-      });
+      const pollRes = await fetch(
+        prediction.urls?.get ?? `https://api.replicate.com/v1/predictions/${prediction.id}`,
+        {
+          headers: { Authorization: `Bearer ${replicateApiKey}` }
+        }
+      );
 
       if (!pollRes.ok) {
         const details = await readErrorBody(pollRes);
-        return reply.status(502).send({ error: `Replicate polling failed: ${details || pollRes.statusText}` });
+        return reply
+          .status(502)
+          .send({ error: `Replicate polling failed: ${details || pollRes.statusText}` });
       }
 
       prediction = (await pollRes.json()) as ReplicatePrediction;
@@ -224,7 +254,9 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     if (prediction.status !== "succeeded") {
       return reply.status(502).send({
-        error: prediction.error ? `Replicate generation failed: ${prediction.error}` : `Replicate generation ended with status ${prediction.status}`
+        error: prediction.error
+          ? `Replicate generation failed: ${prediction.error}`
+          : `Replicate generation ended with status ${prediction.status}`
       });
     }
 
@@ -236,18 +268,24 @@ export async function campaignsRoutes(app: FastifyInstance) {
     const imageRes = await fetch(outputUrl);
     if (!imageRes.ok) {
       const details = await readErrorBody(imageRes);
-      return reply.status(502).send({ error: `Could not download generated image: ${details || imageRes.statusText}` });
+      return reply
+        .status(502)
+        .send({ error: `Could not download generated image: ${details || imageRes.statusText}` });
     }
 
     const buffer = Buffer.from(await imageRes.arrayBuffer());
-    const fileName = `${id}.webp`;
+    const image = verifyImage(buffer, ALLOWED_BACKGROUND_MIME);
+    if (!image) return reply.status(502).send({ error: "Replicate returned an invalid image" });
+    const fileName = `${id}${image.extension}`;
     const filePath = path.join(BACKGROUND_DIR, fileName);
 
     await mkdir(BACKGROUND_DIR, { recursive: true });
     await writeFile(filePath, buffer);
 
     if (campaign.backgroundImageUrl) {
-      const oldFile = path.basename(campaign.backgroundImageUrl.split("?").at(0) ?? campaign.backgroundImageUrl);
+      const oldFile = path.basename(
+        campaign.backgroundImageUrl.split("?").at(0) ?? campaign.backgroundImageUrl
+      );
       if (oldFile !== fileName) {
         await unlink(path.join(BACKGROUND_DIR, oldFile)).catch(() => undefined);
       }
@@ -272,10 +310,10 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+      include: { memberships: { where: { userId: sub, leftAt: null } } }
     });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!campaign.memberships.length) return reply.status(403).send({ error: "Not a member" });
 
     const [sessions, total] = await Promise.all([
       prisma.session.findMany({
@@ -312,26 +350,47 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { group: { include: { memberships: { where: { userId: sub, leftAt: null } } } } }
+      include: { memberships: { where: { userId: sub, leftAt: null } } }
     });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Not a member" });
+    if (!campaign.memberships.length) return reply.status(403).send({ error: "Not a member" });
 
     // Alle Summaries dieser Kampagne laden (nur DONE Sessions)
     const summaries = await prisma.summary.findMany({
       where: { session: { campaignId: id, status: "DONE" } },
-      include: { session: { select: { id: true, sessionNumber: true, title: true, startedAt: true } } },
+      include: {
+        session: { select: { id: true, sessionNumber: true, title: true, startedAt: true } }
+      },
       orderBy: { session: { startedAt: "asc" } }
     });
 
     // ─── Aggregation ───
-    interface NPCEntry { name: string; description: string; firstMention: string; }
-    interface QuestEntry { title: string; status: string; notes: string; }
-    interface LocationEntry { name: string; description: string; }
-    interface LootEntry { item: string; foundBy: string; source?: string; description?: string | undefined; }
+    interface NPCEntry {
+      name: string;
+      description: string;
+      firstMention: string;
+    }
+    interface QuestEntry {
+      title: string;
+      status: string;
+      notes: string;
+    }
+    interface LocationEntry {
+      name: string;
+      description: string;
+    }
+    interface LootEntry {
+      item: string;
+      foundBy: string;
+      source?: string;
+      description?: string | undefined;
+    }
 
     // NSCs: deduplizieren via name (case-insensitive), Beschreibungen mergen
-    const npcMap = new Map<string, { name: string; descriptions: string[]; firstMention: string }>();
+    const npcMap = new Map<
+      string,
+      { name: string; descriptions: string[]; firstMention: string }
+    >();
     for (const s of summaries) {
       const npcs = (s.npcs as unknown as unknown as NPCEntry[]) ?? [];
       for (const npc of npcs) {
@@ -398,13 +457,14 @@ export async function campaignsRoutes(app: FastifyInstance) {
     }
 
     // ─── Manuelle Einträge mergen (source='manual') ───
-    const [manualNpcs, manualQuests, manualLocations, manualThreads, manualLoots] = await Promise.all([
-      prisma.campaignNPC.findMany({ where: { campaignId: id, source: "manual" } }),
-      prisma.campaignQuest.findMany({ where: { campaignId: id, source: "manual" } }),
-      prisma.campaignLocation.findMany({ where: { campaignId: id, source: "manual" } }),
-      prisma.campaignThread.findMany({ where: { campaignId: id, source: "manual" } }),
-      prisma.campaignLoot.findMany({ where: { campaignId: id, source: "manual" } })
-    ]);
+    const [manualNpcs, manualQuests, manualLocations, manualThreads, manualLoots] =
+      await Promise.all([
+        prisma.campaignNPC.findMany({ where: { campaignId: id, source: "manual" } }),
+        prisma.campaignQuest.findMany({ where: { campaignId: id, source: "manual" } }),
+        prisma.campaignLocation.findMany({ where: { campaignId: id, source: "manual" } }),
+        prisma.campaignThread.findMany({ where: { campaignId: id, source: "manual" } }),
+        prisma.campaignLoot.findMany({ where: { campaignId: id, source: "manual" } })
+      ]);
 
     // NSCs
     for (const m of manualNpcs) {
@@ -421,7 +481,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
       }
     }
     const npcsFinal = Array.from(npcMap.entries()).map(([key, n]) => {
-      const isManual = manualNpcs.some(m => m.name.toLowerCase().trim() === key);
+      const isManual = manualNpcs.some((m) => m.name.toLowerCase().trim() === key);
       return {
         ...n,
         description: n.descriptions.join(" "),
@@ -447,24 +507,37 @@ export async function campaignsRoutes(app: FastifyInstance) {
     const questsFinal = Array.from(questMap.entries()).map(([key, q]) => ({
       ...q,
       notes: q.notes.join(" | "),
-      source: manualQuests.some(m => m.title.toLowerCase().trim() === key) ? "manual" : "aggregated"
+      source: manualQuests.some((m) => m.title.toLowerCase().trim() === key)
+        ? "manual"
+        : "aggregated"
     }));
 
     // Orte
     for (const m of manualLocations) {
       const key = m.name.toLowerCase().trim();
       if (!locationMap.has(key)) {
-        locationMap.set(key, { name: m.name.trim(), description: m.description?.trim() ?? "", source: "manual" });
+        locationMap.set(key, {
+          name: m.name.trim(),
+          description: m.description?.trim() ?? "",
+          source: "manual"
+        });
       }
     }
     const locationsFinal = Array.from(locationMap.entries()).map(([key, l]) => ({
       ...l,
-      source: manualLocations.some(m => m.name.toLowerCase().trim() === key) ? "manual" : "aggregated"
+      source: manualLocations.some((m) => m.name.toLowerCase().trim() === key)
+        ? "manual"
+        : "aggregated"
     }));
 
     // Beute (manuell, flach)
     for (const m of manualLoots) {
-      loot.push({ item: m.name, foundBy: "", source: "manual", description: m.description ?? undefined });
+      loot.push({
+        item: m.name,
+        foundBy: "",
+        source: "manual",
+        description: m.description ?? undefined
+      });
     }
 
     // Offene Fäden (manuell)
@@ -484,6 +557,68 @@ export async function campaignsRoutes(app: FastifyInstance) {
     });
   });
 
+  // DELETE /campaigns/:id — Kampagne inklusive Sessions und Uploads löschen.
+  app.delete("/campaigns/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { sub } = req.user as { sub: string };
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      include: {
+        memberships: true,
+        sessions: { include: { recordings: true } },
+        _count: { select: { sessions: true, memberships: true, bindings: true } }
+      }
+    });
+    if (!campaign) return reply.status(404).send({ error: "Campaign not found" });
+    if (
+      !campaign.memberships.some(
+        (membership) => membership.userId === sub && membership.role === "GM" && !membership.leftAt
+      )
+    ) {
+      return reply.status(403).send({ error: "Only GMs can delete campaigns" });
+    }
+    if (
+      campaign.sessions.some((session) => session.status !== "DONE" && session.status !== "FAILED")
+    ) {
+      return reply.status(409).send({ error: "CAMPAIGN_HAS_ACTIVE_SESSIONS" });
+    }
+
+    const files = [
+      ...(campaign.backgroundImageUrl
+        ? [[BACKGROUND_DIR, path.basename(campaign.backgroundImageUrl.split("?")[0]!)]]
+        : []),
+      ...campaign.sessions.flatMap((session) => [
+        ...(session.sessionImageUrl
+          ? [[SESSION_IMAGE_DIR, path.basename(session.sessionImageUrl.split("?")[0]!)]]
+          : []),
+        ...session.recordings.map((recording) => [RECORDING_DIR, path.basename(recording.filename)])
+      ]),
+      ...campaign.memberships.flatMap((membership) => [
+        ...(membership.avatarUrl
+          ? [[AVATAR_DIR, path.basename(membership.avatarUrl.split("?")[0]!)]]
+          : []),
+        ...(membership.characterSheetUrl
+          ? [[SHEET_DIR, path.basename(membership.characterSheetUrl.split("?")[0]!)]]
+          : [])
+      ])
+    ] as Array<[string, string]>;
+
+    await prisma.campaign.delete({ where: { id } });
+    await Promise.all(
+      files.map(([directory, filename]) =>
+        unlink(path.join(directory, filename)).catch(() => undefined)
+      )
+    );
+    return reply.send({
+      deleted: true,
+      id,
+      sessions: campaign._count.sessions,
+      memberships: campaign._count.memberships,
+      bindings: campaign._count.bindings,
+      files: files.length
+    });
+  });
+
   // DELETE /campaigns/:id/background — Hintergrundbild entfernen
   app.delete("/campaigns/:id/background", async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -491,10 +626,11 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { group: { include: { memberships: { where: { userId: sub, role: "GM", leftAt: null } } } } }
+      include: { memberships: { where: { userId: sub, role: "GM", leftAt: null } } }
     });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    if (!campaign.group.memberships.length) return reply.status(403).send({ error: "Only GMs can remove the background image" });
+    if (!campaign.memberships.length)
+      return reply.status(403).send({ error: "Only GMs can remove the background image" });
 
     if (campaign.backgroundImageUrl) {
       const oldFile = path.basename(campaign.backgroundImageUrl);

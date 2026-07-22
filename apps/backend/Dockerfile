@@ -19,9 +19,9 @@ RUN pnpm --filter @ai-dungeon-master-recorder/backend run build
 
 FROM node:22-alpine AS runner
 RUN npm install -g pnpm@10.0.0
-# Prisma's auto-downloaded schema-engine binary (used by `prisma db push` in start.sh)
+# Prisma's auto-downloaded schema-engine binary (used by `prisma migrate deploy` in start.sh)
 # links against OpenSSL 1.1, which current Alpine no longer ships (3.x only).
-# Install the archived 1.1 compat libs so `db push` doesn't fail with
+# Install the archived 1.1 compat libs so database migrations don't fail with
 # "Could not parse schema engine response" / missing libssl.so.1.1 at container start.
 RUN apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/v3.16/main libssl1.1 libcrypto1.1
 WORKDIR /app

@@ -2,6 +2,7 @@ import { Queue } from "bullmq";
 import { Redis as IORedis } from "ioredis";
 
 export interface BatchChunkMeta {
+  index: number;
   filePath: string;
   filename: string;
   durationSeconds: number;
@@ -11,15 +12,22 @@ export interface BatchChunkMeta {
 export interface TranscriptionJobData {
   sessionId: string;
   guildId: string;
+  campaignId?: string;
+  bindingId?: string;
+  voiceChannelId?: string;
+  summaryChannelId?: string;
   filePath: string;
   filename: string;
   durationSeconds?: number;
   discordChannelId?: string;
-  // Per-chunk recording (legacy/OpenAI fallback)
+  // Interne Optionen für eine manuelle Summary-Neugenerierung.
+  summaryOnly?: boolean;
+  skipNotification?: boolean;
+  // Per-chunk recording
   chunkIndex?: number;
   isLastChunk?: boolean;
   totalChunks?: number;
-  // Batch mode: all chunks in one job (for Replicate/selfhosted concat)
+  // Batch mode: all compact chunks in one queue job; worker processes them sequentially.
   batchChunks?: BatchChunkMeta[];
 }
 
@@ -29,7 +37,11 @@ const connection = new IORedis({
   maxRetriesPerRequest: null
 });
 
-export const transcriptionQueue = new Queue<TranscriptionJobData, unknown, "transcribe" | "transcribe-chunk" | "transcribe-batch">("transcription", {
+export const transcriptionQueue = new Queue<
+  TranscriptionJobData,
+  unknown,
+  "transcribe" | "transcribe-chunk" | "transcribe-batch"
+>("transcription", {
   connection,
   defaultJobOptions: {
     attempts: 3,

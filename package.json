@@ -7,12 +7,22 @@
   "pnpm": {
     "overrides": {
       "ioredis": "5.10.1"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "msgpackr-extract",
+      "prisma"
+    ]
   },
   "scripts": {
+    "build": "pnpm -r --if-present build",
+    "test": "pnpm -r --if-present test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm --filter frontend check && pnpm test && pnpm build",
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write \"apps/**/*.{ts,js,json,css}\" \"services/**/*.{ts,js,json}\" \"scripts/**/*.ts\" \"*.{json,mjs,yml,yaml}\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,js,json,css}\" \"services/**/*.{ts,js,json}\" \"scripts/**/*.ts\" \"*.{json,mjs,yml,yaml}\"",
     "typecheck": "tsc --noEmit -p tsconfig.base.json"
   },
   "devDependencies": {

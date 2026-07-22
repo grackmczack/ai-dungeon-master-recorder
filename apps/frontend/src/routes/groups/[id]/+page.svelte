@@ -1,15 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
-  import { auth } from '$lib/auth.js';
   import { parallax, parallaxFixed } from '$lib/actions/parallax.js';
   import WikiView from '$lib/components/WikiView.svelte';
-  import type { Group } from '$lib/types.js';
+  import Dialog from '$lib/components/Dialog.svelte';
+  import { keyboardTabs } from '$lib/actions/tabs.js';
+  import { confirmAction } from '$lib/confirm.js';
+  import { track } from '$lib/analytics.js';
 
   let group: any = $state(null);
   let loading = $state(true);
   let error = $state('');
+  let discordInviteUrl = $state('');
+  let discordInstallations: Array<{ id: string; guildName: string; isActive: boolean }> = $state([]);
+  let bindingBusy = $state('');
   let editingContext: string | null = $state(null);
   let contextEdits: Record<string, string> = $state({});
 
@@ -51,6 +57,7 @@
   let generatePrompt: Record<string, string> = $state({});
   let generateError: Record<string, string> = $state({});
   let backgroundVersion: Record<string, number> = $state({});
+  let deletingCampaign = $state(false);
 
   // Paginierte Sessions
   let loadingMoreSessions: Record<string, boolean> = $state({});
@@ -72,9 +79,33 @@
     FAILED: 'text-red-400 bg-red-500/10'
   };
 
+  function campaignView(campaign: any) {
+    const primaryBinding = campaign.bindings?.find(
+      (binding: any) => binding.isActive && binding.installation.isActive
+    ) ?? campaign.bindings?.[0];
+    return {
+      ...campaign,
+      campaigns: [campaign],
+      discordGuildId: primaryBinding?.installation.discordGuildId ?? null,
+      discordGuildName: primaryBinding?.installation.guildName ?? null,
+      discordBotActive: primaryBinding?.installation.isActive ?? false
+    };
+  }
+
+  async function reloadCampaign() {
+    group = campaignView(await api.getCampaign($page.params.id!));
+  }
+
   onMount(async () => {
     try {
-      group = await api.getGroup($page.params.id!);
+      const [campaign, discordConfig, installations] = await Promise.all([
+        api.getCampaign($page.params.id!),
+        api.getDiscordConfig().catch(() => ({ configured: false, inviteUrl: null })),
+        api.getDiscordInstallations().catch(() => [])
+      ]);
+      group = campaignView(campaign);
+      discordInviteUrl = discordConfig.inviteUrl ?? '';
+      discordInstallations = installations;
     } catch (e: any) {
       error = e.error ?? 'Fehler beim Laden';
     } finally {
@@ -94,11 +125,7 @@
 
   async function saveContext(campaignId: string) {
     try {
-      await fetch(`/api/campaigns/${campaignId}/context`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.getToken()}` },
-        body: JSON.stringify({ campaignContext: contextEdits[campaignId] })
-      });
+      await api.updateCampaignContext(campaignId, contextEdits[campaignId]);
       const c = group?.campaigns.find((c: any) => c.id === campaignId);
       if (c) c.campaignContext = contextEdits[campaignId];
       editingContext = null;
@@ -142,7 +169,12 @@
   }
 
   async function removeBackground(campaignId: string) {
-    if (!confirm('Hintergrundbild wirklich entfernen?')) return;
+    if (!await confirmAction({
+      title: 'Hintergrundbild entfernen?',
+      message: 'Das aktuelle Kampagnen-Hintergrundbild wird dauerhaft entfernt.',
+      confirmLabel: 'Bild entfernen',
+      danger: true
+    })) return;
     try {
       await api.removeCampaignBackground(campaignId);
       const c = group?.campaigns.find((c: any) => c.id === campaignId);
@@ -199,7 +231,7 @@
         partyRole: newPartyRole || undefined,
         role: newRole
       });
-      group = await api.getGroup($page.params.id!);
+      await reloadCampaign();
       showAddMember = false;
       newDiscordName = '';
       newCharacterName = '';
@@ -232,7 +264,7 @@
         partyRole: editPartyRole || null,
         role: editRole
       });
-      group = await api.getGroup($page.params.id!);
+      await reloadCampaign();
       editingMember = null;
     } catch (e: any) {
       editError = e.error ?? 'Fehler beim Speichern';
@@ -248,7 +280,7 @@
     try {
       const { avatarUrl } = await api.uploadMemberAvatar($page.params.id!, editingMember.id, file);
       editingMember.avatarUrl = avatarUrl;
-      group = await api.getGroup($page.params.id!);
+      await reloadCampaign();
     } catch (e: any) {
       editError = e.error ?? 'Fehler beim Avatar-Upload';
     } finally {
@@ -263,7 +295,7 @@
     try {
       const { characterSheetUrl } = await api.uploadMemberCharacterSheet($page.params.id!, editingMember.id, file);
       editingMember.characterSheetUrl = characterSheetUrl;
-      group = await api.getGroup($page.params.id!);
+      await reloadCampaign();
     } catch (e: any) {
       editError = e.error ?? 'Fehler beim PDF-Upload';
     } finally {
@@ -273,23 +305,122 @@
 
   async function pauseMember(memberId: string) {
     await api.pauseMember($page.params.id!, memberId, pauseNote);
-    group = await api.getGroup($page.params.id!);
+    await reloadCampaign();
     pausingMemberId = null;
   }
 
   async function resumeMember(memberId: string) {
     await api.resumeMember($page.params.id!, memberId);
-    group = await api.getGroup($page.params.id!);
+    await reloadCampaign();
   }
 
   async function removeMember(memberId: string, name: string) {
-    if (!confirm(`${name} wirklich aus der Gruppe entfernen? Die Session-Historie bleibt erhalten.`)) return;
+    if (!await confirmAction({
+      title: 'Mitglied entfernen?',
+      message: `${name} wird aus der Kampagne entfernt. Die Session-Historie bleibt erhalten.`,
+      confirmLabel: 'Mitglied entfernen',
+      danger: true
+    })) return;
     await api.removeMember($page.params.id!, memberId);
-    group = await api.getGroup($page.params.id!);
+    await reloadCampaign();
+  }
+
+  async function deleteCurrentCampaign() {
+    if (!await confirmAction({
+      title: 'Kampagne löschen?',
+      message: `„${group.name}“ wird einschließlich Sessions, Zusammenfassungen und Wiki dauerhaft gelöscht.`,
+      confirmLabel: 'Kampagne löschen',
+      danger: true
+    })) return;
+    deletingCampaign = true;
+    try {
+      await api.deleteCampaign(group.id);
+      track('campaign_deleted', {
+        page_type: 'app',
+        journey_stage: 'engagement',
+        feature_name: 'campaign',
+        method: 'web',
+        result: 'success'
+      });
+      await goto('/dashboard');
+    } catch (e: any) {
+      error = e.error ?? 'Kampagne konnte nicht gelöscht werden';
+      deletingCampaign = false;
+    }
+  }
+
+  async function addDiscordServer(installationId: string) {
+    if (!installationId) return;
+    bindingBusy = installationId;
+    try {
+      await api.addCampaignDiscordBinding(group.id, installationId);
+      track('campaign_server_bound', {
+        page_type: 'app',
+        journey_stage: 'setup',
+        feature_name: 'campaign',
+        method: 'web',
+        result: 'success'
+      });
+      await reloadCampaign();
+    } finally {
+      bindingBusy = '';
+    }
+  }
+
+  async function setBindingActive(binding: any, isActive: boolean) {
+    bindingBusy = binding.id;
+    try {
+      await api.updateCampaignDiscordBinding(group.id, binding.id, { isActive });
+      await reloadCampaign();
+    } finally {
+      bindingBusy = '';
+    }
+  }
+
+  async function removeBinding(binding: any) {
+    if (!await confirmAction({
+      title: 'Discord-Server trennen?',
+      message: `${binding.installation.guildName} wird von dieser Kampagne getrennt.`,
+      confirmLabel: 'Verbindung trennen',
+      danger: true
+    })) return;
+    bindingBusy = binding.id;
+    try {
+      await api.removeCampaignDiscordBinding(group.id, binding.id);
+      await reloadCampaign();
+    } finally {
+      bindingBusy = '';
+    }
+  }
+
+  function availableDiscordInstallations() {
+    return discordInstallations.filter(
+      (installation) =>
+        !(group?.campaigns?.[0]?.bindings ?? []).some(
+          (binding: any) => binding.installation.id === installation.id
+        )
+    );
+  }
+
+  function openWiki() {
+    activeView = 'wiki';
+    if (!wikiCampaignId && group?.campaigns?.length) {
+      wikiCampaignId = group.campaigns[0].id;
+      wikiCampaignName = group.campaigns[0].name;
+    }
+    track('wiki_viewed', {
+      page_type: 'app',
+      journey_stage: 'activation',
+      feature_name: 'wiki',
+      method: 'web',
+      result: 'success'
+    });
   }
 </script>
 
-<div class="max-w-5xl mx-auto px-6 py-10 relative">
+<svelte:head><title>{group?.name ?? 'Kampagne'} — DnD Recorder</title></svelte:head>
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10 relative">
   <!-- Seitenweiter Hintergrund (Parallax) -->
   {#if group && backgroundImageUrl(group.campaigns?.[0])}
     <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
@@ -310,47 +441,124 @@
   {:else if error}
     <div class="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400">{error}</div>
   {:else if group}
-    <div class="flex items-start justify-between mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
       <div>
         <h1 class="text-3xl font-bold text-white">{group.name}</h1>
         {#if group.description}<p class="text-gray-500 mt-1">{group.description}</p>{/if}
-        {#if group.discordGuildId}
-          <p class="text-xs text-gray-600 mt-1 font-mono">Guild: {group.discordGuildId}</p>
-        {/if}
+        <div class="mt-3 flex flex-wrap gap-2">
+          {#each group.campaigns?.[0]?.bindings ?? [] as binding}
+            <div role="status" class="inline-flex items-center gap-2 rounded-full border px-3 py-2 {binding.isActive && binding.installation.isActive ? 'border-green-500/30 bg-green-500/10' : 'border-amber-500/30 bg-amber-500/10'}">
+              <span class="h-2.5 w-2.5 rounded-full {binding.isActive && binding.installation.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 'bg-amber-500'}" aria-hidden="true"></span>
+              <span class="text-sm text-white">{binding.installation.guildName}</span>
+              <span class="text-xs {binding.isActive && binding.installation.isActive ? 'text-green-300' : 'text-amber-300'}">· {binding.isActive && binding.installation.isActive ? 'Verbunden' : 'Inaktiv'}</span>
+              {#if binding.voiceChannelName}<span class="text-xs text-gray-400">· {binding.voiceChannelName}</span>{/if}
+            </div>
+          {/each}
+        </div>
       </div>
-      <a href="/settings?groupId={group.id}"
-        class="text-gray-500 hover:text-white text-sm border border-surface-600 hover:border-surface-500 px-4 py-2 rounded-lg transition">
-        ⚙️ Einstellungen
-      </a>
+      <div class="flex flex-wrap gap-2">
+        {#if discordInviteUrl}<a href={discordInviteUrl} target="_blank" rel="noreferrer" class="text-sm border border-brand-500/40 text-brand-300 hover:bg-brand-500/10 px-4 py-2 rounded-lg transition">🤖 Weiteren Server</a>{/if}
+        <a href="/settings?campaignId={group.id}"
+          class="text-gray-500 hover:text-white text-sm border border-surface-600 hover:border-surface-500 px-4 py-2 rounded-lg transition">
+          ⚙️ Einstellungen
+        </a>
+        <button type="button" onclick={deleteCurrentCampaign} disabled={deletingCampaign}
+          class="text-sm border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50 px-4 py-2 rounded-lg transition">
+          {deletingCampaign ? 'Lösche…' : 'Kampagne löschen'}
+        </button>
+      </div>
     </div>
 
-    <!-- Tab-Switcher für Kampagnen-Ansicht -->
-    <div class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 w-fit border border-surface-600">
-      <button onclick={() => activeView = 'sessions'}
+    {#if !group.discordGuildId}
+      <section aria-labelledby="discord-connect-title" class="mb-8 rounded-2xl border border-brand-500/30 bg-brand-500/5 p-5 sm:p-6">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div class="max-w-2xl">
+            <h2 id="discord-connect-title" class="text-lg font-semibold text-white">🤖 Discord-Server verbinden</h2>
+            <p class="mt-1 text-sm text-gray-400">Keine Server-ID nötig: Der Bot erkennt den Server automatisch und gibt den Verbindungslink ausschließlich einem Server-Admin aus.</p>
+            <ol class="mt-4 space-y-2 text-sm text-gray-300">
+              <li><span class="mr-2 text-brand-400">1.</span>Bot zum gewünschten Server einladen.</li>
+              <li><span class="mr-2 text-brand-400">2.</span>Als Server-Admin <code>/status</code> ausführen – alternativ erscheint der Hinweis nach <code>/record</code>.</li>
+              <li><span class="mr-2 text-brand-400">3.</span>Den privaten Link anklicken und diese Kampagne auswählen.</li>
+            </ol>
+          </div>
+          <div class="flex shrink-0 flex-col items-start gap-1">
+            {#if discordInviteUrl}
+              <a href={discordInviteUrl} target="_blank" rel="noreferrer"
+                class="inline-flex min-h-11 items-center rounded-lg border border-brand-500/40 px-4 py-2 text-sm font-medium text-brand-300 hover:bg-brand-500/10 transition">
+                Bot einladen
+              </a>
+              <p class="max-w-52 text-xs leading-relaxed text-gray-600">Danach als Server-Admin <code>/status</code> ausführen und den privaten Link öffnen.</p>
+            {/if}
+          </div>
+        </div>
+      </section>
+    {/if}
+
+    <section aria-labelledby="campaign-discord-title" class="mb-8 rounded-2xl border border-surface-600 bg-surface-800 p-5">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="campaign-discord-title" class="font-semibold text-white">Discord-Zuordnungen</h2>
+          <p class="mt-1 text-xs text-gray-500">Voice- und Summary-Kanal setzt du komfortabel mit <code>/kampagne verbinden</code>.</p>
+        </div>
+        {#if availableDiscordInstallations().length > 0}
+          <label class="text-xs text-gray-400">
+            <span class="sr-only">Weiteren Discord-Server zuordnen</span>
+            <select disabled={!!bindingBusy} onchange={(event) => { const select = event.currentTarget; addDiscordServer(select.value); select.value = ''; }}
+              class="min-h-10 rounded-lg border border-surface-600 bg-surface-700 px-3 text-sm text-white focus:border-brand-500 focus:outline-none">
+              <option value="">Server zuordnen…</option>
+              {#each availableDiscordInstallations() as installation}<option value={installation.id}>{installation.guildName}</option>{/each}
+            </select>
+          </label>
+        {/if}
+      </div>
+      {#if (group.campaigns?.[0]?.bindings ?? []).length > 0}
+        <div class="mt-4 space-y-2">
+          {#each group.campaigns[0].bindings as binding}
+            <div class="flex flex-col gap-3 rounded-xl border border-surface-600 bg-surface-700/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-white">{binding.installation.guildName}</p>
+                <p class="mt-0.5 text-xs text-gray-500">
+                  {binding.voiceChannelName ? `Voice: ${binding.voiceChannelName}` : 'Voice wird beim nächsten /record automatisch festgelegt'}
+                  {binding.summaryChannelName ? ` · Summary: ${binding.summaryChannelName}` : binding.summaryChannelId ? ' · Summary-Kanal verbunden' : ''}
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" disabled={bindingBusy === binding.id} onclick={() => setBindingActive(binding, !binding.isActive)}
+                  class="min-h-10 rounded-lg border px-3 text-xs transition {binding.isActive ? 'border-green-500/30 text-green-300 hover:bg-green-500/10' : 'border-surface-500 text-gray-400 hover:text-white'}">
+                  {binding.isActive ? '🟢 Aktiv' : '⚫ Inaktiv'}
+                </button>
+                <button type="button" disabled={bindingBusy === binding.id} onclick={() => removeBinding(binding)}
+                  class="min-h-10 rounded-lg border border-red-500/20 px-3 text-xs text-red-400 hover:bg-red-500/10 transition">Trennen</button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="mt-4 text-sm text-gray-500">Noch kein Discord-Server zugeordnet.</p>
+      {/if}
+    </section>
+
+    <div role="tablist" aria-label="Kampagnenbereiche" use:keyboardTabs
+      class="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 max-w-full overflow-x-auto border border-surface-600">
+      <button id="group-tab-sessions" role="tab" aria-selected={activeView === 'sessions'} aria-controls="group-panel-sessions" tabindex={activeView === 'sessions' ? 0 : -1} onclick={() => activeView = 'sessions'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'sessions' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📅 Sessions
       </button>
-      <button onclick={() => { activeView = 'diary'; loadDiary(); }}
+      <button id="group-tab-diary" role="tab" aria-selected={activeView === 'diary'} aria-controls="group-panel-diary" tabindex={activeView === 'diary' ? 0 : -1} onclick={() => { activeView = 'diary'; loadDiary(); }}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'diary' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📖 Tagebuch
       </button>
-      <button onclick={() => {
-          activeView = 'wiki';
-          // Wähle erste Kampagne für Wiki-Ansicht
-          if (!wikiCampaignId && group?.campaigns?.length) {
-            wikiCampaignId = group.campaigns[0].id;
-            wikiCampaignName = group.campaigns[0].name;
-          }
-        }}
+      <button id="group-tab-wiki" role="tab" aria-selected={activeView === 'wiki'} aria-controls="group-panel-wiki" tabindex={activeView === 'wiki' ? 0 : -1} onclick={openWiki}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'wiki' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         📜 Wiki
       </button>
-      <button onclick={() => activeView = 'members'}
+      <button id="group-tab-members" role="tab" aria-selected={activeView === 'members'} aria-controls="group-panel-members" tabindex={activeView === 'members' ? 0 : -1} onclick={() => activeView = 'members'}
         class="px-4 py-2 rounded-lg text-sm font-medium transition {activeView === 'members' ? 'bg-brand-600 text-white' : 'text-gray-500 hover:text-white'}">
         👥 Mitglieder
       </button>
     </div>
 
+    <div role="tabpanel" id={`group-panel-${activeView}`} aria-labelledby={`group-tab-${activeView}`} tabindex="0">
     {#if activeView === 'sessions'}
       <!-- Kampagnen & Sessions -->
       {#if group.campaigns.length === 0}
@@ -362,8 +570,7 @@
       {:else}
         {#each group.campaigns as campaign}
           <div class="mb-8">
-            <!-- Kampagnen-Hintergrundbild mit Parallax -->
-            <div class="relative h-40 md:h-56 rounded-2xl overflow-hidden mb-4 border border-surface-600 bg-surface-800">
+            <div class="relative aspect-[4/3] rounded-2xl overflow-hidden mb-4 border border-surface-600 bg-surface-800">
               {#if campaign.backgroundImageUrl}
                 <div class="absolute -inset-y-[25%] inset-x-0" use:parallax={0.12}>
                   <img src={backgroundImageUrl(campaign)!} alt="" class="w-full h-full object-cover opacity-60" />
@@ -373,44 +580,35 @@
                 <div class="absolute inset-0 flex items-center justify-center text-gray-700 text-4xl">🗺️</div>
               {/if}
 
-              <div class="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+              <div class="absolute bottom-0 left-0 right-0 p-4 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-3">
                 <div class="flex items-center gap-3">
                   <h2 class="text-xl font-semibold text-white drop-shadow">{campaign.name}</h2>
                   {#if campaign.setting}<span class="text-xs text-gray-200 bg-black/40 backdrop-blur px-2 py-1 rounded">{campaign.setting}</span>{/if}
                 </div>
-                <div class="flex flex-col items-end gap-2">
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-200 bg-black/40 hover:bg-black/60 backdrop-blur px-3 py-1.5 rounded-lg transition cursor-pointer">
-                      {uploadingBackgroundFor === campaign.id ? 'Lade hoch...' : campaign.backgroundImageUrl ? 'Bild ersetzen' : '🖼️ Hintergrundbild hinzufügen'}
-                      <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
-                        onchange={(e) => onBackgroundSelected(e, campaign.id)}
-                        disabled={uploadingBackgroundFor === campaign.id} />
-                    </label>
-                    {#if campaign.backgroundImageUrl}
-                      <button onclick={() => removeBackground(campaign.id)}
-                        class="text-xs text-gray-200 bg-black/40 hover:bg-red-900/60 backdrop-blur px-2 py-1.5 rounded-lg transition">✕</button>
-                    {/if}
-                  </div>
-                  <div class="flex items-end gap-2">
-                    <input
-                      bind:value={generatePrompt[campaign.id]}
-                      class="w-60 max-w-[55vw] text-xs bg-black/40 backdrop-blur border border-white/10 hover:border-white/20 focus:border-brand-500/60 text-white placeholder:text-gray-400 rounded-lg px-3 py-2 outline-none transition"
-                      placeholder="Beschreibe die Stimmung der Kampagne..." />
-                    <button
-                      onclick={() => generateBackground(campaign)}
-                      disabled={generatingBackgroundFor === campaign.id}
-                      class="text-xs text-white bg-brand-600 hover:bg-brand-500 disabled:opacity-60 backdrop-blur px-3 py-2 rounded-lg transition min-w-[9rem] flex items-center justify-center gap-2">
-                      {#if generatingBackgroundFor === campaign.id}
-                        <span class="h-3.5 w-3.5 rounded-full border-2 border-white/70 border-t-transparent animate-spin"></span>
-                        Generiere...
-                      {:else if campaign.backgroundImageUrl}
-                        🔄 Neu generieren
-                      {:else}
-                        🎨 Bild generieren
+                <details class="w-full sm:w-auto rounded-lg bg-black/50 text-xs text-gray-200 backdrop-blur">
+                  <summary class="cursor-pointer list-none px-3 py-2 text-right hover:text-white">🖼️ Kampagnenbild bearbeiten</summary>
+                  <div class="flex w-full sm:w-80 flex-col gap-2 border-t border-white/10 p-3">
+                    <div class="flex items-center gap-2">
+                      <label class="cursor-pointer rounded-lg border border-white/20 px-3 py-2 hover:bg-white/10 transition">
+                        {uploadingBackgroundFor === campaign.id ? 'Lade hoch…' : campaign.backgroundImageUrl ? 'Bild ersetzen' : 'Bild hochladen'}
+                        <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
+                          onchange={(e) => onBackgroundSelected(e, campaign.id)}
+                          disabled={uploadingBackgroundFor === campaign.id} />
+                      </label>
+                      {#if campaign.backgroundImageUrl}
+                        <button onclick={() => removeBackground(campaign.id)} class="rounded-lg border border-red-500/30 px-3 py-2 text-red-300 hover:bg-red-900/40 transition">Entfernen</button>
                       {/if}
+                    </div>
+                    <label for={`campaign-image-prompt-${campaign.id}`} class="sr-only">Prompt für das Kampagnenbild</label>
+                    <input id={`campaign-image-prompt-${campaign.id}`} bind:value={generatePrompt[campaign.id]}
+                      class="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-white placeholder:text-gray-400 outline-none focus:border-brand-500/60"
+                      placeholder="Stimmung oder Motiv beschreiben…" />
+                    <button onclick={() => generateBackground(campaign)} disabled={generatingBackgroundFor === campaign.id}
+                      class="min-h-10 rounded-lg bg-brand-600 px-3 py-2 text-white hover:bg-brand-500 disabled:opacity-60 transition">
+                      {generatingBackgroundFor === campaign.id ? 'Generiere…' : campaign.backgroundImageUrl ? '🔄 Neu generieren' : '🎨 Bild generieren'}
                     </button>
                   </div>
-                </div>
+                </details>
               </div>
             </div>
             {#if backgroundError[campaign.id]}
@@ -588,31 +786,31 @@
           <!-- Add-Member Form -->
           {#if showAddMember}
             <form onsubmit={(e) => { e.preventDefault(); createMember(); }} class="mb-5 bg-surface-700 rounded-xl p-4 border border-brand-500/30 space-y-3">
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Discordname</label>
-                  <input bind:value={newDiscordName} placeholder="z.B. grackmczack"
+                  <label for="new-member-discord" class="block text-xs text-gray-500 mb-1">Discordname</label>
+                  <input id="new-member-discord" bind:value={newDiscordName} placeholder="z.B. grackmczack"
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
-                  <select bind:value={newRole}
+                  <label for="new-member-role" class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
+                  <select id="new-member-role" bind:value={newRole}
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
-                    <option value="PLAYER">🎲 Spieler</option>
+                    <option value="PLAYER">🧙 Spieler</option>
                     <option value="GM">🎭 Spielleiter (GM)</option>
                     <option value="OBSERVER">👁️ Zuschauer</option>
                   </select>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Charaktername</label>
-                  <input bind:value={newCharacterName} placeholder="z.B. Arkeles der Magier"
+                  <label for="new-member-character" class="block text-xs text-gray-500 mb-1">Charaktername</label>
+                  <input id="new-member-character" bind:value={newCharacterName} placeholder="z.B. Arkeles der Magier"
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
-                  <input bind:value={newPartyRole} placeholder="z.B. Tank, Healer, Scout"
+                  <label for="new-member-party-role" class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
+                  <input id="new-member-party-role" bind:value={newPartyRole} placeholder="z.B. Tank, Healer, Scout"
                     class="w-full bg-surface-800 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
               </div>
@@ -660,26 +858,26 @@
                 </button>
                 <div class="flex items-center gap-2 shrink-0">
                   <span class="text-xs px-2 py-1 rounded-full {member.role === 'GM' ? 'bg-brand-500/20 text-brand-400' : 'bg-gray-700/50 text-gray-400'}">
-                    {member.role === 'GM' ? '🎭 GM' : member.role === 'PLAYER' ? '🎲 Spieler' : '👁️ Zuschauer'}
+                    {member.role === 'GM' ? '🎭 GM' : member.role === 'PLAYER' ? '🧙 Spieler' : '👁️ Zuschauer'}
                   </span>
                   <div class="flex gap-1">
                     <button onclick={() => openEditMember(member)}
-                      class="text-xs text-gray-500 hover:text-brand-400 border border-surface-600 hover:border-brand-500/40 px-2 py-1 rounded transition">
+                      class="min-h-10 text-xs text-gray-500 hover:text-brand-400 border border-surface-600 hover:border-brand-500/40 px-3 py-2 rounded-lg transition">
                       ✏️
                     </button>
                     {#if member.isPaused}
                       <button onclick={() => resumeMember(member.id)}
-                        class="text-xs text-gray-500 hover:text-green-400 border border-surface-600 hover:border-green-500/40 px-2 py-1 rounded transition">
+                        class="min-h-10 text-xs text-gray-500 hover:text-green-400 border border-surface-600 hover:border-green-500/40 px-3 py-2 rounded-lg transition">
                         ▶ Aktiv
                       </button>
                     {:else}
-                      <button onclick={() => { pausingMemberId = member.id; pauseNote = ''; }}
-                        class="text-xs text-gray-500 hover:text-yellow-400 border border-surface-600 hover:border-yellow-500/40 px-2 py-1 rounded transition">
+                      <button aria-label={`${member.characterName ?? member.discordName ?? 'Mitglied'} pausieren`} onclick={() => { pausingMemberId = member.id; pauseNote = ''; }}
+                        class="min-h-10 min-w-10 text-xs text-gray-500 hover:text-yellow-400 border border-surface-600 hover:border-yellow-500/40 px-3 py-2 rounded-lg transition">
                         ⏸
                       </button>
                     {/if}
-                    <button onclick={() => removeMember(member.id, member.characterName ?? member.discordName ?? member.user?.displayName ?? 'Mitglied')}
-                      class="text-xs text-gray-500 hover:text-red-400 border border-surface-600 hover:border-red-500/40 px-2 py-1 rounded transition">
+                    <button aria-label={`${member.characterName ?? member.discordName ?? 'Mitglied'} entfernen`} onclick={() => removeMember(member.id, member.characterName ?? member.discordName ?? member.user?.displayName ?? 'Mitglied')}
+                      class="min-h-10 min-w-10 text-xs text-gray-500 hover:text-red-400 border border-surface-600 hover:border-red-500/40 px-3 py-2 rounded-lg transition">
                       ✕
                     </button>
                   </div>
@@ -691,9 +889,7 @@
 
         <!-- Edit-Mitglied-Modal -->
         {#if editingMember}
-          <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto">
-              <h3 class="font-semibold text-white mb-4">Mitglied bearbeiten</h3>
+          <Dialog title="Mitglied bearbeiten" titleId="edit-member-dialog-title" onClose={() => editingMember = null}>
 
               <!-- Avatar -->
               <div class="flex items-center gap-4 mb-5">
@@ -711,40 +907,40 @@
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-3 mb-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Discordname</label>
-                  <input bind:value={editDiscordName}
+                  <label for="edit-member-discord" class="block text-xs text-gray-500 mb-1">Discordname</label>
+                  <input id="edit-member-discord" bind:value={editDiscordName}
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
-                  <select bind:value={editRole}
+                  <label for="edit-member-role" class="block text-xs text-gray-500 mb-1">Rolle (GM/Spieler)</label>
+                  <select id="edit-member-role" bind:value={editRole}
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
-                    <option value="PLAYER">🎲 Spieler</option>
+                    <option value="PLAYER">🧙 Spieler</option>
                     <option value="GM">🎭 Spielleiter (GM)</option>
                     <option value="OBSERVER">👁️ Zuschauer</option>
                   </select>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Charaktername</label>
-                  <input bind:value={editCharacterName}
+                  <label for="edit-member-character" class="block text-xs text-gray-500 mb-1">Charaktername</label>
+                  <input id="edit-member-character" bind:value={editCharacterName}
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
-                  <input bind:value={editPartyRole} placeholder="z.B. Tank, Healer"
+                  <label for="edit-member-party-role" class="block text-xs text-gray-500 mb-1">Rolle in der Gruppe</label>
+                  <input id="edit-member-party-role" bind:value={editPartyRole} placeholder="z.B. Tank, Healer"
                     class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
                 </div>
               </div>
 
               <!-- Charakterbogen -->
               <div class="mb-5 pb-5 border-b border-surface-700">
-                <label class="block text-xs text-gray-500 mb-2">Charakterbogen (PDF)</label>
+                <p class="block text-xs text-gray-500 mb-2">Charakterbogen (PDF)</p>
                 {#if editingMember.characterSheetUrl}
-                  <a href={editingMember.characterSheetUrl} target="_blank" class="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1.5 mb-2">
+                  <a href={`/api/campaigns/${$page.params.id}/members/${editingMember.id}/character-sheet`} target="_blank" rel="noreferrer" class="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1.5 mb-2">
                     📄 Aktueller Charakterbogen öffnen
                   </a>
                 {/if}
@@ -764,15 +960,12 @@
                 <button onclick={() => editingMember = null}
                   class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Schließen</button>
               </div>
-            </div>
-          </div>
+          </Dialog>
         {/if}
 
         <!-- Pause-Modal -->
         {#if pausingMemberId}
-          <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div class="bg-surface-800 rounded-2xl border border-surface-600 p-6 w-full max-w-md">
-              <h3 class="font-semibold text-white mb-4">Mitglied pausieren</h3>
+          <Dialog title="Mitglied pausieren" titleId="pause-member-dialog-title" onClose={() => pausingMemberId = null} maxWidth="max-w-md">
               <p class="text-sm text-gray-400 mb-3">Optional: Notiz für die Story (z.B. "Schläft den Abenteuer verschlafen" oder "Erkrankt")</p>
               <textarea bind:value={pauseNote} rows="2" placeholder="Notiz für die Abwesenheit..."
                 class="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm text-white mb-4 focus:outline-none focus:border-brand-500 resize-none"></textarea>
@@ -782,8 +975,7 @@
                 <button onclick={() => pausingMemberId = null}
                   class="text-gray-500 hover:text-white text-sm px-4 py-2 transition">Abbrechen</button>
               </div>
-            </div>
-          </div>
+          </Dialog>
         {/if}
 
         <!-- Ehemalige Mitglieder -->
@@ -805,5 +997,7 @@
         {/if}
       </div>
     {/if}
+    </div>
+
   {/if}
 </div>
