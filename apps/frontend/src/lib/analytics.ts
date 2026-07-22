@@ -104,6 +104,9 @@ const TAG_SERVING_PATH =
 const SCRIPT_ID = "dnd-recorder-gtm";
 const ANALYTICS_IDENTITY_KEY = "dnd_analytics_identity";
 const ANALYTICS_REVOCATION_KEY = "dnd_analytics_revocation_pending";
+const ANALYTICS_CLIENT_ID_PATTERN = /^[1-9]\d{0,9}\.[1-9]\d{0,9}$/;
+const LEGACY_ANALYTICS_CLIENT_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ALLOWED_PARAMETERS = new Set<keyof TrackingParameters>([
   "page_type",
   "journey_stage",
@@ -133,9 +136,8 @@ function validIdentity(value: unknown): value is AnalyticsIdentity {
   const candidate = value as Partial<AnalyticsIdentity>;
   return (
     typeof candidate.clientId === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      candidate.clientId
-    ) &&
+    (ANALYTICS_CLIENT_ID_PATTERN.test(candidate.clientId) ||
+      LEGACY_ANALYTICS_CLIENT_ID_PATTERN.test(candidate.clientId)) &&
     typeof candidate.revocationToken === "string" &&
     /^[a-f0-9]{64}$/.test(candidate.revocationToken) &&
     (candidate.source === "BANNER" || candidate.source === "SETTINGS")
@@ -159,9 +161,13 @@ function randomHex(bytes: number): string {
 
 function getOrCreateAnalyticsIdentity(source: "BANNER" | "SETTINGS"): AnalyticsIdentity {
   const existing = storedIdentity();
-  if (existing) return existing;
+  if (existing && ANALYTICS_CLIENT_ID_PATTERN.test(existing.clientId)) return existing;
+  if (existing && !storedIdentity(ANALYTICS_REVOCATION_KEY)) {
+    localStorage.setItem(ANALYTICS_REVOCATION_KEY, JSON.stringify(existing));
+  }
+  const values = crypto.getRandomValues(new Uint32Array(2));
   const identity: AnalyticsIdentity = {
-    clientId: crypto.randomUUID(),
+    clientId: `${values[0] || 1}.${values[1] || 1}`,
     revocationToken: randomHex(32),
     source
   };
@@ -336,26 +342,41 @@ export function queueAnalyticsRevocation() {
 
 export async function syncAnalyticsConsentToBackend(granted: boolean): Promise<void> {
   if (!browser) return;
-  const identity = granted ? storedIdentity() : storedIdentity(ANALYTICS_REVOCATION_KEY);
-  if (!identity) return;
+
+  async function revoke(identity: AnalyticsIdentity): Promise<boolean> {
+    const response = await fetch("/api/analytics/consent/revoke", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: identity.clientId,
+        revocationToken: identity.revocationToken
+      })
+    });
+    return response.ok;
+  }
+
   try {
-    const response = await fetch(
-      granted ? "/api/analytics/consent" : "/api/analytics/consent/revoke",
-      {
+    const pendingRevocation = storedIdentity(ANALYTICS_REVOCATION_KEY);
+    if (pendingRevocation && (await revoke(pendingRevocation))) {
+      localStorage.removeItem(ANALYTICS_REVOCATION_KEY);
+    }
+
+    if (granted) {
+      const identity = storedIdentity();
+      if (!identity || !ANALYTICS_CLIENT_ID_PATTERN.test(identity.clientId)) return;
+      await fetch("/api/analytics/consent", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: identity.clientId,
           revocationToken: identity.revocationToken,
-          ...(granted && {
-            policyVersion: CONSENT_POLICY_VERSION,
-            source: identity.source
-          })
+          policyVersion: CONSENT_POLICY_VERSION,
+          source: identity.source
         })
-      }
-    );
-    if (!granted && response.ok) localStorage.removeItem(ANALYTICS_REVOCATION_KEY);
+      });
+    }
   } catch {
     // A pending revocation remains locally and is retried on the next visit.
   }

@@ -24,12 +24,13 @@ import { FixedWindowRateLimiter, normalizedEmailFromBody, rateLimit } from "../l
 import { accountAccessState } from "../lib/account-access.js";
 import {
   ANALYTICS_POLICY_VERSION,
+  ANALYTICS_CLIENT_ID_PATTERN,
   enqueueAnalyticsEvent,
   hashAnalyticsRevocationToken
 } from "../lib/analytics.js";
 
 const RegistrationAnalyticsSchema = z.object({
-  clientId: z.string().uuid(),
+  clientId: z.string().regex(ANALYTICS_CLIENT_ID_PATTERN),
   revocationToken: z.string().regex(/^[a-f0-9]{64}$/),
   policyVersion: z.literal(ANALYTICS_POLICY_VERSION),
   source: z.enum(["BANNER", "SETTINGS"])

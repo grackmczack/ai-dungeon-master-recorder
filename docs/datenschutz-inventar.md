@@ -22,12 +22,12 @@ Dieses Dokument bildet die technische Datenschutzgrundlage für die öffentliche
 | Sessionaufnahme | Audio, Zeit, Discord-Sprecheraktivität/-namen | Aufnahme, Transkription, Sprecherzuordnung | Leistungserbringung; Rechtmäßigkeit der konkreten Aufnahme muss vor Start feststehen | Hosting, gewählter Transkriptionsanbieter | bis Session-, Kampagnen- oder Kontolöschung |
 | KI-Verarbeitung | Audio, Transkript, Kampagnenkontext, Prompt, Referenzbilder | Transkription, Summary, Objektextraktion, Bilder | Art. 6 Abs. 1 lit. b DSGVO | je Auswahl: selbst gehostet, OpenAI, Anthropic, Google, Replicate, SiliconFlow | lokale Ergebnisse bis Löschung; Providerfristen je gewähltem Vertrag |
 | Kampagnenverwaltung | Kampagnen-, Mitglieder-, Charakter-, Session- und Wiki-Inhalte | Chronik, Gruppen- und Questverwaltung | Art. 6 Abs. 1 lit. b DSGVO | Hosting, berechtigte Kampagnenmitglieder | bis Objekt-, Kampagnen- oder Kontolöschung |
-| Optionale Analyse | zufällige Client-ID, normalisierte Route, feste Event-/Statuswerte, Consentversion | Reichweite, Registrierung, Setup-/Aktivierungsfunnel, UX | Art. 6 Abs. 1 lit. a DSGVO und § 25 Abs. 1 TDDDG | Google Ireland/Google LLC über First-Party-Server-GTM | Consent 6 Monate; GA4-Ereignisse höchstens 14 Monate; Outboxstatus siehe unten |
+| Optionale Analyse | zufällige Client-ID, normalisierte Route, feste Event-/Statuswerte, Consentversion | Reichweite, Registrierung, Setup-/Aktivierungsfunnel, UX | Art. 6 Abs. 1 lit. a DSGVO und § 25 Abs. 1 TDDDG | Google Ireland/Google LLC; Browser über First-Party-Server-GTM, Backend-Lifecycle über regionales Measurement Protocol | Consent 6 Monate; GA4-Ereignisse höchstens 14 Monate; Outboxstatus siehe unten |
 
 ## Consent- und Analytics-Datenmodell
 
 - `dnd_consent`: notwendige Präferenz mit Policyversion, Kategorien, Quelle, Entscheidungs- und Ablaufzeit; sechs Monate.
-- `dnd_analytics_identity`: erst nach Analyse-Opt-in lokal erzeugte zufällige UUID plus separates Widerrufsgeheimnis; wird beim Widerruf lokal entfernt.
+- `dnd_analytics_identity`: erst nach Analyse-Opt-in lokal erzeugte zufällige, GA4-kompatible Nummernkombination plus separates Widerrufsgeheimnis; wird beim Widerruf lokal entfernt.
 - `AnalyticsIdentity`: pseudonyme Zuordnung zum Konto, Consentversion, Quelle, Freigabe- und Widerrufszeit; keine IP-Adresse, keine E-Mail und kein Anzeigename.
 - `AnalyticsEventOutbox`: nur allowlistete Lifecycle-Ereignisse und feste Statusparameter. Erfolgreiche Einträge werden nach 30 Tagen, endgültig fehlgeschlagene Einträge nach 90 Tagen automatisch gelöscht und dürfen nicht für Produktrückschlüsse außerhalb des erklärten Analysezwecks verwendet werden.
 - Ein Widerruf markiert die Identity als widerrufen, verwirft ausstehende Events und wird bei einem temporären Netzfehler aus dem Browser erneut versucht.

@@ -4,6 +4,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 
 export const ANALYTICS_POLICY_VERSION = "2026-07-20";
+export const ANALYTICS_CLIENT_ID_PATTERN = /^[1-9]\d{0,9}\.[1-9]\d{0,9}$/;
+export const LEGACY_ANALYTICS_CLIENT_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const GA_MEASUREMENT_PROTOCOL_ENDPOINT = "https://region1.google-analytics.com/mp/collect";
 
 export const SERVER_ANALYTICS_EVENTS = [
   "email_verified",
@@ -150,17 +154,10 @@ export async function enqueueCampaignAnalyticsEvent(
 }
 
 function deliveryConfig() {
-  const serverUrl = process.env.ANALYTICS_SERVER_URL?.trim().replace(/\/$/, "");
   const measurementId = process.env.GA_MEASUREMENT_ID?.trim();
   const apiSecret = process.env.GA_API_SECRET?.trim();
-  if (!serverUrl || !measurementId || !apiSecret) return null;
-  try {
-    const parsed = new URL(serverUrl);
-    if (parsed.protocol !== "https:") return null;
-  } catch {
-    return null;
-  }
-  return { serverUrl, measurementId, apiSecret };
+  if (!measurementId || !apiSecret) return null;
+  return { measurementId, apiSecret };
 }
 
 async function deliverPendingAnalyticsEvents(log: FastifyBaseLogger): Promise<void> {
@@ -197,14 +194,14 @@ async function deliverPendingAnalyticsEvents(log: FastifyBaseLogger): Promise<vo
     for (const event of events) {
       let errorCode: string | null = null;
       try {
-        const url = new URL("/mp/collect", config.serverUrl);
+        const url = new URL(GA_MEASUREMENT_PROTOCOL_ENDPOINT);
         url.searchParams.set("measurement_id", config.measurementId);
         url.searchParams.set("api_secret", config.apiSecret);
         const response = await fetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-DnD-Analytics-Source": "lifecycle-outbox"
+            "User-Agent": "DnD-Recorder-Analytics-Outbox/1.0"
           },
           body: JSON.stringify({
             client_id: event.analyticsIdentity.clientId,

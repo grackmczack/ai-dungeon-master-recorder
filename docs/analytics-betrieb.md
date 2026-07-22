@@ -13,12 +13,12 @@ Browser
 
 Backend-Outbox
   └─ nur bei aktiver, versionierter AnalyticsIdentity
-       -> https://analytics.dnd-recorder.de/mp/collect
-       -> serverseitiger GTM
+       -> https://region1.google-analytics.com/mp/collect
+       -> offizielles GA4 Measurement Protocol
        -> GA4
 ```
 
-Werbesignale sind immer abgelehnt. Browser und Backend sprechen nie direkt mit `google-analytics.com` oder `googletagmanager.com`. Der Haupt-nginx erlaubt per CSP ausschließlich die First-Party-Subdomain.
+Werbesignale sind immer abgelehnt. Der Browser spricht ausschließlich mit der First-Party-Subdomain und nie direkt mit `google-analytics.com` oder `googletagmanager.com`; der Haupt-nginx erlaubt per CSP nur diese Strecke. Consent-gebundene Backend-Lifecycle-Events gehen ohne Browser-, Geräte- oder IP-Daten über Googles regionalen Measurement-Protocol-Endpunkt. Ihre Ereignisse und Parameter werden vor dem Versand bereits im Anwendungscode strikt allowlistet.
 
 ## Voraussetzungen und Secrets
 
@@ -33,7 +33,6 @@ VITE_GTM_SERVING_PATH=/CCo2D
 Backend-Secrets in `apps/backend/.env`:
 
 ```dotenv
-ANALYTICS_SERVER_URL=https://analytics.dnd-recorder.de
 GA_MEASUREMENT_ID=G-J3SR1MTC8J
 GA_API_SECRET=<Measurement-Protocol-Secret>
 ```
@@ -119,13 +118,13 @@ Die eigentlichen GTM-Container besitzen keinen Hostport. Nur der gehärtete Gate
 - Im Server-Container einen Client vom Typ **Google Tag Manager: Web Container** anlegen, die Web-Container-ID erlauben und den automatisch erzeugten, zufälligen **Tag serving path** unverändert als `VITE_GTM_SERVING_PATH` hinterlegen.
 - Google Tag Gateway/Dependency Serving so konfigurieren, dass `gtm.js` über genau diesen First-Party-Pfad ausgeliefert wird; der Pfad gehört nicht in `server_container_url`.
 - Einen GA4-Tag für die erlaubten Events anlegen; keine Werbe-, Remarketing- oder zusätzlichen Vendor-Tags.
-- Eingehende Ereignisse nur bei aktivem `analytics_storage` beziehungsweise für die consent-gebundene Backend-Outbox annehmen.
+- Eingehende Browserereignisse nur bei aktivem `analytics_storage` annehmen.
 - Vor Veröffentlichung die eingebaute Transformation **Allow parameters** auf den GA4-Tag anwenden und ausschließlich die für GA4 technisch notwendigen Felder sowie `page_path`, `page_location`, `page_type`, `journey_stage`, `cta_name`, `feature_name`, `provider_type`, `result`, `error_code`, `method`, `entity_type`, `settings_area` und `topic_id` zulassen. Freitext und alle übrigen Parameter verwerfen.
 
 ### Webcontainer
 
 - Google-Tag/GA4-Konfiguration mit Measurement-ID und `server_container_url=https://analytics.dnd-recorder.de`.
-- `analytics_client_id` aus dem `dataLayer` als `client_id` verwenden; es ist eine erst nach Opt-in zufällig erzeugte UUID, keine fachliche Nutzer-ID.
+- `analytics_client_id` aus dem `dataLayer` als `client_id` verwenden; es ist eine erst nach Opt-in zufällig erzeugte GA4-kompatible Nummernkombination, keine fachliche Nutzer-ID.
 - Consent Checks für jeden Tag; `analytics_storage` erforderlich.
 - `ad_storage`, `ad_user_data` und `ad_personalization` nicht überschreiben und dauerhaft abgelehnt lassen.
 - Manuelle Pageviews verwenden; Enhanced Measurement für Pageviews deaktivieren, damit SPA-Navigation nicht doppelt zählt.
@@ -143,7 +142,7 @@ Key Events:
 - `discord_connection_claimed`
 - `first_session_completed`
 
-Weitere erlaubte Ereignisse stehen typisiert in `apps/frontend/src/lib/analytics.ts`. Asynchron serverseitig sind ausschließlich die in `apps/backend/src/lib/analytics.ts` definierte Allowlist aus Verifizierung, Freigabe, Discord-Verknüpfung, Aufnahmebeginn/-ende, Verarbeitungsfehler und erster fertiger Session zulässig. Deduplizierung erfolgt über interne, nie übertragene Outbox-Schlüssel.
+Weitere erlaubte Ereignisse stehen typisiert in `apps/frontend/src/lib/analytics.ts`. Asynchron serverseitig sind ausschließlich die in `apps/backend/src/lib/analytics.ts` definierte Allowlist aus Verifizierung, Freigabe, Discord-Verknüpfung, Aufnahmebeginn/-ende, Verarbeitungsfehler und erster fertiger Session zulässig. Diese Ereignisse werden nach erfolgreicher strenger Payloadvalidierung über Googles fest im Code hinterlegten regionalen Measurement-Protocol-Endpunkt übertragen; der API-Schlüssel bleibt ausschließlich im Backend. Deduplizierung erfolgt über interne, nie übertragene Outbox-Schlüssel.
 
 ## Consent-QA vor jedem Release
 

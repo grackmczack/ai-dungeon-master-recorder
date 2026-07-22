@@ -420,7 +420,7 @@ E-Mail-Bestätigung, Adminfreigabe und Sessionverarbeitung finden teilweise ohne
 - Zustimmungsversion und Client-ID bei Registrierung getrennt von fachlichen Profildaten speichern
 - `AnalyticsIdentity` bei Widerruf deaktivieren; keine neuen Serverevents senden
 - idempotente `AnalyticsEventOutbox` für `email_verified`, `account_approved`, `discord_connection_claimed` und `first_session_completed`
-- Outbox sendet ausschließlich erlaubte Events an Server-GTM, nie direkt an GA4
+- Outbox sendet ausschließlich erlaubte Events über den fest hinterlegten regionalen GA4-Measurement-Protocol-Endpunkt; API-Secret, Ereignis- und Parameter-Allowlist bleiben im Backend
 - keine GA `user_id` in der ersten Version
 - Events ohne nachweislich aktive Analytics-Einwilligung verwerfen
 - Lösch-/Widerrufsprozess und eventuelle GA-Löschanfrage dokumentieren
